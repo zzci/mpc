@@ -1,0 +1,108 @@
+# E2E-002 — Docker isolated-VM E2E topology (docs/design/testing.md §3.3).
+#
+# Each simulated machine is its own container on a user-defined bridge network
+# (`mpcnet`): every container has its own network namespace, so there is NO
+# 127.0.0.1 shortcut between roles — cross-container traffic crosses a real
+# network boundary, and members reach the relay only via `/dns4/node/...`.
+#
+# Reuse-only: the images build the unmodified cmd/node, cmd/cli and the
+# finalized mock-extsvc module. The sole new artifacts are the Dockerfiles,
+# this compose file and the Bun/TS container adapter (e2e/src/lib/docker-ring.ts).
+#
+# No host bind mounts (the daemon runs in a separate fs namespace here):
+#   - node config is delivered with `docker compose cp` to /node.yaml;
+#   - member secret config is `cp`-ed PRIVATELY into each member's /work
+#     (never on any shared medium → physical keystore isolation, §3.3);
+#   - the `rz` NAMED volume is shared by members ONLY and carries just public
+#     discovery (peerIds + public pubkeys), barrier markers and the public
+#     result ({R,S,V}+pubkey) — never a secret.
+# The harness reaches node/mock-extsvc by service DNS after attaching itself
+# to `mpcnet` (it is the test orchestrator, not a wallet role).
+
+services:
+  node:
+    build:
+      context: ../..
+      dockerfile: tests/docker/Dockerfile.node
+    environment:
+      NODE_CONFIG: /node.yaml
+      RELAY_PNET_PSK: ${RELAY_PNET_PSK:?}
+      COORD_DB_DSN: /tmp/coord.db
+      COORD_API_KEY: ${COORD_API_KEY:?}
+      ALLOW_INSECURE_DB: "1"
+      TSSNODE_ADMIN__LISTEN: 0.0.0.0:8090
+      TSSNODE_ADMIN__READ_TOKEN: ${ADMIN_READ_TOKEN:?}
+      TSSNODE_ADMIN__CONTROL_TOKEN: ${ADMIN_CONTROL_TOKEN:?}
+    networks:
+      - mpcnet
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/healthz"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+      start_period: 3s
+
+  mock-extsvc:
+    build:
+      context: ../..
+      dockerfile: tests/docker/Dockerfile.mock-extsvc
+    environment:
+      PORT: "4500"
+      COORD_BASE_URL: http://node:8080
+      COORD_API_KEY: ${COORD_API_KEY:?}
+      COORD_API_KEY_HEADER: X-API-Key
+      RESULT_MODE: longpoll
+    networks:
+      - mpcnet
+    depends_on:
+      node:
+        condition: service_healthy
+
+  member0:
+    build:
+      context: ../..
+      dockerfile: tests/docker/Dockerfile.member
+    environment:
+      MEMBER_INDEX: "0"
+    volumes:
+      - rz:/rz
+    networks:
+      - mpcnet
+    depends_on:
+      node:
+        condition: service_healthy
+
+  member1:
+    build:
+      context: ../..
+      dockerfile: tests/docker/Dockerfile.member
+    environment:
+      MEMBER_INDEX: "1"
+    volumes:
+      - rz:/rz
+    networks:
+      - mpcnet
+    depends_on:
+      node:
+        condition: service_healthy
+
+  member2:
+    build:
+      context: ../..
+      dockerfile: tests/docker/Dockerfile.member
+    environment:
+      MEMBER_INDEX: "2"
+    volumes:
+      - rz:/rz
+    networks:
+      - mpcnet
+    depends_on:
+      node:
+        condition: service_healthy
+
+networks:
+  mpcnet:
+    driver: bridge
+
+volumes:
+  rz:

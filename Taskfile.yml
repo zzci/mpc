@@ -1,0 +1,43 @@
+version: "3"
+
+tasks:
+  fmt:
+    desc: 格式检查（gofmt + goimports）
+    cmds:
+      - gofmt -l .
+      - goimports -l .
+
+  vet:
+    desc: go vet 静态检查
+    cmds:
+      - go vet ./...
+
+  lint:
+    desc: golangci-lint v2
+    cmds:
+      - golangci-lint run
+
+  test:
+    desc: 单元测试
+    cmds:
+      - go test ./...
+
+  build:
+    desc: 构建全部包
+    cmds:
+      - go build ./...
+
+  tidy-check:
+    desc: 校验 go.mod/go.sum 无未提交变更
+    cmds:
+      - go mod tidy
+      - git diff --exit-code go.mod go.sum
+
+  ci:
+    desc: 本地一键质量门（与 CI 对齐）
+    cmds:
+      - task: fmt
+      - task: vet
+      - task: lint
+      - task: build
+      - task: test

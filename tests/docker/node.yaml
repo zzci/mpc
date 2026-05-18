@@ -1,0 +1,30 @@
+# E2E-002 node config — REFERENCE TEMPLATE.
+#
+# This is the canonical shape of the relay+coord dual-role config the Docker
+# E2E uses. It is byte-identical to the proven §3.1 config
+# (e2e/src/lib/node-process.ts) except the listen addresses bind 0.0.0.0
+# instead of 127.0.0.1 so the relay/coord are reachable across the Docker
+# network boundary (no localhost shortcut).
+#
+# `relay.token_verify.group_pubkeys` is per-run (a fresh wallet-group key is
+# generated each run), so the live config is RENDERED by the harness
+# (e2e/src/lib/docker-ring.ts) into ${E2E_DOCKER_WS}/ctl/node.yaml with the
+# real base64 group pubkey substituted for __GROUP_PUB_B64__. Secrets stay in
+# env refs (resolved by node.Config.Validate), never inlined here.
+
+log: { level: info, format: json }
+relay:
+  enable: true
+  listen: ["/ip4/0.0.0.0/tcp/4001"]
+  pnet_psk_ref: "env:RELAY_PNET_PSK"
+  token_verify: { source: config, group_pubkeys: ["__GROUP_PUB_B64__"] }
+  rendezvous: { enable: false }
+  limits: { reservation_per_token: 8, reservation_per_group: 16, bandwidth_per_conn: "4MiB/s" }
+coord:
+  enable: true
+  http: { listen: "0.0.0.0:8080" }
+  db: { dsn_ref: "env:COORD_DB_DSN", encryption: { enable: false } }
+  external: { auth: api_key, api_key_ref: "env:COORD_API_KEY", result_callback: longpoll }
+  ttl: { skew_tolerance: "2m" }
+  quorum: { signer_select: stable }
+  dispatch: { timeout: "2m" }

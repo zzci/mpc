@@ -1,0 +1,13 @@
+{{define "login.tmpl"}}{{template "head" .}}
+<div class="flex flex-col items-center mt-6">
+  <div class="card" style="max-width:28rem;width:100%">
+    <h1 class="text-xl font-bold text-slate-100 mb-2">admin-ui sign in</h1>
+    <p class="text-sm text-slate-400 mb-4">Read-only inspection panel. Present the admin read (or control) credential. Strong auth (mTLS/OIDC) and the IP allowlist still apply in front (admin.md §4/§5).</p>
+    {{if .Error}}<p class="badge badge-err mb-4">Invalid credential</p>{{end}}
+    <form method="post" action="/admin/ui/session" class="flex flex-col gap-3">
+      <input class="input w-full" type="password" name="token" placeholder="admin read token" autocomplete="off" autofocus required>
+      <button class="btn" type="submit">Sign in</button>
+    </form>
+  </div>
+</div>
+{{template "foot" .}}{{end}}

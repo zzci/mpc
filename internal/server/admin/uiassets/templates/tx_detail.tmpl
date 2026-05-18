@@ -1,0 +1,68 @@
+{{define "tx_detail.tmpl"}}{{template "head" .}}{{template "nav" .}}
+{{with .D}}
+<div class="flex items-center gap-3 mb-4">
+  <a href="/admin/ui/transactions" class="text-slate-400 text-sm">&larr; Transactions</a>
+  <h1 class="text-xl font-bold text-slate-100 font-mono">{{.RequestID}}</h1>
+  <span class="badge {{statusClass .Status}}">{{.Status}}</span>
+</div>
+
+<div class="card mb-4">
+  <div class="grid grid-cols-2 gap-3 text-sm">
+    <div><span class="text-slate-500">Group</span><div class="font-mono break-all">{{.GroupID}}</div></div>
+    <div><span class="text-slate-500">Chain</span><div>{{.Chain}}</div></div>
+    <div><span class="text-slate-500">Proposer</span><div class="font-mono break-all">{{.Proposer}}</div></div>
+    <div><span class="text-slate-500">Created</span><div>{{msTime .CreatedAt}}</div></div>
+    <div><span class="text-slate-500">Expiry</span><div>{{msTime .Expiry}}</div></div>
+    <div><span class="text-slate-500">Dispatched</span><div>{{if .DispatchedAt}}{{msTime .DispatchedAt}}{{else}}—{{end}}</div></div>
+    {{if .FailReason}}<div><span class="text-slate-500">Fail reason</span><div class="text-rose-400">{{.FailReason}}</div></div>{{end}}
+    {{if .ResultRSV}}<div><span class="text-slate-500">Result {R,S,V} (b64)</span><div class="font-mono break-all text-emerald-400">{{.ResultRSV}}</div></div>{{end}}
+  </div>
+</div>
+
+<div class="card mb-4">
+  <div class="text-slate-300 font-semibold mb-2">Encoded fields (display-only; semantic decoding is non-security, admin.md §1)</div>
+  <div class="grid grid-cols-2 gap-3 text-xs">
+    <div><span class="text-slate-500">unsigned_tx (b64)</span><div class="font-mono break-all">{{.UnsignedTx}}</div></div>
+    <div><span class="text-slate-500">digest32 (b64)</span><div class="font-mono break-all">{{.Digest32}}</div></div>
+    <div><span class="text-slate-500">meta_hash (b64)</span><div class="font-mono break-all">{{.MetaHash}}</div></div>
+    <div><span class="text-slate-500">proposer_sig (b64)</span><div class="font-mono break-all">{{.ProposerSig}}</div></div>
+    {{if .BusinessInfo}}<div><span class="text-slate-500">business_info</span><pre class="font-mono break-all">{{.BusinessInfo}}</pre></div>{{end}}
+    {{if .Signers}}<div><span class="text-slate-500">signers</span><pre class="font-mono break-all">{{.Signers}}</pre></div>{{end}}
+  </div>
+</div>
+
+<div class="card mb-4">
+  <div class="text-slate-300 font-semibold mb-2">Status timeline</div>
+  <table>
+    <thead><tr><th>At</th><th>From</th><th>To</th><th>Actor</th><th>Detail</th></tr></thead>
+    <tbody>
+    {{range .Timeline}}
+      <tr>
+        <td class="text-slate-400">{{msTime .At}}</td>
+        <td>{{if .FromStatus}}{{.FromStatus}}{{else}}—{{end}}</td>
+        <td><span class="badge {{statusClass .ToStatus}}">{{.ToStatus}}</span></td>
+        <td class="font-mono">{{.Actor}}</td>
+        <td class="font-mono break-all">{{if .Detail}}{{.Detail}}{{else}}—{{end}}</td>
+      </tr>
+    {{else}}<tr><td colspan="5" class="text-center text-slate-500 py-3">No events</td></tr>{{end}}
+    </tbody>
+  </table>
+</div>
+
+<div class="card">
+  <div class="text-slate-300 font-semibold mb-2">Approvals</div>
+  <table>
+    <thead><tr><th>Member</th><th>Decision</th><th>Decided</th></tr></thead>
+    <tbody>
+    {{range .Approvals}}
+      <tr>
+        <td class="font-mono">{{.MemberID}}</td>
+        <td>{{.Decision}}</td>
+        <td class="text-slate-400">{{msTime .DecidedAt}}</td>
+      </tr>
+    {{else}}<tr><td colspan="3" class="text-center text-slate-500 py-3">No approvals</td></tr>{{end}}
+    </tbody>
+  </table>
+</div>
+{{end}}
+{{template "foot" .}}{{end}}

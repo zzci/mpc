@@ -1,0 +1,10 @@
+* text=auto eol=lf
+
+*.go text eol=lf
+*.md text eol=lf
+go.mod text eol=lf
+go.sum text eol=lf
+
+# Vendored tss-lib v3 — exclude from language stats and review diffs
+external/** linguist-vendored=true
+external/tss-lib/** linguist-generated=true

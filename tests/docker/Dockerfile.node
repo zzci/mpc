@@ -1,0 +1,27 @@
+# E2E-002 (docs/design/testing.md §3.3): the `node` container image — the relay+coord
+# dual-role binary (FIX-002), one process, isolated container. Build context is
+# the Go module root (see tests/docker/docker-compose.yml `context`). The Go
+# source is built as-is; no cryptographic/contract/MPC code is modified.
+#
+# glibc base (NOT alpine/musl): coord's store uses mattn/go-sqlite3, which
+# REQUIRES cgo, and its bundled sqlite3.c fails to compile against musl
+# (pread64/off64_t LFS symbols). The host §3.1 build (e2e/src/lib/go-build.ts)
+# is also cgo + glibc, so this matches the proven toolchain exactly.
+FROM golang:1.25 AS build
+WORKDIR /src
+# go.mod uses a local `replace ... => ./external/tss-lib`, so the module graph
+# can only resolve with the full tree present — copy it all, then build (the
+# build resolves+downloads remote deps; the network is available at build).
+COPY . .
+RUN CGO_ENABLED=1 go build -trimpath -o /out/node ./cmd/node
+
+FROM debian:stable-slim
+# wget backs the compose healthcheck; tini reaps libp2p goroutine children and
+# forwards SIGTERM on `docker compose down`.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends wget tini ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+COPY --from=build /out/node /usr/local/bin/node
+COPY tests/docker/node-entrypoint.sh /usr/local/bin/node-entrypoint.sh
+RUN chmod +x /usr/local/bin/node-entrypoint.sh
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/node-entrypoint.sh"]

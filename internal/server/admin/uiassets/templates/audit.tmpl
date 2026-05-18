@@ -1,0 +1,7 @@
+{{define "audit.tmpl"}}{{template "head" .}}{{template "nav" .}}
+<h1 class="text-xl font-bold text-slate-100 mb-2">Admin audit</h1>
+<p class="text-sm text-slate-400 mb-4">Append-only trail. This panel offers no mutation route — the administrator cannot tamper with it from here (admin.md §7bis).</p>
+<div class="card overflow-x-auto">
+  {{template "audit_rows.tmpl" .}}
+</div>
+{{template "foot" .}}{{end}}

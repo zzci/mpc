@@ -1,0 +1,40 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  # standard 已含 errcheck / govet / ineffassign / staticcheck / unused
+  default: standard
+  enable:
+    - revive        # 风格与可维护性
+    - misspell      # 拼写
+    - errorlint     # %w 包裹 / errors.Is/As
+    - bodyclose     # HTTP body 泄漏
+    - sloglint      # 结构化日志（slog）一致性
+    - noctx         # 出站请求必须带 context
+  settings:
+    sloglint:
+      no-mixed-args: true
+      kv-only: false
+    revive:
+      rules:
+        - name: package-comments
+        - name: exported
+  exclusions:
+    generated: lax
+    paths:
+      # vendored tss-lib v3：不纳入本仓库 lint
+      - external
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/zzci/mpc
+  exclusions:
+    paths:
+      - external

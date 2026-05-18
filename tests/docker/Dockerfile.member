@@ -1,0 +1,35 @@
+# E2E-002 (docs/design/testing.md §3.3): a member-device container image — the
+# CLI-001 member harness (`cli member <config.json>`). One image, run N times
+# as N isolated containers, each with its own private `/work` volume so the
+# device's secret identity material is physically isolated (§3.3). Build
+# context is the Go module root.
+FROM golang:1.25-alpine AS build
+WORKDIR /src
+RUN apk add --no-cache git
+# go.mod uses a local `replace ... => ./external/tss-lib`; the module graph only
+# resolves with the full tree present — copy it all, then build.
+COPY . .
+# NO -trimpath: the member loads tss-lib's bundled keygen pre-param fixtures
+# via keygen.LoadKeygenTestFixtures, whose path is derived from
+# runtime.Caller(0). Without trimpath that resolves to the absolute build path
+# (/src/external/tss-lib/ecdsa/keygen) so the fixtures are found at
+# /src/external/tss-lib/test/_ecdsa_fixtures (shipped below). This is the same
+# tss-lib test-fixture mechanism §3.1 relies on (docs/design/testing.md §6); the
+# custody red line is unaffected (each device loads its own locally).
+RUN CGO_ENABLED=0 go build -o /out/cli ./cmd/cli
+
+FROM alpine:3.20
+# The fixture path is the UN-normalized
+# /src/external/tss-lib/ecdsa/keygen/../../test/_ecdsa_fixtures/... — Linux
+# resolves `..` by walking the fs, so the intermediate `ecdsa/keygen` dir must
+# exist for the traversal to reach the fixtures (kept empty; only the walk
+# matters).
+RUN apk add --no-cache tini \
+  && mkdir -p /work /src/external/tss-lib/ecdsa/keygen
+COPY --from=build /out/cli /usr/local/bin/cli
+# tss-lib keygen pre-param fixtures at the exact absolute path the cgo-free
+# binary's runtime.Caller resolves to (see above).
+COPY --from=build /src/external/tss-lib/test/_ecdsa_fixtures /src/external/tss-lib/test/_ecdsa_fixtures
+COPY tests/docker/member-entrypoint.sh /usr/local/bin/member-entrypoint.sh
+RUN chmod +x /usr/local/bin/member-entrypoint.sh
+ENTRYPOINT ["/sbin/tini", "--", "/usr/local/bin/member-entrypoint.sh"]

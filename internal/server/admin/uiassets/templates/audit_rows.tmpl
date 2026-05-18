@@ -1,0 +1,22 @@
+{{define "audit_rows.tmpl"}}<div id="audit-body">
+<table>
+  <thead><tr><th>ID</th><th>At</th><th>Admin</th><th>Action</th><th>Source IP</th><th>Params</th></tr></thead>
+  <tbody>
+  {{range .Items}}
+    <tr>
+      <td class="text-slate-500">{{.ID}}</td>
+      <td class="text-slate-400">{{msTime .At}}</td>
+      <td class="font-mono">{{.AdminID}}</td>
+      <td class="font-medium">{{.Action}}</td>
+      <td class="font-mono">{{if .SrcIP}}{{.SrcIP}}{{else}}—{{end}}</td>
+      <td class="font-mono break-all">{{if .Params}}{{.Params}}{{else}}—{{end}}</td>
+    </tr>
+  {{else}}
+    <tr><td colspan="6" class="text-center text-slate-500 py-3">No audit entries</td></tr>
+  {{end}}
+  </tbody>
+</table>
+{{if ge .Next 0}}
+<div class="mt-4"><a class="btn btn-ghost" href="/admin/ui/audit?before={{.Next}}">Load older</a></div>
+{{end}}
+</div>{{end}}
