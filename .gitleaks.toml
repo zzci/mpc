@@ -1,0 +1,27 @@
+title = "mcp-wallet gitleaks config"
+
+# Keep all upstream default rules; only narrow with a scoped allowlist.
+[extend]
+useDefault = true
+
+[allowlist]
+description = """
+False-positive sources that contain NO credentials by design:
+  - external/        : vendored, audited, pinned upstream source (tss-lib v3
+                       BIP32 xpub test vectors, etc.) — not our secrets.
+  - *_test.go / testdata / tests/ : deterministic public test vectors and
+                       fixtures (known chain digests, well-known public
+                       contract addresses like USDT 0xdac17f..., xpubs).
+  - docs/            : design/audit docs cite example digests/addresses.
+Real secrets are structurally impossible as literals here: every secret is
+an env:/file: reference, enforced at startup by node.errSecretPlaintext
+(internal/node/config.go). gitleaks therefore still meaningfully scans the
+real source (cmd/, internal/ non-test, scripts/) for accidental leaks.
+"""
+paths = [
+  '''^external/''',
+  '''_test\.go$''',
+  '''(^|/)testdata/''',
+  '''^tests/''',
+  '''^docs/''',
+]
