@@ -1,0 +1,28 @@
+// Android library module for the mcp RN bridge. The gomobile artifact
+// (mobileapi.aar, produced by `gomobile bind` per docs/design/mcp/sdk.md §8) is
+// expected under libs/ and is auto-linked into the app. SKELETON: declares
+// the module shape only; not built/run in B-004.
+
+apply plugin: 'com.android.library'
+apply plugin: 'org.jetbrains.kotlin.android'
+
+android {
+    namespace 'cc.mcp.wallet.bridge'
+    compileSdk 34
+
+    defaultConfig {
+        minSdk 24
+    }
+
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+}
+
+dependencies {
+    implementation 'com.facebook.react:react-android'
+    // gomobile-bound device-signing SDK (.aar). Placed here by the packaging
+    // step; the flat mobileapi surface (SDK / *Callback / SignSession) is the
+    // only thing this module touches.
+    implementation files('libs/mobileapi.aar')
+}

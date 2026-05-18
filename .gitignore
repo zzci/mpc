@@ -1,0 +1,53 @@
+# Go build artifacts
+/bin/
+/dist/
+
+# gomobile mobile artifacts (GM-001) — never commit binaries; built into /dist/
+*.aar
+*.xcframework/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Coverage / profiling
+coverage.txt
+coverage.out
+coverage.html
+*.cover
+*.prof
+cpu.pprof
+mem.pprof
+
+# Go workspace
+go.work
+go.work.sum
+
+# Secrets / env
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.log
+
+# Keystore / shard dumps (runtime artifacts)
+*.keystore
+*.shard
+/data/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*~
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+*.swo
+
+# tool crash dumps
+core

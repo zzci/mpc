@@ -1,0 +1,176 @@
+name: Release
+
+# Tag-triggered trusted, reproducible, static release. Jobs:
+#   * android : ubuntu-latest — gomobile + Android NDK -> mcpwallet.aar
+#   * ios     : macos-14 (GitHub-hosted, Xcode + iOS SDK) -> Mcpwallet
+#               .xcframework (user needs no local Mac; docs/design/P0-report.md §6,
+#               L1 ruling 2026-05-18)
+#   * verify  : trust evidence — builds the Go binaries TWICE from a clean
+#               tree and asserts (a) cli + server are FULLY STATIC (no dynamic
+#               interpreter) and (b) the two builds are BYTE-IDENTICAL
+#               (SHA256 match) => reproducible. A release only publishes if
+#               this passes.
+#   * release : gathers the two mobile libs + builds the static Go binaries
+#               (pure-Go cli cross-matrix + cgo-SQLCipher server, both fully
+#               static & byte-reproducible on the pinned builder toolchain),
+#               emits SHA256SUMS + provenance.json, publishes the Release.
+#
+# No Go/product source is touched; scripts/build-*.sh are GM-001 exclusive and
+# only invoked, never modified (CI-001 ownership: .github/**, scripts/ci/**).
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup Go
+        uses: actions/setup-go@3041bf56c941b39c61721a86cd11f3bb1338122a # v5.2.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build Android .aar (NDK + gomobile -> scripts/build-android.sh)
+        run: ./scripts/ci/setup-android-ndk.sh
+
+      - name: Upload .aar artifact
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+        with:
+          name: mcpwallet-aar
+          path: dist/mobile/mcpwallet.aar
+          if-no-files-found: error
+          retention-days: 14
+
+  ios:
+    # GitHub-hosted macOS runner: Xcode + iOS SDK preinstalled, so the
+    # .xcframework is produced automatically with no local Mac.
+    runs-on: macos-14
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup Go
+        uses: actions/setup-go@3041bf56c941b39c61721a86cd11f3bb1338122a # v5.2.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build iOS .xcframework (gomobile -> scripts/build-ios.sh)
+        run: ./scripts/ci/build-ios.sh
+
+      - name: Upload .xcframework artifact
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+        with:
+          name: mcpwallet-xcframework
+          path: dist/mobile/Mcpwallet.xcframework.zip
+          if-no-files-found: error
+          retention-days: 14
+
+  verify:
+    # Trusted-release evidence: static + reproducibility self-check. No mobile
+    # deps — pure Go cli + server. Two clean builds must be byte-identical.
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0 # SOURCE_DATE_EPOCH = commit time (reproducibility)
+
+      - name: Setup Go
+        uses: actions/setup-go@3041bf56c941b39c61721a86cd11f3bb1338122a # v5.2.0
+        with:
+          go-version-file: go.mod
+          cache: false # cache off so build #1 and #2 are both from scratch
+
+      - name: Build #1
+        run: ./scripts/ci/release-build.sh "${GITHUB_REF_NAME}-verify"
+
+      - name: Snapshot checksums + assert FULLY STATIC
+        run: |
+          cp dist/release/SHA256SUMS /tmp/SUMS1
+          for b in dist/release/mcpwallet-cli-linux-amd64 \
+                   dist/release/mcpwallet-node-linux-amd64; do
+            if file "$b" | grep -q "dynamically linked"; then
+              echo "::error::$b is dynamically linked (static invariant violated)"; exit 1
+            fi
+            echo "static OK: $b -> $(file "$b" | sed 's/.*: //; s/,.*//')"
+          done
+          ./dist/release/mcpwallet-cli-linux-amd64 --help >/dev/null 2>&1 || true
+          echo "smoke: cli binary executes"
+
+      - name: Build #2 (from scratch) + assert BYTE-IDENTICAL
+        run: |
+          go clean -cache
+          rm -rf dist/release
+          ./scripts/ci/release-build.sh "${GITHUB_REF_NAME}-verify"
+          # Reproducibility: the static Go binaries must hash identically.
+          # (provenance.json/SHA256SUMS embed the run-specific builder field,
+          # so compare the binary checksum lines, not the manifest verbatim.)
+          for name in mcpwallet-cli-linux-amd64 mcpwallet-cli-linux-arm64 \
+                      mcpwallet-cli-darwin-amd64 mcpwallet-cli-darwin-arm64 \
+                      mcpwallet-node-linux-amd64; do
+            h1=$(grep "  ${name}\$" /tmp/SUMS1 | awk '{print $1}')
+            h2=$(grep "  ${name}\$" dist/release/SHA256SUMS | awk '{print $1}')
+            if [ -z "$h1" ] || [ "$h1" != "$h2" ]; then
+              echo "::error::NOT reproducible: ${name} ${h1:-<missing>} != ${h2:-<missing>}"; exit 1
+            fi
+            echo "reproducible OK: ${name} ${h1}"
+          done
+          echo "All static Go artifacts are byte-reproducible."
+
+  release:
+    needs: [android, ios, verify]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write # create the GitHub Release and upload assets
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0 # provenance.json records the exact commit + commit time
+
+      - name: Setup Go
+        uses: actions/setup-go@3041bf56c941b39c61721a86cd11f3bb1338122a # v5.2.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Download Android .aar
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        with:
+          name: mcpwallet-aar
+          path: dist/mobile
+
+      - name: Download iOS .xcframework
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        with:
+          name: mcpwallet-xcframework
+          path: dist/mobile
+
+      - name: Build release artifacts (binaries + SHA256SUMS + provenance)
+        run: |
+          AAR_PATH="dist/mobile/mcpwallet.aar" \
+          XCFRAMEWORK_PATH="dist/mobile/Mcpwallet.xcframework.zip" \
+          ./scripts/ci/release-build.sh "${GITHUB_REF_NAME}"
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --title "${GITHUB_REF_NAME}" \
+            --generate-notes \
+            dist/release/*

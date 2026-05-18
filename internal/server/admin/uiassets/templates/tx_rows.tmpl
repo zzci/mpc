@@ -1,0 +1,28 @@
+{{define "tx_rows.tmpl"}}<div id="tx-body">
+<table>
+  <thead><tr>
+    <th>Request</th><th>Group</th><th>Chain</th><th>Proposer</th>
+    <th>Status</th><th>Created</th><th>Elapsed</th>
+  </tr></thead>
+  <tbody>
+  {{range .Items}}
+    <tr>
+      <td class="font-mono"><a href="/admin/ui/transactions/{{.RequestID}}">{{short .RequestID}}</a></td>
+      <td class="font-mono">{{short .GroupID}}</td>
+      <td>{{.Chain}}</td>
+      <td class="font-mono">{{short .Proposer}}</td>
+      <td><span class="badge {{statusClass .Status}}">{{.Status}}</span></td>
+      <td class="text-slate-400">{{msTime .CreatedAt}}</td>
+      <td class="text-slate-400">{{with durMS .CreatedAt .DispatchedAt}}{{.}}{{else}}—{{end}}</td>
+    </tr>
+  {{else}}
+    <tr><td colspan="7" class="text-center text-slate-500 py-3">No matching requests</td></tr>
+  {{end}}
+  </tbody>
+</table>
+{{if .NextBefore}}
+<div class="mt-4">
+  <a class="btn btn-ghost" href="/admin/ui/transactions?group={{.F.group}}&amp;proposer={{.F.proposer}}&amp;status={{.F.status}}&amp;before={{.NextBefore}}">Load older</a>
+</div>
+{{end}}
+</div>{{end}}

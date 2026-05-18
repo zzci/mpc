@@ -1,0 +1,70 @@
+{
+  "domainHex": "5453532d454e56454c4f50452d43414e4f4e4943414c2d763100",
+  "emptyMetaHashHex": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "withBusiness": {
+    "envelope": {
+      "version": 1,
+      "requestId": "123e4567-e89b-12d3-a456-426614174000",
+      "groupId": "grp-1",
+      "chain": "ethereum",
+      "unsignedTxB64": "AQIDcmF3LXR4",
+      "digest32Hex": "abababababababababababababababababababababababababababababababab",
+      "proposer": "proposer-A",
+      "createdAt": 1700000000000,
+      "expiry": 1700000900000,
+      "businessInfo": {
+        "title": "Payout #42",
+        "summary": "Vendor settlement",
+        "items": [
+          "invoice-42",
+          "po-7"
+        ],
+        "refs": {
+          "invoice": "INV-42",
+          "po": "PO-7"
+        },
+        "requester": "finance-bot",
+        "memo": "monthly"
+      }
+    },
+    "metaHashHex": "e5dbdaf0c7d7a031505b0513e9f0d305ca8b89876afe870140e640061cf6dddc",
+    "canonicalHex": "5453532d454e56454c4f50452d43414e4f4e4943414c2d7631000000000000000001123e4567e89b12d3a456426614174000000000056772702d3100000008657468657265756d000000090102037261772d7478abababababababababababababababababababababababababababababababab0000000a70726f706f7365722d410000018bcfe568000000018bcff323a0e5dbdaf0c7d7a031505b0513e9f0d305ca8b89876afe870140e640061cf6dddc",
+    "envelopeDigestHex": "ab0bd96b6da9492c7b093a4c8eee1272337a418897f6c5db149afa030d5908c1",
+    "proposerSigHex": "3045022100ae03f84d6bd9d7f4f1e2cd36a0aa2350f95f0e0f20bc1bb299a5f937fd48193802206c35532bef69a3c6a91a727ad91081502c3b029eece5ea91e403698370720ddd"
+  },
+  "noBusiness": {
+    "envelope": {
+      "version": 1,
+      "requestId": "00000000-0000-0000-0000-000000000001",
+      "groupId": "grp-1",
+      "chain": "ethereum",
+      "unsignedTxB64": "AQIDcmF3LXR4",
+      "digest32Hex": "abababababababababababababababababababababababababababababababab",
+      "proposer": "proposer-A",
+      "createdAt": 1700000000000,
+      "expiry": 1700000900000,
+      "businessInfo": null
+    },
+    "metaHashHex": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "canonicalHex": "5453532d454e56454c4f50452d43414e4f4e4943414c2d763100000000000000000100000000000000000000000000000001000000056772702d3100000008657468657265756d000000090102037261772d7478abababababababababababababababababababababababababababababababab0000000a70726f706f7365722d410000018bcfe568000000018bcff323a0e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "envelopeDigestHex": "e70e53dd5b77b96c57b86969cbf6cd97d8cadd796839d9f3d924dd0fe021c9e2",
+    "proposerSigHex": "3044022015eec486d1fc14d997d5f081590f83175c863ac6226a46c00a8b40ffbd1f91cd02207df6564f7775b7d9d08a50ca20705c7bdf52fc469dcd01b375ad048265484728"
+  },
+  "proposer": {
+    "privHex": "1111111111111111111111111111111111111111111111111111111111111111",
+    "pubCompressedHex": "034f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa",
+    "pubUncompressedHex": "044f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa385b6b1b8ead809ca67454d9683fcf2ba03456d6fe2c4abe2b07f0fbdbb2f1c1"
+  },
+  "group": {
+    "privHex": "2222222222222222222222222222222222222222222222222222222222222222",
+    "pubCompressedHex": "02466d7fcae563e5cb09a0d1870bb580344804617879a14949cf22285f1bae3f27",
+    "pubUncompressedHex": "04466d7fcae563e5cb09a0d1870bb580344804617879a14949cf22285f1bae3f276728176c3c6431f8eeda4538dc37c865e2784f3a9e77d044f33e407797e1278a",
+    "evmAddress": "0x1563915e194D8CfBA1943570603F7606A3115508",
+    "tronAddress": "TBvJUBXorwBPzqvV38vjDgegj5Eh6g2Tsq",
+    "rsv": {
+      "digest32Hex": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+      "rsvB64": "HCN/ZpN/WfXSu6M/QE9I8/XIUyQGU/wwxufghaCTd/DXYIrHQHhsIdHhRSB7RF6dC4TOk6mKhhPjOliDdSg0AD8=",
+      "rsvHex": "1c237f66937f59f5d2bba33f404f48f3f5c853240653fc30c6e7e085a09377f0d7608ac740786c21d1e145207b445e9d0b84ce93a98a8613e33a5883752834003f"
+    }
+  }
+}

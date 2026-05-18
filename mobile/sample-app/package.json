@@ -1,0 +1,18 @@
+{
+  "name": "@mcp/sample-app",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Minimal React Native integration example for the mcp device-signing SDK: keygen / sign / reshare + multi-party WYSIWYS approval, driven through @mcp/rn-bridge (docs/design/mcp/sdk.md §1 rn-bridge / §3 signing flow).",
+  "main": "index.js",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@mcp/rn-bridge": "file:../bridge",
+    "react": "*",
+    "react-native": "*"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  }
+}

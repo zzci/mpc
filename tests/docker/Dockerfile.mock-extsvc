@@ -1,0 +1,15 @@
+# E2E-002 (docs/design/testing.md §3.3): the `mock-extsvc` container — the finalized
+# MEXT-001/MEXT-002 external-business-service double, run unchanged as an
+# isolated container reachable only over the Docker network. Build context is
+# the repo root so the `tests/mock/` module is copied verbatim; no
+# crypto/contract code is modified (proposerSig/metaHash/verify come from
+# tests/mock/src/contract as-is).
+FROM oven/bun:1.3-alpine
+WORKDIR /app/mock-extsvc
+COPY tests/mock/package.json tests/mock/bun.lock ./
+RUN bun install --frozen-lockfile
+COPY tests/mock/ ./
+# RESULT_MODE defaults to longpoll — the proven E2E-001 control contract
+# (e2e/src/lib/mock-extsvc.ts). PORT/COORD_BASE_URL/COORD_API_KEY are injected
+# by docker-compose.yml.
+CMD ["bun", "src/server.ts"]

@@ -1,0 +1,24 @@
+{{define "relay.tmpl"}}{{template "head" .}}{{template "nav" .}}
+<h1 class="text-xl font-bold text-slate-100 mb-4">Relay metrics</h1>
+{{if .Available}}
+<div class="card overflow-x-auto">
+  <table>
+    <thead><tr><th>Metric</th><th>Value</th></tr></thead>
+    <tbody>
+    {{range $k, $v := .Metrics}}
+      <tr><td class="font-mono">{{$k}}</td><td class="font-mono">{{$v}}</td></tr>
+    {{else}}
+      <tr><td colspan="2" class="text-center text-slate-500 py-3">No metrics reported</td></tr>
+    {{end}}
+    </tbody>
+  </table>
+</div>
+{{else}}
+<div class="card">
+  <div class="text-amber-400 font-semibold mb-2">Relay metrics not wired</div>
+  <p class="text-sm text-slate-400">The relay role is decoupled from coord (server.md R5). Scrape relay
+  connection / reservation / forward counts from the relay role's own
+  <code class="font-mono">metrics.listen</code> surface (server.md R6). No payload is ever exposed.</p>
+</div>
+{{end}}
+{{template "foot" .}}{{end}}
