@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/royqta/mcp-wallet/internal/server/coorddb"
+	"github.com/zzci/mpc/internal/server/coorddb"
 )
 
 // doFrom is do() with a controllable source address (netGate is keyed on the

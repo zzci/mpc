@@ -12,8 +12,8 @@ import (
 
 	"github.com/bnb-chain/tss-lib/v3/ecdsa/keygen"
 
-	"github.com/royqta/mcp-wallet/internal/keystore"
-	"github.com/royqta/mcp-wallet/internal/mpc"
+	"github.com/zzci/mpc/internal/keystore"
+	"github.com/zzci/mpc/internal/mpc"
 )
 
 // plaintextMarker is embedded in the shard so tests can assert it never

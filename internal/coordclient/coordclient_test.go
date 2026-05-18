@@ -14,7 +14,7 @@ import (
 
 	"github.com/btcsuite/btcd/btcec/v2"
 
-	"github.com/royqta/mcp-wallet/internal/contract"
+	"github.com/zzci/mpc/internal/contract"
 )
 
 func mustKey(t *testing.T) *btcec.PrivateKey {

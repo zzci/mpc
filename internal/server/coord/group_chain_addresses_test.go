@@ -3,7 +3,7 @@ package coord
 import (
 	"testing"
 
-	"github.com/royqta/mcp-wallet/internal/addr"
+	"github.com/zzci/mpc/internal/addr"
 )
 
 // G-001: the already-exposed GET /v1/groups/{groupId} path surfaces the

@@ -106,7 +106,7 @@ golang.org/x/mobile/bind`，需模块可解析该依赖。
 ### 阻断 B — `internal/mobileapi` 无法被 gomobile 直接绑定
 
 `gomobile bind .../internal/mobileapi` 报 `use of internal package
-github.com/royqta/mcp-wallet/internal/mobileapi not allowed`：gomobile 在模块外的
+github.com/zzci/mpc/internal/mobileapi not allowed`：gomobile 在模块外的
 合成 `gobind` 包生成桥接，Go 的 internal 可见性规则禁止其导入 `internal/`。
 
 - 绕过（取证用，已删除）：在仓库根建临时**非 internal 转发垫片包**
@@ -123,7 +123,7 @@ github.com/royqta/mcp-wallet/internal/mobileapi not allowed`：gomobile 在模�
 
 `scripts/build-android.sh` / `scripts/build-ios.sh`（详见 §5）已加：
 1. `MCPWALLET_BIND_PKG` 环境覆盖钩子——后续正式非 internal 包就位后，仅需
-   `export MCPWALLET_BIND_PKG=github.com/royqta/mcp-wallet/<pkg>` 即可，**无需再改
+   `export MCPWALLET_BIND_PKG=github.com/zzci/mpc/<pkg>` 即可，**无需再改
    脚本或 `_common.sh`**（`_common.sh` 非本任务 owner，未改）；
 2. `golang.org/x/mobile` 依赖**快速失败前置**——缺失时打印精确指引并退出，取代
    gobind 的晦涩报错。

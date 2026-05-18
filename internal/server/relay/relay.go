@@ -16,7 +16,7 @@ import (
 	circuitv2 "github.com/libp2p/go-libp2p/p2p/protocol/circuitv2/relay"
 	noise "github.com/libp2p/go-libp2p/p2p/security/noise"
 
-	"github.com/royqta/mcp-wallet/internal/node"
+	"github.com/zzci/mpc/internal/node"
 )
 
 // Relay is a running relay-role instance.

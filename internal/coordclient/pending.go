@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/royqta/mcp-wallet/internal/contract"
+	"github.com/zzci/mpc/internal/contract"
 )
 
 // PendingItem is one entry of the B3 pending list (api.md:43-46). It embeds

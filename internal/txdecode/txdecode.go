@@ -4,7 +4,7 @@ import (
 	"crypto/subtle"
 	"fmt"
 
-	"github.com/royqta/mcp-wallet/internal/contract"
+	"github.com/zzci/mpc/internal/contract"
 )
 
 // ChainDecoder is the pluggable per-chain decoder. An override may replace a

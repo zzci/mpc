@@ -14,8 +14,8 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"golang.org/x/text/unicode/norm"
 
-	"github.com/royqta/mcp-wallet/internal/contract"
-	"github.com/royqta/mcp-wallet/internal/server/relay"
+	"github.com/zzci/mpc/internal/contract"
+	"github.com/zzci/mpc/internal/server/relay"
 )
 
 // Relay link glue (the M-005 transport client <-> N-002 relay INTEROP the

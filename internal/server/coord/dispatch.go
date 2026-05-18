@@ -3,7 +3,7 @@ package coord
 import (
 	"sync"
 
-	"github.com/royqta/mcp-wallet/internal/contract"
+	"github.com/zzci/mpc/internal/contract"
 )
 
 // dispatchHub delivers START to signer devices via the B6 long-poll channel

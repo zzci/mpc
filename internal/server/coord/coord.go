@@ -9,8 +9,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/royqta/mcp-wallet/internal/contract"
-	"github.com/royqta/mcp-wallet/internal/server/coorddb"
+	"github.com/zzci/mpc/internal/contract"
+	"github.com/zzci/mpc/internal/server/coorddb"
 )
 
 // Coord is the coord-role orchestrator. It owns the D-001 store + presence set

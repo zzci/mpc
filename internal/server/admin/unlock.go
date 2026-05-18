@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/royqta/mcp-wallet/internal/server/coorddb"
+	"github.com/zzci/mpc/internal/server/coorddb"
 )
 
 // unlockGuard rate-limits unlock attempts with exponential backoff so a leaked

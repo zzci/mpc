@@ -7,7 +7,7 @@ import (
 
 	"github.com/libp2p/go-libp2p/core/peer"
 
-	"github.com/royqta/mcp-wallet/internal/contract"
+	"github.com/zzci/mpc/internal/contract"
 )
 
 // authz is the relay-side authorization table (server.md R4). A peer becomes

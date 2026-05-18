@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/royqta/mcp-wallet/internal/contract"
+	"github.com/zzci/mpc/internal/contract"
 )
 
 // Authentication (docs/design/contract/api.md A1/B1, group-provisioning.md §6).

@@ -17,10 +17,10 @@ import (
 
 	"github.com/bnb-chain/tss-lib/v3/ecdsa/keygen"
 
-	"github.com/royqta/mcp-wallet/internal/addr"
-	"github.com/royqta/mcp-wallet/internal/contract"
-	"github.com/royqta/mcp-wallet/internal/mpc"
-	"github.com/royqta/mcp-wallet/internal/txdecode"
+	"github.com/zzci/mpc/internal/addr"
+	"github.com/zzci/mpc/internal/contract"
+	"github.com/zzci/mpc/internal/mpc"
+	"github.com/zzci/mpc/internal/txdecode"
 )
 
 // eip1559TxType is the EIP-1559 typed-transaction envelope prefix; mirrors the

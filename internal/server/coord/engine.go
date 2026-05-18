@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/royqta/mcp-wallet/internal/contract"
-	"github.com/royqta/mcp-wallet/internal/server/coorddb"
+	"github.com/zzci/mpc/internal/contract"
+	"github.com/zzci/mpc/internal/server/coorddb"
 )
 
 // engine is the C5 quorum-initiation algorithm (docs/design/server/server.md C5),

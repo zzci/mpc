@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/royqta/mcp-wallet/internal/addr"
+	"github.com/zzci/mpc/internal/addr"
 )
 
 // 本文件仅提供 D-001 验收所需的最小持久化原语：S-002 组开通落库（单事务）、

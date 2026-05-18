@@ -19,8 +19,8 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2"
 	becdsa "github.com/btcsuite/btcd/btcec/v2/ecdsa"
 
-	"github.com/royqta/mcp-wallet/internal/contract"
-	"github.com/royqta/mcp-wallet/internal/server/coorddb"
+	"github.com/zzci/mpc/internal/contract"
+	"github.com/zzci/mpc/internal/server/coorddb"
 )
 
 // testClock is a settable clock for the C6 expiry gates (no sleeping).

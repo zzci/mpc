@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/royqta/mcp-wallet/internal/node"
+	"github.com/zzci/mpc/internal/node"
 )
 
 // swapRunners replaces the package role runners for the duration of a test and

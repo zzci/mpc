@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/royqta/mcp-wallet/internal/server/coorddb"
+	"github.com/zzci/mpc/internal/server/coorddb"
 )
 
 // The C3 state machine (docs/design/server/server.md C3). Every transition is

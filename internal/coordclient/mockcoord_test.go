@@ -15,7 +15,7 @@ import (
 
 	"github.com/btcsuite/btcd/btcec/v2"
 
-	"github.com/royqta/mcp-wallet/internal/contract"
+	"github.com/zzci/mpc/internal/contract"
 )
 
 // mockCoord is an independent, spec-faithful coord stand-in: it re-verifies

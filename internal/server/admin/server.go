@@ -12,7 +12,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/royqta/mcp-wallet/internal/server/coorddb"
+	"github.com/zzci/mpc/internal/server/coorddb"
 )
 
 // maxBodyBytes caps an admin request body (DoS guard; mirrors coord).

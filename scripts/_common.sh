@@ -17,7 +17,7 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # 绑定目标:B-001 的扁平 SDK 面(仅 string/[]byte/callback,无泛型/复杂结构体)。
-MODULE_PATH="github.com/royqta/mcp-wallet"
+MODULE_PATH="github.com/zzci/mpc"
 BIND_PKG="${MODULE_PATH}/internal/mobileapi"
 
 # 产物输出目录:dist/ 已被 .gitignore 忽略(/dist/),不污染工作树。

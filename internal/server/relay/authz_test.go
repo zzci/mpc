@@ -7,7 +7,7 @@ import (
 
 	"github.com/libp2p/go-libp2p/core/peer"
 
-	"github.com/royqta/mcp-wallet/internal/contract"
+	"github.com/zzci/mpc/internal/contract"
 )
 
 func grantTok(group, nonce string, scope contract.CapScope, notAfter int64) *contract.CapToken {

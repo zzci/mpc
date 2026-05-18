@@ -4,7 +4,7 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/royqta/mcp-wallet/internal/server/coorddb"
+	"github.com/zzci/mpc/internal/server/coorddb"
 )
 
 // apiError carries the docs/design/contract/api.md C-table code/HTTP status plus an

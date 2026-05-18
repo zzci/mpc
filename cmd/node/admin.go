@@ -5,8 +5,8 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/royqta/mcp-wallet/internal/server/admin"
-	"github.com/royqta/mcp-wallet/internal/server/coorddb"
+	"github.com/zzci/mpc/internal/server/admin"
+	"github.com/zzci/mpc/internal/server/coorddb"
 )
 
 // admin-api wiring (A-001). It runs in the coord process (admin.md §5:

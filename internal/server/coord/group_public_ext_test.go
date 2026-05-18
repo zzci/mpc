@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/royqta/mcp-wallet/internal/addr"
+	"github.com/zzci/mpc/internal/addr"
 )
 
 // XA-001 (L1 (b) split ruling): api.md A1 GET /v1/groups/{groupId}/public — a

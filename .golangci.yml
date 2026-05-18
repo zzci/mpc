@@ -34,7 +34,7 @@ formatters:
   settings:
     goimports:
       local-prefixes:
-        - github.com/royqta/mcp-wallet
+        - github.com/zzci/mpc
   exclusions:
     paths:
       - external/tss-lib

@@ -19,8 +19,8 @@ import (
 
 	"github.com/bnb-chain/tss-lib/v3/ecdsa/keygen"
 
-	"github.com/royqta/mcp-wallet/internal/contract"
-	"github.com/royqta/mcp-wallet/internal/transport"
+	"github.com/zzci/mpc/internal/contract"
+	"github.com/zzci/mpc/internal/transport"
 )
 
 // DeviceConfig is the JSON a member subprocess is launched with. Peers are

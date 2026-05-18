@@ -1,0 +1,35 @@
+# Dependabot — repository dependency scanning (security alerts + version
+# updates). Pairs with the in-CI vulnerability scan (govulncheck, ci.yml
+# quality-gate) and secret scan (gitleaks).
+#
+# external/tss-lib is intentionally NOT scanned/updated: it is vendored,
+# audited, pinned upstream source (go.mod `replace`) — its version is locked
+# by design and must not be auto-bumped.
+version: 2
+updates:
+  # Go modules (root module github.com/zzci/mpc)
+  - package-ecosystem: gomod
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      go-deps:
+        patterns: ["*"]
+
+  # GitHub Actions used by the CI / Release workflows
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+
+  # JS/TS (Bun) test + mobile-skeleton packages
+  - package-ecosystem: npm
+    directories:
+      - "/tests/e2e"
+      - "/tests/mock"
+      - "/mobile/bridge"
+      - "/mobile/sample-app"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10

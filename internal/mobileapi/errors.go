@@ -3,8 +3,8 @@ package mobileapi
 import (
 	"errors"
 
-	"github.com/royqta/mcp-wallet/internal/contract"
-	"github.com/royqta/mcp-wallet/internal/txdecode"
+	"github.com/zzci/mpc/internal/contract"
+	"github.com/zzci/mpc/internal/txdecode"
 )
 
 // The flat API reports every failure as a stable {code,msg} pair

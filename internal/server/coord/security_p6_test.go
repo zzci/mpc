@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/royqta/mcp-wallet/internal/contract"
+	"github.com/zzci/mpc/internal/contract"
 )
 
 // P6 hardening (docs/design/security.md §5, docs/design/server/server.md C7/C8). These

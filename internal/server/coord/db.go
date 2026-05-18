@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/royqta/mcp-wallet/internal/contract"
-	"github.com/royqta/mcp-wallet/internal/server/coorddb"
+	"github.com/zzci/mpc/internal/contract"
+	"github.com/zzci/mpc/internal/server/coorddb"
 )
 
 // db is coord's access layer over the D-001 store. coorddb (D-001) is owned by

@@ -4,7 +4,7 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/royqta/mcp-wallet/internal/server/coorddb"
+	"github.com/zzci/mpc/internal/server/coorddb"
 )
 
 // apiError carries an HTTP status, a stable code and an operator-safe message

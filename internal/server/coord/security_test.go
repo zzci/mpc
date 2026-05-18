@@ -10,7 +10,7 @@ import (
 
 	"github.com/btcsuite/btcd/btcec/v2"
 
-	"github.com/royqta/mcp-wallet/internal/contract"
+	"github.com/zzci/mpc/internal/contract"
 )
 
 // LOCKED: every data endpoint fail-closes 503 and leaks nothing; /healthz

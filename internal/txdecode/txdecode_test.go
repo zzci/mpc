@@ -5,7 +5,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/royqta/mcp-wallet/internal/contract"
+	"github.com/zzci/mpc/internal/contract"
 )
 
 func TestEnvelopeValidation(t *testing.T) {

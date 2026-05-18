@@ -6,8 +6,8 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/royqta/mcp-wallet/internal/node"
-	"github.com/royqta/mcp-wallet/internal/server/relay"
+	"github.com/zzci/mpc/internal/node"
+	"github.com/zzci/mpc/internal/server/relay"
 )
 
 // runRelay starts the real relay role (N-002): circuit-relay v2 + rendezvous +

@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/royqta/mcp-wallet/internal/node"
-	"github.com/royqta/mcp-wallet/internal/server/coord"
-	"github.com/royqta/mcp-wallet/internal/server/coorddb"
+	"github.com/zzci/mpc/internal/node"
+	"github.com/zzci/mpc/internal/server/coord"
+	"github.com/zzci/mpc/internal/server/coorddb"
 )
 
 // runCoord wires the real coord role (X-001). It builds the D-001 encrypted

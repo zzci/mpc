@@ -5,7 +5,7 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/royqta/mcp-wallet/internal/contract"
+	"github.com/zzci/mpc/internal/contract"
 )
 
 // A/B declarative cross-check keys (businessInfo.displayHints). The check is

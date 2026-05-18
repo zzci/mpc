@@ -8,7 +8,7 @@ import (
 
 	btcec "github.com/btcsuite/btcd/btcec/v2"
 
-	"github.com/royqta/mcp-wallet/internal/contract"
+	"github.com/zzci/mpc/internal/contract"
 )
 
 func mustGroupKey(t *testing.T) (*btcec.PrivateKey, string) {

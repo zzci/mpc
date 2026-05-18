@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/royqta/mcp-wallet/internal/server/coorddb"
+	"github.com/zzci/mpc/internal/server/coorddb"
 )
 
 // uiReq issues a UI request with optional bearer / cookie and returns the

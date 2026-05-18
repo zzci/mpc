@@ -8,8 +8,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/royqta/mcp-wallet/internal/contract"
-	"github.com/royqta/mcp-wallet/internal/server/coorddb"
+	"github.com/zzci/mpc/internal/contract"
+	"github.com/zzci/mpc/internal/server/coorddb"
 )
 
 // S-002 group/membership provisioning (docs/spec/group-provisioning.md). The

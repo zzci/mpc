@@ -8,7 +8,7 @@ import (
 
 	"github.com/umbracle/fastrlp"
 
-	"github.com/royqta/mcp-wallet/internal/contract"
+	"github.com/zzci/mpc/internal/contract"
 )
 
 func mustHex(t *testing.T, s string) []byte {

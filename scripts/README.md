@@ -14,7 +14,7 @@
 | `build-android.sh` | `gomobile bind -target=android` → `dist/mobile/mcpwallet.aar` |
 | `build-ios.sh` | `gomobile bind -target=ios,iossimulator` → `dist/mobile/Mcpwallet.xcframework` |
 
-绑定目标固定为 `github.com/royqta/mcp-wallet/internal/mobileapi`；产物输出至
+绑定目标固定为 `github.com/zzci/mpc/internal/mobileapi`；产物输出至
 `dist/mobile/`（`dist/` 已被 `.gitignore` 忽略，不污染工作树）。
 
 ## 用法（需 mobile 环境）

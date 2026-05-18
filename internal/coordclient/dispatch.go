@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/royqta/mcp-wallet/internal/contract"
+	"github.com/zzci/mpc/internal/contract"
 )
 
 // maxDispatchWait is the coord's per-call long-poll ceiling

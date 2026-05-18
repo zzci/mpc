@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/royqta/mcp-wallet/internal/keystore"
-	"github.com/royqta/mcp-wallet/internal/mpc"
+	"github.com/zzci/mpc/internal/keystore"
+	"github.com/zzci/mpc/internal/mpc"
 )
 
 // ReshareCallback mirrors KeyGenCallback for a resharing run. The master

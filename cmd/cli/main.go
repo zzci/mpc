@@ -20,7 +20,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/royqta/mcp-wallet/internal/cli"
+	"github.com/zzci/mpc/internal/cli"
 )
 
 func main() {

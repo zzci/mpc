@@ -6,7 +6,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/royqta/mcp-wallet/internal/keystore"
+	"github.com/zzci/mpc/internal/keystore"
 )
 
 // craftEnvelope seals a valid backup, then rewrites its kdf parameters so a

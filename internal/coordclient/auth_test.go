@@ -13,7 +13,7 @@ import (
 
 	"github.com/btcsuite/btcd/btcec/v2"
 
-	"github.com/royqta/mcp-wallet/internal/contract"
+	"github.com/zzci/mpc/internal/contract"
 )
 
 // independentDigest recomputes the member-auth digest from the api.md B1 / S-001

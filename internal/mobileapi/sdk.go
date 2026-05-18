@@ -8,8 +8,8 @@ import (
 
 	"github.com/btcsuite/btcd/btcec/v2"
 
-	"github.com/royqta/mcp-wallet/internal/keystore"
-	"github.com/royqta/mcp-wallet/internal/mpc"
+	"github.com/zzci/mpc/internal/keystore"
+	"github.com/zzci/mpc/internal/mpc"
 
 	tsskeygen "github.com/bnb-chain/tss-lib/v3/ecdsa/keygen"
 )

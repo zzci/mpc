@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/royqta/mcp-wallet/internal/contract"
+	"github.com/zzci/mpc/internal/contract"
 )
 
 // maxFrame caps a single directed-stream MpcMessage frame. tss-lib keygen

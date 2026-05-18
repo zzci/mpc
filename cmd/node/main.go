@@ -19,7 +19,7 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
-	"github.com/royqta/mcp-wallet/internal/node"
+	"github.com/zzci/mpc/internal/node"
 )
 
 func main() {

@@ -15,9 +15,9 @@ import (
 	"github.com/bnb-chain/tss-lib/v3/ecdsa/signing"
 	"github.com/bnb-chain/tss-lib/v3/tss"
 
-	"github.com/royqta/mcp-wallet/internal/contract"
-	"github.com/royqta/mcp-wallet/internal/mpc"
-	"github.com/royqta/mcp-wallet/internal/transport"
+	"github.com/zzci/mpc/internal/contract"
+	"github.com/zzci/mpc/internal/mpc"
+	"github.com/zzci/mpc/internal/transport"
 )
 
 // Network MPC driver: it drives real tss-lib keygen / signing / resharing

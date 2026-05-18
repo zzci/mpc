@@ -5,7 +5,7 @@ import (
 
 	btcec "github.com/btcsuite/btcd/btcec/v2"
 
-	"github.com/royqta/mcp-wallet/internal/mpc"
+	"github.com/zzci/mpc/internal/mpc"
 )
 
 // groupPubUncompressed extracts the wallet master public key (uncompressed

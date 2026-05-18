@@ -10,7 +10,7 @@ import (
 
 	"golang.org/x/text/unicode/norm"
 
-	"github.com/royqta/mcp-wallet/internal/contract"
+	"github.com/zzci/mpc/internal/contract"
 )
 
 // CapToken access control implements docs/design/server/server.md R4 layer 2

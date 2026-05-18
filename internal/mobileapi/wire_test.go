@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/royqta/mcp-wallet/internal/contract"
+	"github.com/zzci/mpc/internal/contract"
 )
 
 func TestOnWireMessageGate(t *testing.T) {

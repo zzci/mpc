@@ -20,11 +20,11 @@ import (
 	btcec "github.com/btcsuite/btcd/btcec/v2"
 	"golang.org/x/text/unicode/norm"
 
-	"github.com/royqta/mcp-wallet/internal/contract"
-	"github.com/royqta/mcp-wallet/internal/mpc"
-	"github.com/royqta/mcp-wallet/internal/server/coord"
-	"github.com/royqta/mcp-wallet/internal/server/coorddb"
-	"github.com/royqta/mcp-wallet/internal/txdecode"
+	"github.com/zzci/mpc/internal/contract"
+	"github.com/zzci/mpc/internal/mpc"
+	"github.com/zzci/mpc/internal/server/coord"
+	"github.com/zzci/mpc/internal/server/coorddb"
+	"github.com/zzci/mpc/internal/txdecode"
 
 	"github.com/bnb-chain/tss-lib/v3/ecdsa/keygen"
 )

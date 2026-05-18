@@ -7,10 +7,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/royqta/mcp-wallet/internal/contract"
-	"github.com/royqta/mcp-wallet/internal/coordclient"
-	"github.com/royqta/mcp-wallet/internal/mpc"
-	"github.com/royqta/mcp-wallet/internal/txdecode"
+	"github.com/zzci/mpc/internal/contract"
+	"github.com/zzci/mpc/internal/coordclient"
+	"github.com/zzci/mpc/internal/mpc"
+	"github.com/zzci/mpc/internal/txdecode"
 )
 
 // SignCallback is the Go→host channel of a signing session. Per DREV-001 D4-1

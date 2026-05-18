@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/royqta/mcp-wallet/internal/addr"
+	"github.com/zzci/mpc/internal/addr"
 )
 
 // uncompressedPub builds the 65-byte uncompressed secp256k1 public key

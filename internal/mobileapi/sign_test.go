@@ -8,7 +8,7 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2"
 	btcecdsa "github.com/btcsuite/btcd/btcec/v2/ecdsa"
 
-	"github.com/royqta/mcp-wallet/internal/contract"
+	"github.com/zzci/mpc/internal/contract"
 )
 
 // TestSignHappyPathCallbackOrder exercises the full WYSIWYS flow in-process:

@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/royqta/mcp-wallet/internal/contract"
+	"github.com/zzci/mpc/internal/contract"
 )
 
 // K-002 lost-member recovery, coord side. The reshare commit reuses the S-002

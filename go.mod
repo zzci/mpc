@@ -1,6 +1,6 @@
-module github.com/royqta/mcp-wallet
+module github.com/zzci/mpc
 
-go 1.25.7
+go 1.25.10
 
 // tss-lib v3 is vendored locally via a replace directive: external/tss-lib is
 // github.com/bnb-chain/tss-lib/v3 at tag v3.0.0 (pure Go, no cgo), pinned to an

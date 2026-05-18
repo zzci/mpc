@@ -3,8 +3,8 @@ package mobileapi
 import (
 	"fmt"
 
-	"github.com/royqta/mcp-wallet/internal/keystore"
-	"github.com/royqta/mcp-wallet/internal/mpc"
+	"github.com/zzci/mpc/internal/keystore"
+	"github.com/zzci/mpc/internal/mpc"
 )
 
 // ExportShare produces a portable, passphrase-encrypted backup of one held

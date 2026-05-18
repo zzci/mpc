@@ -9,7 +9,7 @@ Pod::Spec.new do |s|
   s.name         = "McpWallet"
   s.version      = package["version"]
   s.summary      = package["description"]
-  s.homepage     = "https://github.com/royqta/mcp-wallet"
+  s.homepage     = "https://github.com/zzci/mpc"
   s.license      = "MIT"
   s.authors      = "mcp"
   s.platforms    = { :ios => "13.0" }

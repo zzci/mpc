@@ -21,8 +21,8 @@ import (
 	noise "github.com/libp2p/go-libp2p/p2p/security/noise"
 	ma "github.com/multiformats/go-multiaddr"
 
-	"github.com/royqta/mcp-wallet/internal/contract"
-	"github.com/royqta/mcp-wallet/internal/node"
+	"github.com/zzci/mpc/internal/contract"
+	"github.com/zzci/mpc/internal/node"
 )
 
 const testPSKHex = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"

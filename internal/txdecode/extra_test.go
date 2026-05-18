@@ -6,7 +6,7 @@ import (
 
 	"github.com/umbracle/fastrlp"
 
-	"github.com/royqta/mcp-wallet/internal/contract"
+	"github.com/zzci/mpc/internal/contract"
 )
 
 // buildLegacy builds a legacy signing preimage (6 = pre-EIP-155, 9 = EIP-155).
