@@ -1,6 +1,6 @@
-// Package node 实现 node 的配置体系：内置默认 < 配置文件 < 环境变量，
-// 角色开关与已启用角色的必填 secret fail-fast 校验。
-// 对应 docs/design/server/server.md「配置」章；供 cmd/node 加载与角色分发使用。
+// Package node implements the node config system: built-in defaults <
+// config file < environment variables, role switches, and fail-fast
+// validation of required secrets for enabled roles (server.md "config").
 package node
 
 import (
@@ -21,7 +21,7 @@ const (
 	envNestSep        = "__"
 )
 
-// Config 是 node 的完整配置（log/metrics/relay/coord），字段与 server.md 配置章一致。
+// Config is the full node config (log/metrics/relay/coord).
 type Config struct {
 	Log     LogConfig     `yaml:"log"`
 	Metrics MetricsConfig `yaml:"metrics"`
@@ -29,18 +29,17 @@ type Config struct {
 	Coord   CoordConfig   `yaml:"coord"`
 }
 
-// LogConfig 控制日志级别与格式。
 type LogConfig struct {
 	Level  string `yaml:"level"`
 	Format string `yaml:"format"`
 }
 
-// MetricsConfig 是健康检查与指标监听地址（不含载荷）。
 type MetricsConfig struct {
 	Listen string `yaml:"listen"`
 }
 
-// RelayConfig 是 relay 角色配置（circuit-relay v2 + rendezvous + 访问控制）。
+// RelayConfig is the relay-role config (circuit-relay v2 + rendezvous +
+// access control).
 type RelayConfig struct {
 	Enable      bool              `yaml:"enable"`
 	Listen      []string          `yaml:"listen"`
@@ -50,22 +49,22 @@ type RelayConfig struct {
 	Limits      RelayLimitsConfig `yaml:"limits"`
 }
 
-// TokenVerifyConfig 是能力令牌验签公钥来源与自主式信任锚。
 type TokenVerifyConfig struct {
 	Source       string   `yaml:"source"`
 	GroupPubkeys []string `yaml:"group_pubkeys"`
 }
 
-// RendezvousConfig 控制 rendezvous 发现开关。
 type RendezvousConfig struct {
 	Enable bool `yaml:"enable"`
 }
 
-// RelayLimitsConfig 是预约/连接/带宽配额（防 DoS）。CircuitMaxDuration 是单条
-// circuit-v2 中继链路重置前的最长时长（Go duration，如 "10m"；空=保留 libp2p
-// 默认 2m）。security.md 不变量 #10 / RA-001 P1-1：生产联网 keygen/reshare 必带
-// Paillier 证明,带证明的 keygen 为分钟级,默认 2m 上限会在 keygen 中途重置链路;
-// 故此项须 keygen-aware 放宽/可配,而非靠关证明迁就(testing.md §6)。
+// RelayLimitsConfig is the reservation/connection/bandwidth quota
+// (anti-DoS). CircuitMaxDuration is the max lifetime of one circuit-v2
+// relayed link before reset (Go duration, e.g. "10m"; empty = libp2p
+// default 2m). security.md invariant #10 / RA-001 P1-1: production
+// networked keygen/reshare MUST run Paillier proofs and is minutes-long,
+// so the default 2m cap would reset the link mid-keygen; this must be
+// keygen-aware / configurable rather than dropping proofs (testing.md §6).
 type RelayLimitsConfig struct {
 	ReservationPerToken int    `yaml:"reservation_per_token"`
 	ReservationPerGroup int    `yaml:"reservation_per_group"`
@@ -73,7 +72,8 @@ type RelayLimitsConfig struct {
 	CircuitMaxDuration  string `yaml:"circuit_max_duration"`
 }
 
-// CoordConfig 是 coord 角色配置（编排者 + 外部业务对接入口）。
+// CoordConfig is the coord-role config (orchestrator + external-service
+// entry).
 type CoordConfig struct {
 	Enable   bool                `yaml:"enable"`
 	HTTP     CoordHTTPConfig     `yaml:"http"`
@@ -85,69 +85,70 @@ type CoordConfig struct {
 	Dispatch CoordDispatchConfig `yaml:"dispatch"`
 }
 
-// CoordHTTPConfig 是外部服务 + 成员 API 监听地址。
 type CoordHTTPConfig struct {
 	Listen string `yaml:"listen"`
 }
 
-// CoordDBConfig 是持久化连接串引用（secret）与整库加密开关。
 type CoordDBConfig struct {
 	DSNRef     string                  `yaml:"dsn_ref"`
 	Encryption CoordDBEncryptionConfig `yaml:"encryption"`
 }
 
-// CoordDBEncryptionConfig 控制 coord 持久库整库静态加密（database.md §7/§7.1）。
-// 默认 enable=true（defaults() 设定）：encrypted + 默认 LOCKED。仅 dev/test 可
-// 置 false 禁用——禁用须经生产铁律护栏(Validate)显式非生产确认,否则 node 拒启动。
+// CoordDBEncryptionConfig controls coord whole-DB encryption at rest
+// (database.md §7/§7.1). Default enable=true (set in defaults()):
+// encrypted + LOCKED. Only dev/test may set false; disabling requires the
+// explicit non-production confirmation enforced by Validate(), else the
+// node refuses to start.
 type CoordDBEncryptionConfig struct {
 	Enable bool `yaml:"enable"`
 }
 
-// allowInsecureDBEnv 是禁用整库加密时必须显式置位的「非生产确认」env
-// (database.md §7.1 生产铁律护栏)。fail-closed：缺省即拒——加固的生产/release
-// CI 永不设置它(H-004/H-005 核验),故误在生产禁用加密不可能而非仅不推荐。
+// allowInsecureDBEnv is the explicit "non-production confirmation" env
+// that must be set to disable whole-DB encryption (database.md §7.1
+// production iron-law guardrail). Fail-closed: absent = refuse. Hardened
+// production/release CI never sets it, so disabling encryption in
+// production is impossible, not merely discouraged.
 const allowInsecureDBEnv = "ALLOW_INSECURE_DB"
 
-// CoordExternalConfig 是外部业务服务鉴权与结果回传方式。
 type CoordExternalConfig struct {
 	Auth           string `yaml:"auth"`
 	APIKeyRef      string `yaml:"api_key_ref"`
 	ResultCallback string `yaml:"result_callback"`
 }
 
-// CoordPushConfig 是推送凭证引用（secret，可选）。
 type CoordPushConfig struct {
 	FCMCredRef  string `yaml:"fcm_cred_ref"`
 	APNSCredRef string `yaml:"apns_cred_ref"`
 }
 
-// CoordTTLConfig 是时钟偏移容差。
 type CoordTTLConfig struct {
 	SkewTolerance string `yaml:"skew_tolerance"`
 }
 
-// CoordQuorumConfig 是签名子集选取策略。
 type CoordQuorumConfig struct {
 	SignerSelect string `yaml:"signer_select"`
 }
 
-// CoordDispatchConfig 是派发后等待签名完成超时。
 type CoordDispatchConfig struct {
 	Timeout string `yaml:"timeout"`
 }
 
-// ErrNoRoleEnabled 表示 relay.enable 与 coord.enable 同为 false 的无效配置。
+// ErrNoRoleEnabled means relay.enable and coord.enable are both false.
 var ErrNoRoleEnabled = errors.New("relay.enable and coord.enable are both false")
 
 var errSecretMissing = errors.New("required secret missing")
 
-// errSecretPlaintext 表示 secret 项以明文字面值出现：server.md「密钥处理」要求
-// 标 secret 的项一律经 env:VAR / file:/path 注入，禁止明文写入提交的配置文件。
+// errSecretPlaintext means a secret appeared as a plaintext literal:
+// server.md requires every secret to be injected via env:VAR / file:/path;
+// plaintext in a committed config file is forbidden.
 var errSecretPlaintext = errors.New("secret must be an env: or file: reference (plaintext forbidden)")
 
-// errInsecureDBNotConfirmed 是生产铁律护栏(database.md §7.1):coord 启用且整库
-// 加密被禁用,但未经 ALLOW_INSECURE_DB=1 显式非生产确认 → fail-closed 拒启动。
-// 误在生产禁用加密 = 资金编排数据明文落盘的安全红线,护栏使其不可能。
+// errInsecureDBNotConfirmed is the production iron-law guardrail
+// (database.md §7.1): coord enabled with whole-DB encryption disabled but
+// no explicit ALLOW_INSECURE_DB=1 non-production confirmation →
+// fail-closed refuse to start. Disabling encryption in production =
+// plaintext fund-orchestration data at rest (a security red line); the
+// guardrail makes it impossible.
 var errInsecureDBNotConfirmed = fmt.Errorf(
 	"coord enabled with db.encryption.enable=false but %s=1 not set: "+
 		"whole-DB encryption may be disabled only in non-production "+
@@ -181,9 +182,9 @@ func defaults() Config {
 	}
 }
 
-// Load 按「内置默认 < 配置文件 < 环境变量」装配配置。
-// 配置文件路径取 NODE_CONFIG，缺省为 ./node.yaml；默认路径不存在时允许纯 env 配置，
-// 但 NODE_CONFIG 显式指定的文件缺失即报错。
+// Load assembles config as built-in defaults < config file < env vars.
+// The path is NODE_CONFIG (default ./node.yaml); a missing default path
+// allows pure-env config, but a missing explicitly-set NODE_CONFIG errors.
 func Load() (Config, error) {
 	cfg := defaults()
 
@@ -195,7 +196,7 @@ func Load() (Config, error) {
 			return Config{}, fmt.Errorf("parse config %s: %w", path, err)
 		}
 	case errors.Is(err, os.ErrNotExist) && !explicit:
-		// 默认路径缺省：允许容器/CI 场景纯 env 注入。
+		// Default path absent: allow pure-env injection (containers/CI).
 	default:
 		return Config{}, fmt.Errorf("read config %s: %w", path, err)
 	}
@@ -206,9 +207,11 @@ func Load() (Config, error) {
 	return cfg, nil
 }
 
-// Validate 执行启动期校验：双角色均关闭即失败；已启用角色的受约束枚举必须合法、
-// 必填 secret 必须可解析且为 env:/file: 引用（明文即 fail-fast），可选 secret 一旦
-// 配置亦强制引用纪律。校验仅覆盖已启用角色（关闭角色的配置不参与启动校验）。
+// Validate runs startup checks: fail if both roles are off; enabled
+// roles' constrained enums must be valid; required secrets must resolve
+// and be env:/file: refs (plaintext = fail-fast); a configured optional
+// secret is held to the same ref discipline. Only enabled roles are
+// checked (a disabled role's config does not gate startup).
 func (c Config) Validate() error {
 	if !c.Relay.Enable && !c.Coord.Enable {
 		return ErrNoRoleEnabled
@@ -223,9 +226,11 @@ func (c Config) Validate() error {
 		}
 	}
 	if c.Coord.Enable {
-		// 生产铁律护栏(database.md §7.1):整库加密被禁用时,必须有显式非生产
-		// 确认 ALLOW_INSECURE_DB=1,否则 fail-closed 拒启动。默认 enable=true,
-		// 故正常/生产配置不受影响;此分支仅在显式 enable=false 时触发。
+		// Production iron-law guardrail (database.md §7.1): if whole-DB
+		// encryption is disabled, ALLOW_INSECURE_DB=1 must explicitly
+		// confirm non-production, else fail-closed. Default enable=true, so
+		// normal/production config is unaffected; this only triggers on an
+		// explicit enable=false.
 		if !c.Coord.DB.Encryption.Enable && os.Getenv(allowInsecureDBEnv) != "1" {
 			return errInsecureDBNotConfirmed
 		}
@@ -266,8 +271,9 @@ func configPath() (path string, explicit bool) {
 	return defaultConfigPath, false
 }
 
-// resolveSecret 解析 secret 引用：仅接受 env:VAR / file:/path；空值视为缺失，
-// 任何其它字面值视为明文 secret 并拒绝（server.md 密钥处理：禁明文入提交的配置文件）。
+// resolveSecret resolves a secret ref: only env:VAR / file:/path; empty =
+// missing; any other literal is treated as a plaintext secret and
+// rejected (server.md: no plaintext in committed config files).
 func resolveSecret(ref string) (string, error) {
 	ref = strings.TrimSpace(ref)
 	if ref == "" {
@@ -295,8 +301,8 @@ func resolveSecret(ref string) (string, error) {
 	}
 }
 
-// optionalSecret 校验可选 secret：未配置（空引用）即跳过；一旦配置则同样强制
-// env:/file: 引用纪律并要求可解析（push 凭证等可选项也禁明文入文件）。
+// optionalSecret validates an optional secret: skip if unset (empty ref);
+// once set, the same env:/file: ref discipline applies and it must resolve.
 func optionalSecret(ref string) error {
 	if strings.TrimSpace(ref) == "" {
 		return nil
@@ -305,7 +311,7 @@ func optionalSecret(ref string) error {
 	return err
 }
 
-// validateEnum 校验受约束的字符串取值（server.md 参数表枚举列）。
+// validateEnum checks a constrained string value (server.md enum column).
 func validateEnum(field, val string, allowed ...string) error {
 	for _, a := range allowed {
 		if val == a {
@@ -319,7 +325,8 @@ func applyEnvOverrides(cfg *Config) error {
 	return walkEnv(reflect.ValueOf(cfg).Elem(), envPrefix)
 }
 
-// walkEnv 递归遍历带 yaml 标签的结构体，按 TSSNODE_<大写键>（嵌套以 __ 连接）覆盖标量。
+// walkEnv recurses yaml-tagged structs, overriding scalars from
+// TSSNODE_<UPPER KEY> (nested keys joined by __).
 func walkEnv(v reflect.Value, prefix string) error {
 	t := v.Type()
 	for i := range t.NumField() {
