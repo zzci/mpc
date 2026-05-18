@@ -37,4 +37,8 @@ gomobile init
 
 log "delegating to scripts/build-android.sh (GM-001, call-only)"
 cd "${CI_REPO_ROOT}"
+# gomobile bind needs a NON-internal target (Go internal/ rule forbids the
+# generated gobind glue from importing internal/mobileapi). mobilesdk is the
+# 1:1 public re-export; build-android.sh honors MCPWALLET_BIND_PKG.
+export MCPWALLET_BIND_PKG="github.com/zzci/mpc/mobilesdk"
 bash scripts/build-android.sh
