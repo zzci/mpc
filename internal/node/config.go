@@ -29,11 +29,13 @@ type Config struct {
 	Coord   CoordConfig   `yaml:"coord"`
 }
 
+// LogConfig is the log level and format.
 type LogConfig struct {
 	Level  string `yaml:"level"`
 	Format string `yaml:"format"`
 }
 
+// MetricsConfig is the health-check / metrics listen address.
 type MetricsConfig struct {
 	Listen string `yaml:"listen"`
 }
@@ -49,11 +51,14 @@ type RelayConfig struct {
 	Limits      RelayLimitsConfig `yaml:"limits"`
 }
 
+// TokenVerifyConfig is the capability-token verify-key source
+// (self-sovereign trust anchor).
 type TokenVerifyConfig struct {
 	Source       string   `yaml:"source"`
 	GroupPubkeys []string `yaml:"group_pubkeys"`
 }
 
+// RendezvousConfig toggles rendezvous discovery.
 type RendezvousConfig struct {
 	Enable bool `yaml:"enable"`
 }
@@ -85,10 +90,13 @@ type CoordConfig struct {
 	Dispatch CoordDispatchConfig `yaml:"dispatch"`
 }
 
+// CoordHTTPConfig is the external-service + member API listen address.
 type CoordHTTPConfig struct {
 	Listen string `yaml:"listen"`
 }
 
+// CoordDBConfig is the persistence DSN ref (secret) + whole-DB
+// encryption switch.
 type CoordDBConfig struct {
 	DSNRef     string                  `yaml:"dsn_ref"`
 	Encryption CoordDBEncryptionConfig `yaml:"encryption"`
@@ -110,25 +118,31 @@ type CoordDBEncryptionConfig struct {
 // production is impossible, not merely discouraged.
 const allowInsecureDBEnv = "ALLOW_INSECURE_DB"
 
+// CoordExternalConfig is the external-service auth + result-callback
+// method.
 type CoordExternalConfig struct {
 	Auth           string `yaml:"auth"`
 	APIKeyRef      string `yaml:"api_key_ref"`
 	ResultCallback string `yaml:"result_callback"`
 }
 
+// CoordPushConfig is the push-credential refs (secret, optional).
 type CoordPushConfig struct {
 	FCMCredRef  string `yaml:"fcm_cred_ref"`
 	APNSCredRef string `yaml:"apns_cred_ref"`
 }
 
+// CoordTTLConfig is the clock-skew tolerance.
 type CoordTTLConfig struct {
 	SkewTolerance string `yaml:"skew_tolerance"`
 }
 
+// CoordQuorumConfig is the signer-subset selection policy.
 type CoordQuorumConfig struct {
 	SignerSelect string `yaml:"signer_select"`
 }
 
+// CoordDispatchConfig is the post-dispatch signing-completion timeout.
 type CoordDispatchConfig struct {
 	Timeout string `yaml:"timeout"`
 }
