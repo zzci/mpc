@@ -8,49 +8,57 @@ import (
 	"net/url"
 	"sync"
 
-	_ "github.com/mutecomm/go-sqlcipher/v4" // 注册加密 sqlite3 驱动（cgo / SQLCipher）
+	_ "github.com/mutecomm/go-sqlcipher/v4" // registers the encrypted sqlite3 driver (cgo / SQLCipher)
 )
 
-// Store 是 coord 整库加密持久库 + LOCKED 生命周期（docs/design/server/server.md C9b、
-// server/database.md §7）。
+// Store is the coord whole-DB-encrypted persistence + LOCKED lifecycle
+// (server.md C9b, server/database.md §7).
 //
-//	启动 → LOCKED（db 未挂载、内存无密钥）
-//	  ──Unlock(口令→Argon2id→raw key→挂载+迁移)──▶ UNLOCKED（正常服务）
-//	  ──Relock(清零内存密钥+卸载)──▶ LOCKED
+//	start → LOCKED (db not mounted, no in-memory key)
+//	  ──Unlock(passphrase→Argon2id→raw key→mount+migrate)──▶ UNLOCKED (serving)
+//	  ──Relock(zeroize in-memory key + unmount)──▶ LOCKED
 //
-// LOCKED 下一切数据访问 fail-closed 返回 ErrLocked（上层映射 503 LOCKED）。
-// 口令仅经 Unlock 入参传入，本模块不持久化、不读配置/env；密钥仅驻内存、重锁即清零。
+// Under LOCKED every data access fail-closes with ErrLocked (callers map
+// it to 503 LOCKED). The passphrase is only passed in via Unlock; this
+// module never persists it nor reads config/env; the key lives in memory
+// only and is zeroized on relock.
 type Store struct {
 	dbPath string
 
-	// plaintext 为 true 时为 dev/test 整库加密禁用模式（database.md §7.1）：
-	// OpenInsecure 直接挂载未加密库、不派生密钥、不经 LOCKED；Unlock 被拒。
-	// 生产铁律护栏在 node 启动校验(internal/node Validate)拦截误用,本字段
-	// 仅决定挂载方式。
+	// plaintext=true is the dev/test encryption-disabled mode
+	// (database.md §7.1): OpenInsecure mounts an unencrypted DB, derives
+	// no key, has no LOCKED state; Unlock is rejected. The production
+	// iron-law guardrail blocks misuse at node startup
+	// (internal/node Validate); this field only selects the mount mode.
 	plaintext bool
 
 	mu  sync.RWMutex
 	db  *sql.DB
-	key []byte // Argon2id 派生的 raw 加密密钥；仅内存，Relock 时 zeroize
+	key []byte // Argon2id-derived raw key; memory only, zeroized on Relock
 }
 
-// NewStore 构造一个处于 LOCKED 的加密 Store（不连接、不派生密钥）。dbPath 为
-// 加密单文件路径，由上层（X-001）依配置解析后注入。
+// NewStore builds an encrypted Store in LOCKED state (no connection, no
+// key derivation). dbPath is the encrypted single-file path, injected by
+// the caller (X-001) after resolving config.
 func NewStore(dbPath string) *Store {
 	return &Store{dbPath: dbPath}
 }
 
-// NewPlaintextStore 构造一个 dev/test 整库加密禁用模式的 Store（database.md
-// §7.1）。仍处于未挂载态——调用方须 OpenInsecure 才就绪——但挂载的是**未加密**
-// 库、不派生密钥、不经 LOCKED 生命周期。仅供非生产；生产铁律护栏由
-// internal/node Validate 在 node 启动期 fail-closed 拦截，本类型不重复判定。
+// NewPlaintextStore builds a dev/test encryption-disabled Store
+// (database.md §7.1). Still unmounted — the caller must OpenInsecure —
+// but it mounts an UNENCRYPTED DB, derives no key, and has no LOCKED
+// lifecycle. Non-production only; the production iron-law guardrail
+// fail-closes at node startup (internal/node Validate), so this type
+// does not re-check it.
 func NewPlaintextStore(dbPath string) *Store {
 	return &Store{dbPath: dbPath, plaintext: true}
 }
 
-// Unlock 用口令派生密钥、挂载加密库并前进迁移。成功后转 UNLOCKED。
-// 口令由调用方（admin/X-001 经 N-001 node.UnlockProvider 获取）传入；本方法
-// 不复制、不持久化口令，调用方应在返回后自行 zeroize 其口令缓冲。
+// Unlock derives the key from the passphrase, mounts the encrypted DB
+// and runs migrations forward, transitioning to UNLOCKED. The passphrase
+// is supplied by the caller (admin/X-001 via the N-001
+// node.UnlockProvider); this method does not copy or persist it — the
+// caller should zeroize its own passphrase buffer after return.
 func (s *Store) Unlock(ctx context.Context, passphrase []byte) error {
 	if s.plaintext {
 		return ErrPlaintextMode
@@ -78,12 +86,14 @@ func (s *Store) Unlock(ctx context.Context, passphrase []byte) error {
 		zeroize(key)
 		return fmt.Errorf("coorddb: open: %w", err)
 	}
-	// coord 单节点单写者（database.md §1/§5）：单连接 + BEGIN IMMEDIATE
-	// （_txlock=immediate）串行化写事务，规避 SQLITE_BUSY。
+	// coord is a single-node single-writer (database.md §1/§5): one
+	// connection + BEGIN IMMEDIATE (_txlock=immediate) serializes write
+	// transactions and avoids SQLITE_BUSY.
 	db.SetMaxOpenConns(1)
 
-	// 校验口令：错误密钥下 SQLCipher 无法解出页 → 读 sqlite_master 即失败，
-	// 等价「泄露 .db 文件无口令不可读」在访问层的体现。
+	// Passphrase check: with a wrong key SQLCipher cannot decrypt pages,
+	// so reading sqlite_master fails — the access-layer expression of
+	// "a leaked .db file is unreadable without the passphrase".
 	if err := db.PingContext(ctx); err != nil {
 		_ = db.Close()
 		zeroize(key)
@@ -106,13 +116,18 @@ func (s *Store) Unlock(ctx context.Context, passphrase []byte) error {
 	return nil
 }
 
-// OpenInsecure 是 dev/test 整库加密禁用模式（database.md §7.1）的挂载入口：
-// 打开**未加密** SQLite（无 _pragma_key、不派生密钥）、前进迁移并转 UNLOCKED-
-// 等价,使 coord 启动即可服务、数据端点立即就绪——E2E 据此跑通完整环,不再用
-// harness 解锁时序 hack。仅 plaintext Store 可调；加密 Store 调用即 ErrNotPlaintext。
+// OpenInsecure is the mount entry for dev/test encryption-disabled mode
+// (database.md §7.1): it opens an UNENCRYPTED SQLite (no _pragma_key, no
+// key derivation), runs migrations and becomes UNLOCKED-equivalent so
+// coord serves immediately and data endpoints are ready at once — this
+// is what lets E2E run the full ring without an unlock-timing harness
+// hack. Only a plaintext Store may call it; an encrypted Store returns
+// ErrNotPlaintext.
 //
-// 生产铁律护栏在 node 启动校验拦截误用(缺 ALLOW_INSECURE_DB=1 即 fail-closed
-// 拒启动),故本方法到达时已是经确认的非生产路径;禁用态库不得用于真实部署。
+// The production iron-law guardrail blocks misuse at node startup
+// (missing ALLOW_INSECURE_DB=1 = fail-closed refuse), so by the time
+// this method is reached it is a confirmed non-production path; a
+// disabled-mode DB must never be used for a real deployment.
 func (s *Store) OpenInsecure(ctx context.Context) error {
 	if !s.plaintext {
 		return ErrNotPlaintext
@@ -140,7 +155,8 @@ func (s *Store) OpenInsecure(ctx context.Context) error {
 	return nil
 }
 
-// Relock 清零内存密钥并卸载库，回到 LOCKED。幂等：已 LOCKED 时直接返回。
+// Relock zeroizes the in-memory key and unmounts the DB, returning to
+// LOCKED. Idempotent: a no-op if already LOCKED.
 func (s *Store) Relock() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -157,17 +173,18 @@ func (s *Store) Relock() error {
 	return nil
 }
 
-// Close 等价 Relock，用于进程退出/测试清理。
+// Close is equivalent to Relock, for process exit / test cleanup.
 func (s *Store) Close() error { return s.Relock() }
 
-// IsUnlocked 报告当前是否已解锁。
+// IsUnlocked reports whether the store is currently unlocked.
 func (s *Store) IsUnlocked() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.db != nil
 }
 
-// conn 返回已挂载连接；LOCKED 时 fail-closed 返回 ErrLocked。
+// conn returns the mounted connection; fail-closes with ErrLocked under
+// LOCKED.
 func (s *Store) conn() (*sql.DB, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -177,8 +194,9 @@ func (s *Store) conn() (*sql.DB, error) {
 	return s.db, nil
 }
 
-// WithTx 在写事务内执行 fn；事务为 BEGIN IMMEDIATE（_txlock=immediate）以串行化
-// 写者（database.md §5）。fn 返回错误或 panic 即回滚。LOCKED 下 fail-closed。
+// WithTx runs fn inside a write transaction; the transaction is BEGIN
+// IMMEDIATE (_txlock=immediate) to serialize writers (database.md §5).
+// fn returning an error or panicking rolls back. Fail-closed under LOCKED.
 func (s *Store) WithTx(ctx context.Context, fn func(*sql.Tx) error) (err error) {
 	db, err := s.conn()
 	if err != nil {
@@ -206,9 +224,10 @@ func (s *Store) WithTx(ctx context.Context, fn func(*sql.Tx) error) (err error) 
 	return nil
 }
 
-// dsn 以 raw key 模式构造加密连接串：32B Argon2id 派生密钥以 x'<hex>' 直传
-// SQLCipher（跳过其内置 KDF，由我们用 Argon2id 派生）；salt 由 SQLCipher 存于
-// 库头（非机密）。
+// dsn builds the encrypted connection string in raw-key mode: the 32B
+// Argon2id-derived key is passed to SQLCipher as x'<hex>' (skipping its
+// built-in KDF — we derive with Argon2id); SQLCipher stores the salt in
+// the DB header (non-secret).
 func (s *Store) dsn(key []byte) string {
 	q := url.Values{}
 	q.Set("_pragma_key", fmt.Sprintf("x'%s'", hex.EncodeToString(key)))
@@ -218,8 +237,10 @@ func (s *Store) dsn(key []byte) string {
 	return "file:" + s.dbPath + "?" + q.Encode()
 }
 
-// dsnPlaintext 构造**无 _pragma_key** 的连接串（database.md §7.1 禁用模式）：
-// SQLCipher 驱动未提供密钥即等价标准未加密 SQLite,`.db` 明文落盘。仅 dev/test。
+// dsnPlaintext builds a connection string WITHOUT _pragma_key
+// (database.md §7.1 disabled mode): with no key the SQLCipher driver is
+// equivalent to standard unencrypted SQLite and the .db is plaintext on
+// disk. dev/test only.
 func (s *Store) dsnPlaintext() string {
 	q := url.Values{}
 	q.Set("_busy_timeout", "5000")

@@ -9,19 +9,23 @@ import (
 	"github.com/zzci/mpc/internal/addr"
 )
 
-// 本文件仅提供 D-001 验收所需的最小持久化原语：S-002 组开通落库（单事务）、
-// 状态机迁移 + request_events 同事务、admin_audit 追加写。完整 coord 编排
-// （信封入列/法定人数/TTL/外部&成员 API）属 X-001，不在本模块。
+// This file provides only the minimal persistence primitives D-001
+// accepts on: S-002 group provisioning (single transaction), state-machine
+// transition + request_events in the same transaction, admin_audit
+// append. Full coord orchestration (envelope enqueue / quorum / TTL /
+// external & member API) is X-001, not this module.
 
-// ErrConflict 表示乐观状态守卫未命中（请求不存在或当前状态 != 期望 from）。
-// 对齐 database.md §5：无 SELECT … FOR UPDATE，靠 BEGIN IMMEDIATE + 事务内
-// 「读状态→校验→改」串行化防双发。
+// ErrConflict means the optimistic state guard did not match (request
+// missing, or current status != expected from). Per database.md §5:
+// no SELECT ... FOR UPDATE; BEGIN IMMEDIATE + an in-transaction
+// read-status→check→update serializes against double-dispatch.
 var ErrConflict = errors.New("coorddb: state guard not satisfied")
 
-// GroupRecord 是 groups 一行（公开信息 + S-002 epoch + 派生链地址）。
-// EVMAddress/TronAddress 由 ProvisionGroup 在落库事务内自 ECDSAPubkey 确定性
-// 派生填写（调用方无须、也不应自行设置；地址≠单纯公钥，docs/design/server/database.md
-// groups schema + 地址记录小节）。
+// GroupRecord is one groups row (public info + S-002 epoch + derived
+// chain addresses). EVMAddress/TronAddress are filled by ProvisionGroup,
+// deterministically derived from ECDSAPubkey inside the write
+// transaction (callers neither need nor should set them; an address is
+// not the bare pubkey — database.md groups schema + address-record).
 type GroupRecord struct {
 	GroupID     string
 	ECDSAPubkey []byte
@@ -30,15 +34,19 @@ type GroupRecord struct {
 	PartiesN    int
 	Epoch       int64
 	CreatedAt   string // RFC3339
-	EVMAddress  string // EIP-55；ProvisionGroup 自 ECDSAPubkey 派生
-	TronAddress string // Base58Check；ProvisionGroup 自 ECDSAPubkey 派生
+	EVMAddress  string // EIP-55; derived by ProvisionGroup from ECDSAPubkey
+	TronAddress string // Base58Check; derived by ProvisionGroup from ECDSAPubkey
 }
 
-// deriveChainAddrs 自未压缩 secp256k1 主公钥确定性派生 EVM(EIP-55) 与 TRON
-// (Base58Check) 地址（复用 internal/addr 公开 API，勿重实现）。best-effort：
-// 公钥非合法未压缩点（如低层测试桩 / 历史脏行）时返回空串而非报错，使
-// ProvisionGroup / 迁移 backfill 在退化输入下仍单事务成功（既有 D-001/S-002/
-// X-001 测试以非曲线桩公钥开通；真实 S-002 开通传 65B 未压缩公钥得正确地址）。
+// deriveChainAddrs deterministically derives the EVM (EIP-55) and TRON
+// (Base58Check) addresses from the uncompressed secp256k1 master pubkey
+// (reuses the internal/addr public API; do not reimplement). Best-effort:
+// for a pubkey that is not a valid uncompressed point (low-level test
+// stub / legacy dirty row) it returns empty strings rather than erroring,
+// so ProvisionGroup / migration backfill still succeed in one
+// transaction on degenerate input (existing D-001/S-002/X-001 tests
+// provision with non-curve stub pubkeys; a real S-002 provisioning
+// passes a 65B uncompressed pubkey and gets correct addresses).
 func deriveChainAddrs(pub []byte) (evm, tron string) {
 	if e, err := addr.ETHAddress(pub); err == nil {
 		evm = e
@@ -49,15 +57,17 @@ func deriveChainAddrs(pub []byte) (evm, tron string) {
 	return evm, tron
 }
 
-// MemberRecord 是 group_members 一行。
+// MemberRecord is one group_members row.
 type MemberRecord struct {
 	MemberID       string
 	IdentityPubkey []byte
 }
 
-// ProvisionGroup 单事务写 groups 一行 + 每成员一行 group_members(status=active)
-// + 一条开通审计事件（request_events 风格，actor=coord），对齐 S-002 §3.1/§3.2/§51。
-// 鉴权/签名校验属 X-001，本方法只做落库；调用方须已校验。
+// ProvisionGroup writes, in one transaction, one groups row + one
+// group_members row per member (status=active) + one provisioning audit
+// event (request_events style, actor=coord), per S-002 §3.1/§3.2/§51.
+// Auth/signature checks are X-001; this method only persists — the
+// caller must have validated already.
 func (s *Store) ProvisionGroup(ctx context.Context, g GroupRecord, members []MemberRecord) error {
 	evmAddr, tronAddr := deriveChainAddrs(g.ECDSAPubkey)
 	return s.WithTx(ctx, func(tx *sql.Tx) error {
@@ -88,13 +98,14 @@ func (s *Store) ProvisionGroup(ctx context.Context, g GroupRecord, members []Mem
 	})
 }
 
-// SigningRequestSeed 是创建待签请求所需的最小字段（X-001 信封入列会承载完整字段）。
+// SigningRequestSeed is the minimal fields to create a pending request
+// (X-001 envelope enqueue carries the full set).
 type SigningRequestSeed struct {
 	RequestID   string
 	GroupID     string
 	Chain       string
 	UnsignedTx  []byte
-	Digest32    []byte // 必须 32B（schema CHECK 兜底）
+	Digest32    []byte // must be 32B (schema CHECK backstop)
 	Proposer    string
 	MetaHash    []byte
 	ProposerSig []byte
@@ -102,7 +113,7 @@ type SigningRequestSeed struct {
 	Expiry      string
 }
 
-// CreateSigningRequest 以 PENDING 入列一条待签请求。
+// CreateSigningRequest enqueues one request as PENDING.
 func (s *Store) CreateSigningRequest(ctx context.Context, r SigningRequestSeed) error {
 	return s.WithTx(ctx, func(tx *sql.Tx) error {
 		_, err := tx.ExecContext(ctx,
@@ -119,9 +130,11 @@ func (s *Store) CreateSigningRequest(ctx context.Context, r SigningRequestSeed) 
 	})
 }
 
-// RecordTransition 在单事务内执行状态机迁移：校验当前状态 == from（守卫），
-// 改为 to，并写一条 request_events。任一步失败整体回滚（database.md §5/§8：
-// 状态机迁移与 request_events 同事务，异常回滚一致）。
+// RecordTransition performs a state-machine transition in one
+// transaction: check current status == from (guard), set to, and write
+// one request_events row. Any step failing rolls back the whole
+// (database.md §5/§8: transition and request_events in one transaction,
+// consistent rollback on error).
 func (s *Store) RecordTransition(ctx context.Context, requestID, from, to, actor, detail string) error {
 	return s.WithTx(ctx, func(tx *sql.Tx) error {
 		res, err := tx.ExecContext(ctx,
@@ -147,8 +160,10 @@ func (s *Store) RecordTransition(ctx context.Context, requestID, from, to, actor
 	})
 }
 
-// AppendAdminAudit 追加写一条管理操作审计；应用层仅 append、不提供改/删
-// （database.md §6：管理员不可改/删）。params 不得含 secret 明文（调用方保证）。
+// AppendAdminAudit append-writes one admin-action audit row; the
+// application layer only appends, never updates/deletes (database.md §6:
+// admins cannot modify/delete). params must not contain plaintext
+// secrets (caller's responsibility).
 func (s *Store) AppendAdminAudit(ctx context.Context, adminID, action, params, srcIP, at string) error {
 	db, err := s.conn()
 	if err != nil {
@@ -163,7 +178,7 @@ func (s *Store) AppendAdminAudit(ctx context.Context, adminID, action, params, s
 	return nil
 }
 
-// RequestStatus 读单个请求的当前状态；LOCKED 下 fail-closed。
+// RequestStatus reads one request's current status; fail-closed under LOCKED.
 func (s *Store) RequestStatus(ctx context.Context, requestID string) (string, error) {
 	db, err := s.conn()
 	if err != nil {
@@ -181,7 +196,8 @@ func (s *Store) RequestStatus(ctx context.Context, requestID string) (string, er
 	return status, nil
 }
 
-// GroupEpoch 读组的当前 epoch（S-002 §4.1 单调校验依赖）；LOCKED 下 fail-closed。
+// GroupEpoch reads a group's current epoch (S-002 §4.1
+// monotonic-check dependency); fail-closed under LOCKED.
 func (s *Store) GroupEpoch(ctx context.Context, groupID string) (int64, error) {
 	db, err := s.conn()
 	if err != nil {

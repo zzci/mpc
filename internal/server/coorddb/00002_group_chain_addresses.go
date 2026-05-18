@@ -8,24 +8,32 @@ import (
 	"github.com/pressly/goose/v3"
 )
 
-// 迁移 v2：groups 增派生链地址列 evm_address / tron_address（L1 设计变更：group
-// 须持久化派生实际链地址，地址≠单纯公钥；docs/design/server/database.md groups schema
-// + 地址记录小节）。仍走 D-001 既有 goose 框架——schema 变更经「新增版本化迁移
-// 文件 + goose_db_version 跟踪」（database.md §1：禁手改 schema）。
+// Migration v2: groups gains derived chain-address columns
+// evm_address / tron_address (L1 design change: a group must persist its
+// derived actual chain addresses; an address is not the bare pubkey;
+// database.md groups schema + address-record). Still uses D-001's
+// existing goose framework — a schema change goes through "a new
+// versioned migration file + goose_db_version tracking" (database.md §1:
+// no hand-edited schema).
 //
-// 00001 为内嵌 SQL（embed FS 仅 *.sql）；本步含确定性地址派生（keccak256 +
-// EIP-55 / Base58Check，非 SQL 可表达），故为 Go 迁移：embed FS 无对应 .go，
-// goose 按「仅注册、不在 FS 提供 .go」整体并入（collectGoMigrations），版本号
-// 取本文件名前缀 00002，与 SQL 迁移按版本统一排序；前进/回滚/幂等仍由
-// goose_db_version 保证。
+// 00001 is embedded SQL (the embed FS is *.sql only); this step performs
+// deterministic address derivation (keccak256 + EIP-55 / Base58Check,
+// not expressible in SQL), so it is a Go migration: no .go in the embed
+// FS, goose folds it in via collectGoMigrations ("registered only, not
+// provided in the FS"), the version is this file's 00002 prefix, ordered
+// uniformly by version with the SQL migrations; up/down/idempotent are
+// still guaranteed by goose_db_version.
 func init() {
 	goose.AddMigrationContext(upGroupChainAddresses, downGroupChainAddresses)
 }
 
-// groupsBaseDDL 是 00001 中 groups 的原始列定义（不含派生地址列）。Down 以整表
-// 重建移除新列：go-sqlcipher v4.4.2 内嵌 SQLite 早于 3.35，ALTER TABLE DROP
-// COLUMN 不可依赖；groups 无索引/触发器、未启用 PRAGMA foreign_keys
-// （00001_init.sql 注），整表重建版本无关且安全。
+// groupsBaseDDL is the original groups column definition from 00001
+// (without the derived-address columns). Down removes the new columns by
+// rebuilding the whole table: go-sqlcipher v4.4.2 embeds a SQLite older
+// than 3.35, so ALTER TABLE DROP COLUMN cannot be relied on; groups has
+// no indexes/triggers and PRAGMA foreign_keys is not enabled
+// (00001_init.sql note), so a full-table rebuild is version-independent
+// and safe.
 const groupsBaseDDL = `CREATE TABLE groups (
     group_id     TEXT    PRIMARY KEY,
     ecdsa_pubkey BLOB    NOT NULL,
@@ -39,10 +47,12 @@ const groupsBaseDDL = `CREATE TABLE groups (
 
 const groupsBaseCols = `group_id, ecdsa_pubkey, threshold_t, parties_n, group_pubkey, epoch, created_at, updated_at`
 
-// upGroupChainAddresses 加 evm_address / tron_address（TEXT NOT NULL DEFAULT ”，
-// 与 ProvisionGroup INSERT 列对齐、读路径免 NULL 处理），再就 ecdsa_pubkey 对
-// 既有 groups 行 backfill 派生地址（无行则仅加列）。确定性、可回滚、幂等（由
-// goose_db_version 跟踪，已应用版本不重复执行）。
+// upGroupChainAddresses adds evm_address / tron_address (TEXT NOT NULL
+// DEFAULT '', aligned with the ProvisionGroup INSERT columns so the read
+// path needs no NULL handling), then backfills derived addresses for
+// existing groups rows from ecdsa_pubkey (adds columns only if no rows).
+// Deterministic, reversible, idempotent (tracked by goose_db_version;
+// applied versions are not re-applied).
 func upGroupChainAddresses(ctx context.Context, tx *sql.Tx) error {
 	for _, stmt := range []string{
 		`ALTER TABLE groups ADD COLUMN evm_address  TEXT NOT NULL DEFAULT ''`,
@@ -89,7 +99,8 @@ func upGroupChainAddresses(ctx context.Context, tx *sql.Tx) error {
 	return nil
 }
 
-// downGroupChainAddresses 以整表重建移除两列，保留全部既有业务列与数据。
+// downGroupChainAddresses removes the two columns by rebuilding the
+// whole table, preserving all existing business columns and data.
 func downGroupChainAddresses(ctx context.Context, tx *sql.Tx) error {
 	stmts := []string{
 		`ALTER TABLE groups RENAME TO groups_g001_drop`,

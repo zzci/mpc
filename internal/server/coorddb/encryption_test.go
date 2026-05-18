@@ -9,18 +9,26 @@ import (
 	"testing"
 )
 
-// 独立加密专测(database.md §7.2,与 E2E-001 解耦)。验收矩阵 (a)-(e):
-//   (a) 启用加密时 .db 落盘实为密文            -> store_test.go TestStore_LeakedFileIsCiphertext
-//   (b) 口令解锁 -> UNLOCKED 正常读写          -> store_test.go TestStore_UnlockRelockLifecycle
-//   (c) 错误口令拒绝                           -> store_test.go TestStore_WrongPassphraseRejected
-//   (d) relock 清零回 LOCKED 不可读            -> store_test.go TestStore_UnlockRelockLifecycle
-//   (e) 生产护栏:禁用开关在模拟生产标记下 fail-closed 拒启动
+// Standalone encryption test suite (database.md §7.2, decoupled from
+// E2E-001). Acceptance matrix (a)-(e):
+//   (a) with encryption on, the .db on disk is ciphertext
+//                                              -> store_test.go TestStore_LeakedFileIsCiphertext
+//   (b) passphrase unlock -> UNLOCKED normal r/w
+//                                              -> store_test.go TestStore_UnlockRelockLifecycle
+//   (c) wrong passphrase rejected              -> store_test.go TestStore_WrongPassphraseRejected
+//   (d) relock zeroizes back to LOCKED, unreadable
+//                                              -> store_test.go TestStore_UnlockRelockLifecycle
+//   (e) production guardrail: the disable switch fail-closes under a
+//       simulated production marker
 //                                              -> internal/node TestEncryptionDisableProductionGuardrail
-// 本文件补 §7.1 新增的「dev/test 整库加密禁用模式」专测,并与 (a) 形成对照:
-// 禁用模式 .db 明文落盘(故仅限非生产),启用模式落盘密文。
+// This file adds the §7.1 "dev/test encryption-disabled mode" tests and
+// contrasts with (a): disabled mode writes the .db in plaintext (hence
+// non-production only), enabled mode writes ciphertext.
 
-// TestPlaintextStore_DisabledModeImmediatelyUnlocked 验证禁用模式:OpenInsecure
-// 后不派生密钥、不经口令、立即 UNLOCKED-等价并可正常读写(database.md §7.1)。
+// TestPlaintextStore_DisabledModeImmediatelyUnlocked verifies disabled
+// mode: after OpenInsecure there is no key derivation, no passphrase,
+// and it is immediately UNLOCKED-equivalent and read/writable
+// (database.md §7.1).
 func TestPlaintextStore_DisabledModeImmediatelyUnlocked(t *testing.T) {
 	dir := t.TempDir()
 	s := NewPlaintextStore(filepath.Join(dir, "coord.db"))
@@ -35,16 +43,18 @@ func TestPlaintextStore_DisabledModeImmediatelyUnlocked(t *testing.T) {
 	if !s.IsUnlocked() {
 		t.Fatal("after OpenInsecure: should be UNLOCKED-equivalent (no key, no LOCKED)")
 	}
-	// 正常读写:无口令也能持久化与回读。
+	// Normal r/w: persists and reads back even without a passphrase.
 	seedGroup(t, s)
 	if got, err := s.GroupEpoch(context.Background(), encMarker); err != nil || got != 0 {
 		t.Fatalf("plaintext read/write: got=%d err=%v", got, err)
 	}
 }
 
-// TestPlaintextStore_FileIsPlaintextAtRest 与 TestStore_LeakedFileIsCiphertext
-// 形成对照:禁用模式 .db 明文落盘(标准 SQLite 头 + 可识别载荷)——正因如此,
-// 禁用仅限非生产,生产铁律护栏(node Validate)必须 fail-closed 拦截误用。
+// TestPlaintextStore_FileIsPlaintextAtRest contrasts with
+// TestStore_LeakedFileIsCiphertext: disabled mode writes the .db in
+// plaintext (standard SQLite header + recognizable payload) — precisely
+// why disabling is non-production only and the production iron-law
+// guardrail (node Validate) must fail-closed on misuse.
 func TestPlaintextStore_FileIsPlaintextAtRest(t *testing.T) {
 	dir := t.TempDir()
 	s := NewPlaintextStore(filepath.Join(dir, "coord.db"))
@@ -66,14 +76,16 @@ func TestPlaintextStore_FileIsPlaintextAtRest(t *testing.T) {
 	if !bytes.Contains(data, []byte(encMarker)) {
 		t.Fatal("disabled mode: payload expected in plaintext on disk")
 	}
-	// 禁用模式不派生密钥 -> 不写 KDF 旁文件。
+	// Disabled mode derives no key -> writes no KDF sidecar.
 	if _, err := os.Stat(filepath.Join(dir, "coord.db.kdf")); !os.IsNotExist(err) {
 		t.Fatalf("disabled mode must not write KDF sidecar: stat err=%v", err)
 	}
 }
 
-// TestPlaintextStore_UnlockRejected 验证禁用模式下口令解锁不适用(fail-closed
-// 误用防护):Unlock 返回 ErrPlaintextMode,不会意外切到加密路径。
+// TestPlaintextStore_UnlockRejected verifies passphrase unlock is not
+// applicable in disabled mode (fail-closed misuse protection): Unlock
+// returns ErrPlaintextMode and does not accidentally switch to the
+// encrypted path.
 func TestPlaintextStore_UnlockRejected(t *testing.T) {
 	s := NewPlaintextStore(filepath.Join(t.TempDir(), "coord.db"))
 	if err := s.Unlock(context.Background(), []byte(testPass)); !errors.Is(err, ErrPlaintextMode) {
@@ -81,9 +93,10 @@ func TestPlaintextStore_UnlockRejected(t *testing.T) {
 	}
 }
 
-// TestEncryptedStore_OpenInsecureRejected 验证加密 Store(NewStore)不能经
-// OpenInsecure 明文挂载——禁用路径仅 NewPlaintextStore 可达,杜绝加密 Store
-// 被误降级为明文。
+// TestEncryptedStore_OpenInsecureRejected verifies an encrypted Store
+// (NewStore) cannot be plaintext-mounted via OpenInsecure — the disabled
+// path is reachable only via NewPlaintextStore, preventing an encrypted
+// store from being mis-downgraded to plaintext.
 func TestEncryptedStore_OpenInsecureRejected(t *testing.T) {
 	s := NewStore(filepath.Join(t.TempDir(), "coord.db"))
 	if err := s.OpenInsecure(context.Background()); !errors.Is(err, ErrNotPlaintext) {
