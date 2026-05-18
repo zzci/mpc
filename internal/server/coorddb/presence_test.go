@@ -49,13 +49,13 @@ func TestPresence_TTLExpiryAndCleanup(t *testing.T) {
 		t.Fatalf("want 1 online immediately, got %d", len(on))
 	}
 
-	time.Sleep(80 * time.Millisecond) // 过 TTL
-	// 即便清理尚未跑，Online 也不返回过期项（expires_at 过滤）
+	time.Sleep(80 * time.Millisecond) // past TTL
+	// even if cleanup has not run, Online does not return expired entries (expires_at filter)
 	if on, _ := p.Online(ctx, "g1"); len(on) != 0 {
 		t.Fatalf("expired member still online: %+v", on)
 	}
 
-	// 周期清理应物理删除过期行
+	// periodic cleanup should physically delete expired rows
 	deadline := time.Now().Add(2 * time.Second)
 	for {
 		var n int

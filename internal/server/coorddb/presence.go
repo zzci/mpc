@@ -8,13 +8,15 @@ import (
 	"sync/atomic"
 	"time"
 
-	_ "github.com/mutecomm/go-sqlcipher/v4" // 同一驱动；presence 不传 key → 普通明文 sqlite
+	_ "github.com/mutecomm/go-sqlcipher/v4" // same driver; presence passes no key -> plain (unencrypted) sqlite
 )
 
-// Presence 是心跳在线集（database.md §11/§27、§143）：内存 SQLite（:memory:）、
-// 不持久、不加密、无敏感数据。SQLite 无原生 TTL → 以 expires_at 列 + 周期清理
-// 实现过期语义。与 Store 的 LOCKED 生命周期正交：presence 始终可用
-// （重启即空，成员重连后由心跳重建）。
+// Presence is the heartbeat online-set (database.md §11/§27, §143): an
+// in-memory SQLite (:memory:), not persisted, not encrypted, no
+// sensitive data. SQLite has no native TTL, so expiry is an expires_at
+// column + periodic cleanup. Orthogonal to the Store LOCKED lifecycle:
+// presence is always available (empty on restart, rebuilt by heartbeats
+// once members reconnect).
 type Presence struct {
 	db     *sql.DB
 	ttl    time.Duration
@@ -23,7 +25,7 @@ type Presence struct {
 	closed atomic.Bool
 }
 
-// OnlineMember 是一名在线成员的快照。
+// OnlineMember is a snapshot of one online member.
 type OnlineMember struct {
 	GroupID     string
 	MemberID    string
@@ -33,13 +35,14 @@ type OnlineMember struct {
 
 var presenceSeq atomic.Int64
 
-// NewPresence 建一个内存在线集并启动周期清理。ttl 为心跳有效期，
-// cleanupInterval 为过期清理周期。
+// NewPresence builds an in-memory online-set and starts periodic
+// cleanup. ttl is the heartbeat validity; cleanupInterval is the
+// expiry-sweep period.
 func NewPresence(ttl, cleanupInterval time.Duration) (*Presence, error) {
 	if ttl <= 0 || cleanupInterval <= 0 {
 		return nil, fmt.Errorf("coorddb: presence ttl/interval must be > 0")
 	}
-	// 唯一名 + shared cache：保证多连接共享同一内存库，且生命周期内不被回收。
+	// unique name + shared cache: all connections share one in-memory DB, not reclaimed for its lifetime.
 	name := fmt.Sprintf("coorddb_presence_%d", presenceSeq.Add(1))
 	dsn := fmt.Sprintf("file:%s?mode=memory&cache=shared&_busy_timeout=5000", name)
 	db, err := sql.Open("sqlite3", dsn)
@@ -70,7 +73,7 @@ func NewPresence(ttl, cleanupInterval time.Duration) (*Presence, error) {
 	return p, nil
 }
 
-// Heartbeat 记录/刷新一名成员在线（upsert）。expires_at = now + ttl。
+// Heartbeat records/refreshes a member as online (upsert). expires_at = now + ttl.
 func (p *Presence) Heartbeat(ctx context.Context, groupID, memberID, relayPeerID string) error {
 	now := time.Now().UnixNano()
 	exp := now + p.ttl.Nanoseconds()
@@ -87,7 +90,7 @@ func (p *Presence) Heartbeat(ctx context.Context, groupID, memberID, relayPeerID
 	return nil
 }
 
-// Online 返回某组当前未过期的在线成员（过期项即便尚未被清理也不返回）。
+// Online returns a group's currently non-expired online members (expired entries are excluded even if not yet cleaned).
 func (p *Presence) Online(ctx context.Context, groupID string) ([]OnlineMember, error) {
 	now := time.Now().UnixNano()
 	rows, err := p.db.QueryContext(ctx,
@@ -113,7 +116,7 @@ func (p *Presence) Online(ctx context.Context, groupID string) ([]OnlineMember, 
 	return out, nil
 }
 
-// Close 停止清理协程并卸载内存库。
+// Close stops the cleanup goroutine and unmounts the in-memory DB.
 func (p *Presence) Close() error {
 	if !p.closed.CompareAndSwap(false, true) {
 		return nil
@@ -137,7 +140,7 @@ func (p *Presence) cleanupLoop(ctx context.Context, interval time.Duration) {
 		case <-t.C:
 			if _, err := p.db.ExecContext(ctx,
 				`DELETE FROM presence WHERE expires_at <= ?`, time.Now().UnixNano()); err != nil {
-				// 内存库清理失败不致命（下轮重试）；不持久、无敏感数据。
+				// in-memory cleanup failure is non-fatal (retried next round); not persisted, no sensitive data.
 				continue
 			}
 		}

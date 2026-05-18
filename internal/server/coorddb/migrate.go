@@ -10,9 +10,10 @@ import (
 	"github.com/pressly/goose/v3"
 )
 
-// 迁移文件随二进制内嵌；schema 仅由 goose 版本化迁移驱动产出（database.md §1：
-// 禁手改 schema）。goose 经 goose_db_version 表跟踪已应用版本，支持前进/回滚、
-// 重复执行幂等（已应用版本不重复执行）。
+// Migrations are embedded in the binary; the schema is produced only by
+// goose versioned migrations (database.md §1: no hand-edited schema).
+// goose tracks applied versions in goose_db_version, supporting
+// up/down and idempotent re-runs (applied versions are not re-applied).
 //
 //go:embed migrations/*.sql
 var migrationsFS embed.FS
@@ -31,7 +32,8 @@ func configureGoose() error {
 	return err
 }
 
-// migrateUp 在（已用密钥挂载的）加密连接上前进到最新版本。
+// migrateUp advances to the latest version on the (key-mounted)
+// encrypted connection.
 func migrateUp(ctx context.Context, db *sql.DB) error {
 	if err := configureGoose(); err != nil {
 		return fmt.Errorf("coorddb: goose dialect: %w", err)
@@ -42,7 +44,8 @@ func migrateUp(ctx context.Context, db *sql.DB) error {
 	return nil
 }
 
-// migrateDownTo 回滚到指定版本（version=0 即全回滚）；仅供迁移可逆性验证/运维使用。
+// migrateDownTo rolls back to the given version (version=0 = full
+// rollback); for migration-reversibility checks / ops use only.
 func migrateDownTo(ctx context.Context, db *sql.DB, version int64) error {
 	if err := configureGoose(); err != nil {
 		return fmt.Errorf("coorddb: goose dialect: %w", err)

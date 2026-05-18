@@ -2,22 +2,26 @@ package coorddb
 
 import "errors"
 
-// ErrLocked 表示持久库处于 LOCKED（未挂载、内存无密钥）。任何数据访问在 LOCKED
-// 下一律返回此错误（fail-closed）；上层（X-001/admin）据此映射为 503 LOCKED
-// （docs/design/server/server.md C9b、server/database.md §7、docs/spec/group-provisioning.md §9）。
+// ErrLocked means the store is LOCKED (not mounted, no in-memory key).
+// Every data access returns this under LOCKED (fail-closed); callers
+// (X-001/admin) map it to 503 LOCKED (server.md C9b, database.md §7,
+// docs/spec/group-provisioning.md §9).
 var ErrLocked = errors.New("coorddb: store is LOCKED")
 
-// ErrUnlocked 表示在已 UNLOCKED 状态下重复解锁。
+// ErrUnlocked means Unlock was called on an already-UNLOCKED store.
 var ErrUnlocked = errors.New("coorddb: store already UNLOCKED")
 
-// ErrEmptyPassphrase 表示解锁口令为空。口令仅运行期经接口传入，本模块不持久化、
-// 不读配置/env（database.md §7：入了即丧失防文件泄露意义）。
+// ErrEmptyPassphrase means the unlock passphrase was empty. The
+// passphrase is only ever passed in at runtime; this module never
+// persists it nor reads it from config/env (database.md §7: doing so
+// would defeat the file-leak protection).
 var ErrEmptyPassphrase = errors.New("coorddb: empty passphrase")
 
-// ErrPlaintextMode 表示对 dev/test 整库加密禁用模式（NewPlaintextStore，
-// database.md §7.1）的 Store 调用 Unlock——禁用态不派生密钥、不经口令解锁。
+// ErrPlaintextMode means Unlock was called on a dev/test
+// encryption-disabled store (NewPlaintextStore, database.md §7.1):
+// that mode derives no key and has no passphrase unlock.
 var ErrPlaintextMode = errors.New("coorddb: store is in plaintext (encryption-disabled) mode; Unlock not applicable")
 
-// ErrNotPlaintext 表示对加密 Store（NewStore）调用 OpenInsecure——明文挂载
-// 仅限 NewPlaintextStore 构造的禁用模式 Store。
+// ErrNotPlaintext means OpenInsecure was called on an encrypted store
+// (NewStore): plaintext mount is only for a NewPlaintextStore store.
 var ErrNotPlaintext = errors.New("coorddb: OpenInsecure requires a plaintext (encryption-disabled) store")

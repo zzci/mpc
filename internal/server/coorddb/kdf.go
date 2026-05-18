@@ -10,21 +10,26 @@ import (
 	"golang.org/x/crypto/argon2"
 )
 
-// kdfParams 是把运营方口令派生为整库加密密钥的 Argon2id 参数（database.md §7）。
+// kdfParams holds the Argon2id parameters that derive the operator
+// passphrase into the whole-DB encryption key (database.md §7).
 //
-// salt 非机密：Argon2id 的 salt 仅需唯一以抗彩虹表，无需保密；故随库持久化于
-// 旁文件 <db>.kdf（明文 JSON），使重启后能由同一口令稳定重派生同一密钥。
-// **口令本身绝不写入此文件、不入配置/env**——丢失即库不可恢复（设计如此）。
+// The salt is non-secret: an Argon2id salt only needs to be unique
+// (anti-rainbow-table), not confidential, so it is persisted next to the
+// DB in a sidecar <db>.kdf (plaintext JSON) so the same passphrase
+// re-derives the same key across restarts. The passphrase itself is
+// NEVER written to this file nor read from config/env — losing it makes
+// the DB unrecoverable (by design).
 type kdfParams struct {
 	Version   int    `json:"version"`
-	Salt      string `json:"salt"` // base64(raw 16B)，非机密
+	Salt      string `json:"salt"` // base64(raw 16B), non-secret
 	TimeCost  uint32 `json:"time"`
 	MemoryKiB uint32 `json:"memory_kib"`
 	Threads   uint8  `json:"threads"`
 	KeyLen    uint32 `json:"key_len"`
 }
 
-// defaultKDFParams 选取高内存 Argon2id 参数（64 MiB / t=3 / p=4 / 32B key）。
+// defaultKDFParams picks high-memory Argon2id params (64 MiB / t=3 /
+// p=4 / 32B key).
 func defaultKDFParams() kdfParams {
 	return kdfParams{
 		Version:   1,
@@ -37,8 +42,10 @@ func defaultKDFParams() kdfParams {
 
 func kdfSidecarPath(dbPath string) string { return dbPath + ".kdf" }
 
-// loadOrInitKDF 读取库旁的 KDF 旁文件；不存在则用默认参数 + 新随机 salt 初始化并
-// 落盘（0600）。salt 非机密，落盘安全；口令不参与本文件。
+// loadOrInitKDF reads the DB-side KDF sidecar; if absent it initializes
+// it with default params + a fresh random salt and writes it (0600).
+// The salt is non-secret so persisting it is safe; the passphrase is
+// not part of this file.
 func loadOrInitKDF(dbPath string) (kdfParams, error) {
 	path := kdfSidecarPath(dbPath)
 	data, err := os.ReadFile(path)
@@ -72,8 +79,9 @@ func loadOrInitKDF(dbPath string) (kdfParams, error) {
 	}
 }
 
-// deriveKey 以 Argon2id 把口令派生为 raw 加密密钥；返回的密钥仅供内存使用，
-// 调用方用毕须 zeroize。
+// deriveKey derives a raw encryption key from the passphrase via
+// Argon2id; the returned key is for in-memory use only and the caller
+// must zeroize it when done.
 func deriveKey(passphrase []byte, p kdfParams) ([]byte, error) {
 	salt, err := base64.StdEncoding.DecodeString(p.Salt)
 	if err != nil {
@@ -82,7 +90,8 @@ func deriveKey(passphrase []byte, p kdfParams) ([]byte, error) {
 	return argon2.IDKey(passphrase, salt, p.TimeCost, p.MemoryKiB, p.Threads, p.KeyLen), nil
 }
 
-// zeroize 清零敏感字节切片（口令副本 / 派生密钥），降低内存残留窗口。
+// zeroize wipes a sensitive byte slice (passphrase copy / derived key)
+// to shorten the in-memory residency window.
 func zeroize(b []byte) {
 	for i := range b {
 		b[i] = 0

@@ -21,11 +21,12 @@ func tableExists(t *testing.T, s *Store, name string) bool {
 	return n == 1
 }
 
-// 迁移由 goose 工具产出（非手写 schema），且可前进/回滚/幂等（database.md §1）。
+// Migrations are produced by goose (no hand-written schema) and are
+// up/down/idempotent (database.md §1).
 func TestMigrations_UpDownIdempotent(t *testing.T) {
 	ctx := context.Background()
 	s := NewStore(filepath.Join(t.TempDir(), "coord.db"))
-	if err := s.Unlock(ctx, []byte(testPass)); err != nil { // Unlock 内部跑 migrateUp
+	if err := s.Unlock(ctx, []byte(testPass)); err != nil { // Unlock runs migrateUp internally
 		t.Fatalf("unlock: %v", err)
 	}
 	t.Cleanup(func() { _ = s.Close() })
@@ -40,12 +41,12 @@ func TestMigrations_UpDownIdempotent(t *testing.T) {
 		}
 	}
 
-	// 重复 up 幂等（已应用版本不重复执行）
+	// idempotent re-up (applied versions are not re-applied)
 	if err := migrateUp(ctx, mustDB(t, s)); err != nil {
 		t.Fatalf("idempotent up: %v", err)
 	}
 
-	// 回滚到 0：业务表全部移除
+	// down-to-0 removes all business tables
 	if err := migrateDownTo(ctx, mustDB(t, s), 0); err != nil {
 		t.Fatalf("migrate down: %v", err)
 	}
@@ -53,7 +54,7 @@ func TestMigrations_UpDownIdempotent(t *testing.T) {
 		t.Fatal("signing_requests still present after down-to-0")
 	}
 
-	// 再次 up 可恢复
+	// up again restores
 	if err := migrateUp(ctx, mustDB(t, s)); err != nil {
 		t.Fatalf("re-up: %v", err)
 	}
