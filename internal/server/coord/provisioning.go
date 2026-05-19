@@ -249,7 +249,7 @@ func (c *Coord) applyMembership(ctx context.Context, p *membershipUpdate) error 
 // groupPublicView is the GET /v1/groups/{id} response (§5.1) — public columns
 // only, never any share/private key. ActiveMembers/Degraded are derived (not
 // stored) so the member SDK can surface lost-member recovery urgency
-// (docs/design/mcp/sdk.md §7: "窗口期冗余下降需提示尽快完成").
+// (docs/design/mcp/sdk.md §7: reduced redundancy in the window must prompt prompt completion).
 type groupPublicView struct {
 	GroupID       string            `json:"groupId"`
 	ECDSAPubkey   []byte            `json:"ecdsaPubkey"`

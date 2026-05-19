@@ -11,7 +11,7 @@ import (
 // built-in decoder, but the "recomputed digest == digest32" assertion is
 // enforced by the framework (Decoder.Decode), not by the decoder, so every
 // override is automatically bound by the same invariant
-// (docs/design/mcp/sdk.md §4 「可插拔覆盖…须满足同一断言」).
+// (docs/design/mcp/sdk.md §4: pluggable override … must satisfy the same assertion).
 //
 // Recompute parses unsignedTx into A-zone Facts and returns the chain signing
 // digest derived from the parsed facts (EVM: keccak256 of the re-encoded
@@ -55,7 +55,7 @@ func (d *Decoder) Register(chain Chain, cd ChainDecoder) {
 // Decode is the security gate. It parses req.UnsignedTx, recomputes the chain
 // signing digest, and asserts it equals req.Digest32. On any binding failure
 // it returns an error and NO Result, so unverified data can never reach the
-// UI as the authoritative A-zone — the caller MUST treat any error as 拒签
+// UI as the authoritative A-zone — the caller MUST treat any error as a rejection
 // and not enter MPC (docs/design/mcp/sdk.md §3/§5, docs/design/contract/protocol.md:25).
 //
 // A successful Result carries the digest-bound A-zone Facts plus the A/B

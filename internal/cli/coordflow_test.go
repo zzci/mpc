@@ -47,7 +47,7 @@ import (
 // tss-lib 2-of-3 (mpc.Keygen/Sign, full proofs); the relay-transported MPC is
 // proven separately and exhaustively by TestE2EMultiProcessKeygenSignReshare
 // ViaRelay. B-002 (coord client) is also unmerged, so the member-side coord
-// calls are hand-rolled here per dispatch ("否则自接 coord HTTP API").
+// calls are hand-rolled here per dispatch ("otherwise drive the coord HTTP API directly").
 
 // --- S-002 group-provisioning canonical (verbatim from coord/
 // provision_canonical.go; that package's symbols are unexported) ----------

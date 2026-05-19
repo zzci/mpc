@@ -34,8 +34,8 @@ func (c *Coord) submitResult(w http.ResponseWriter, r *http.Request, rec *stored
 		c.writeErr(w, errStateConflict("request already in a terminal state"))
 		return
 	}
-	// The reporter must be one of the dispatched signers (api.md:62 "由
-	// signers 中指定一方上报"); a non-signer cannot drive the result.
+	// The reporter must be one of the dispatched signers (api.md:62 "reported by one of the
+	// designated signers"); a non-signer cannot drive the result.
 	if !contains(decodeSigners(rec.SignersJSON), memberID) {
 		c.writeErr(w, errForbidden("reporter is not a dispatched signer"))
 		return

@@ -182,7 +182,7 @@ func (s *SDK) runSign(startJSON string, cb SignCallback, ss *SignSession) {
 	}
 
 	// 8. Final expiry re-check before releasing the signature
-	// (docs/design/mcp/sdk.md §3 「出结果前再校验未过期」).
+	// (docs/design/mcp/sdk.md §3: re-check not-expired before producing the result).
 	if !coordclient.NotExpired(&st, time.Now().UnixMilli()) {
 		cb.OnError(CodeExpired, "request expired before result release")
 		return

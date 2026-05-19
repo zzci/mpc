@@ -1,5 +1,5 @@
 /**
- * E2E-001 EXPIRED path (docs/design/testing.md §3.1/§3.2: "过期路径断言
+ * E2E-001 EXPIRED path (docs/design/testing.md §3.1/§3.2: "expired-path assertion
  * EXPIRED"; api.md C 410 EXPIRED). An envelope whose expiry is already in
  * the past must be rejected by coord and surface a terminal EXPIRED to the
  * external service. Same live-run gate as the full ring.

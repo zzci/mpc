@@ -5,8 +5,8 @@ import (
 	"net/http"
 )
 
-// netGate enforces the non-public boundary in-process (admin.md §5 "不对公网
-// 暴露:仅内网 / VPN / mTLS / IP 允许列表", §7bis "admin-ui 非公网可达"). When
+// netGate enforces the non-public boundary in-process (admin.md §5 "not exposed to the public internet: intranet / VPN /
+// mTLS / IP allowlist only", §7bis "admin-ui not public-internet reachable"). When
 // an allowlist is configured every request whose source IP is outside all
 // allowed CIDRs is rejected 403 before auth — so a misconfigured listener or a
 // bypassed external boundary still fails closed instead of exposing the

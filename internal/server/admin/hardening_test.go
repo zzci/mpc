@@ -133,7 +133,7 @@ func TestStrongAuth_EnforcedAndAttributed(t *testing.T) {
 	}
 }
 
-// --- unlock concurrency hardening (admin.md §8 防爆破) --------------------
+// --- unlock concurrency hardening (admin.md §8 anti-brute-force) --------------------
 
 func TestUnlock_InflightRejected(t *testing.T) {
 	s, store, _ := newServer(t)
@@ -148,7 +148,7 @@ func TestUnlock_InflightRejected(t *testing.T) {
 	}
 }
 
-// --- sustained brute-force alarm (security.md §5 解锁尝试限速) -----------
+// --- sustained brute-force alarm (security.md §5 unlock-attempt rate limit) -----------
 
 func TestUnlock_BruteForceEscalationAlarm(t *testing.T) {
 	clk := &fakeClock{t: time.Unix(1_700_000_000, 0).UTC()}

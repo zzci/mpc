@@ -264,7 +264,7 @@ func rendezvousRPC(t *testing.T, ctx context.Context, h host.Host, relayID peer.
 
 // teeProxy is a transparent TCP proxy in front of the relay that records every
 // byte in both directions, so a test can assert the relay only ever moves
-// ciphertext (server.md R7 / protocol.md §8: "在 relay 抓包仅见密文").
+// ciphertext (server.md R7 / protocol.md §8: "a relay packet capture sees only ciphertext").
 type teeProxy struct {
 	ln  net.Listener
 	mu  sync.Mutex

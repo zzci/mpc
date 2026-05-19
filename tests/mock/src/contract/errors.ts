@@ -9,7 +9,7 @@ export class ContractError extends Error {
 /**
  * Raised when a SigningRequest cannot be reduced to a canonical preimage:
  * a fixed-length field is wrong, an integer is out of range, or requestId is
- * not a UUID. Mirrors contract.ErrInvalidEnvelope (protocol.md:25 "任一不过即拒签").
+ * not a UUID. Mirrors contract.ErrInvalidEnvelope (protocol.md:25 "any check failing = reject").
  */
 export class InvalidEnvelopeError extends ContractError {
   override readonly name = 'InvalidEnvelopeError'

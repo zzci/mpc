@@ -10,14 +10,14 @@ import (
 )
 
 // admin-api wiring (A-001). It runs in the coord process (admin.md §5:
-// admin-api 随 coord 进程 coord.enable) over the same D-001 store, so the
+// admin-api runs in the coord process (coord.enable) over the same D-001 store, so the
 // administrator can unlock the LOCKED store at runtime — coord cannot unlock
 // itself (server.md C9b: passphrase never in config/env/KMS, only via the
 // interactive admin-api).
 //
 // server.md's config chapter has no admin fields and internal/node is out of
 // this task's scope, so admin settings are read directly from TSSNODE_ADMIN__*
-// environment variables — the same env-injection channel server.md's "密钥处理"
+// environment variables — the same env-injection channel server.md's "secret handling"
 // approves for secrets, and the same local-env-override precedent already used
 // in coord.go for TSSNODE_COORD__EXTERNAL__CALLBACK_URL. Tokens are secrets:
 // they are injected via env only, never a committed literal.

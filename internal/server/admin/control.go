@@ -6,7 +6,7 @@ import (
 )
 
 // RelayController is the relay-side enforcement seam for the operations
-// kill-switches (admin.md §1 可控, server.md R4 layer 3). The relay role is
+// kill-switches (admin.md §1 controllable, server.md R4 layer 3). The relay role is
 // stateless and coord-independent (server.md R5) — a deployment may run it as
 // a separate instance — so admin-api does not import the relay package; it
 // records every directive in admin_audit and, when a controller is wired,
@@ -38,7 +38,7 @@ type RelayMetrics interface {
 // (append-only, non-secret params), then enforce via the controller when
 // wired. Auditing before enforcement guarantees the operator action is
 // recorded even if enforcement is delegated or fails (admin.md §7bis
-// "控制操作...全部进 admin_audit").
+// "all control operations ... go into admin_audit").
 func (s *Server) applyControl(w http.ResponseWriter, r *http.Request,
 	action string, params map[string]any, enforce func(RelayController) error) {
 
@@ -93,7 +93,7 @@ func (s *Server) hRevokeReservation(w http.ResponseWriter, r *http.Request) {
 
 // hRotatePSK rotates the pnet PSK. The new key value is generated relay-side
 // and is a secret: it is never accepted from, returned by, or audited through
-// admin-api (database.md §6 params 不含 secret 明文). Only the rotation event
+// admin-api (database.md §6 params contain no plaintext secret). Only the rotation event
 // is recorded.
 func (s *Server) hRotatePSK(w http.ResponseWriter, r *http.Request) {
 	s.applyControl(w, r, "relay.rotate_psk", nil,
@@ -105,7 +105,7 @@ type quotaBody struct {
 }
 
 // hSetQuota updates relay quota / rate-limit parameters (admin.md §1
-// 配额/限流参数). Values are non-secret operational integers and are audited.
+// quota/rate-limit params). Values are non-secret operational integers and are audited.
 func (s *Server) hSetQuota(w http.ResponseWriter, r *http.Request) {
 	var b quotaBody
 	if !s.readJSON(w, r, &b) {

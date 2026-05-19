@@ -9,7 +9,7 @@ import (
 // surface: string, []byte, error / callback interface, or an opaque pointer to
 // one of this package's handle structs. Anything else (a struct by value, a
 // map, a numeric, a generic type parameter) fails the constraint
-// "仅 string/[]byte/callback,无泛型/复杂结构体导出".
+// "only string/[]byte/callback, no generics/complex structs exported".
 func allowedKind(ty reflect.Type) bool {
 	switch ty.Kind() {
 	case reflect.String:

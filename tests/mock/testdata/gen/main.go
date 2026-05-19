@@ -3,7 +3,7 @@
 // (internal/contract, internal/addr) so the committed JSON is byte-exact
 // truth, not a hand-written guess. The Bun test double asserts its
 // TypeScript canonical-serialization / metaHash / proposerSig / RSV-verify
-// implementations reproduce these bytes exactly (MEXT-001 "逐字节一致").
+// implementations reproduce these bytes exactly (MEXT-001 "byte-exact").
 //
 // Regenerate (must run from repo root, after any change to the contract
 // canonicalization or addr derivation):

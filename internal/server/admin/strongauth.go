@@ -7,8 +7,8 @@ import (
 )
 
 // StrongAuth is the deployment seam for strong administrator authentication
-// (admin.md §4 "强鉴权(mTLS 或 OIDC + 2FA)", security.md §5 恶意/被控管理员
-// 行). The admin identity is independent of members/external services; this
+// (admin.md §4 "strong auth (mTLS or OIDC + 2FA)", security.md §5
+// malicious/compromised-admin row). The admin identity is independent of members/external services; this
 // contract lets a deployment terminate mTLS or OIDC+2FA in front of (or
 // inside) admin-api and bind a verified principal to the audited operation.
 //
@@ -20,7 +20,7 @@ import (
 // Authenticate runs BEFORE the scope/token check. Returning a non-nil error
 // fails the request closed (401) and nothing downstream executes. The
 // returned principal is a non-secret operator label recorded in admin_audit
-// (database.md §6 "谁"); it MUST NOT be a token or any secret.
+// (database.md §6 "who"); it MUST NOT be a token or any secret.
 type StrongAuth interface {
 	Authenticate(r *http.Request) (principal string, err error)
 }

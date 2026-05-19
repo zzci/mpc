@@ -14,7 +14,7 @@ import (
 )
 
 // CapToken access control implements docs/design/server/server.md R4 layer 2
-// (能力令牌) and docs/design/contract/protocol.md §6. The token type and the
+// (capability token) and docs/design/contract/protocol.md §6. The token type and the
 // secp256k1-ECDSA-over-SHA256 signature primitive are owned by C-001
 // (internal/contract); protocol.md §6 says only that groupSig covers "the
 // preimage" without fixing its bytes, and S-001 (envelope-canonical) scopes

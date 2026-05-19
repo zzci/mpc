@@ -1,13 +1,18 @@
-// Command node 是 mcp-wallet 的单一可执行入口。relay / coord 两种角色由配置开关
-// relay.enable / coord.enable 决定（node.yaml + TSSNODE_ 环境变量覆盖），可单开任一或双开；
-// 非子命令、非 --role flag。
+// Command node is the single executable entrypoint of mcp-wallet. The
+// relay / coord roles are selected by the config switches relay.enable /
+// coord.enable (node.yaml + TSSNODE_ env overrides); either or both may
+// run. Not a subcommand, not a --role flag.
 //
-// 信任边界（docs/design/server/server.md）：合并同进程不削弱 relay 密码学零信任——
-// Noise 端到端不在 relay 终结；coord 明文信封经「外部服务 → coord API」另一路径进入，
-// 不经 relay 转发；两条数据路径进程内逻辑隔离。relay 角色无状态、不持分片、读不到 MPC
-// 内容；coord 不参与 MPC、不持分片。
+// Trust boundary (docs/design/server/server.md): co-locating in one
+// process does not weaken the relay's cryptographic zero-trust — Noise
+// is end-to-end and not terminated at the relay; coord's plaintext
+// envelope enters via a separate path ("external service → coord API"),
+// not via relay forwarding; the two data paths are logically isolated
+// in-process. The relay role is stateless, holds no shares, cannot read
+// MPC content; coord does not participate in MPC and holds no shares.
 //
-// 角色业务体由 N-002（relay）/ X-001（coord）实现；本文件仅做配置加载、校验与角色分发。
+// The role bodies are implemented by N-002 (relay) / X-001 (coord);
+// this file only does config load, validation and role dispatch.
 package main
 
 import (

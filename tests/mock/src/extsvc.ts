@@ -8,7 +8,7 @@ import { verifyGroupRSV } from './verify.ts'
 import { WebhookServer } from './webhook-server.ts'
 
 // Orchestrates the external-business-service side of the E2E loop
-// (testing.md §3.1): (b) 申请地址 → (a) 自构信封提交 → (c) 收 {R,S,V} 验签.
+// (testing.md §3.1): (b) request address -> (a) self-build & submit envelope -> (c) receive & verify {R,S,V}.
 // E2E-001 drives this against a live node(coord+relay)+CLI members.
 
 export interface EnvelopeInput {
@@ -78,7 +78,7 @@ export class MockExtSvc {
    * Full loop for one request: A1 (re-fetch group for verification) → A2
    * submit → await terminal result → on RETURNED, independently verify the
    * {R,S,V} against the group's A1 evm/tron addresses (testing.md §3.1).
-   * EXPIRED/REJECTED/FAILED return with no verification (3.2: 外部收 EXPIRED).
+   * EXPIRED/REJECTED/FAILED return with no verification (3.2: external receives EXPIRED).
    */
   async run(input: EnvelopeInput, proposerPriv: Uint8Array): Promise<RunOutcome> {
     const group = await this.client.getGroupPublic(input.groupId)

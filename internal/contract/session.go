@@ -4,7 +4,7 @@ import "fmt"
 
 // SessionID strong isolation (docs/design/contract/protocol.md:53): an inbound
 // MpcMessage whose sessionId differs from the active session is dropped
-// unconditionally, defeating replay and cross-session ("串话") injection.
+// unconditionally, defeating replay and cross-session ("cross-talk") injection.
 // sessionId equals requestId for signing, or the keygen/reshare session ID
 // (docs/design/contract/protocol.md:49).
 

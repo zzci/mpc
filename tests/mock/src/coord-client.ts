@@ -75,7 +75,7 @@ export class CoordClient {
     throw new CoordError(message, resp.status, code)
   }
 
-  /** A1: GET /v1/groups/{groupId}/public — "申请地址" (XA-001 endpoint). */
+  /** A1: GET /v1/groups/{groupId}/public — "request address" (XA-001 endpoint). */
   async getGroupPublic(groupId: string): Promise<GroupPublic> {
     const resp = await this.fetchImpl(this.url(`/v1/groups/${encodeURIComponent(groupId)}/public`), {
       method: 'GET',

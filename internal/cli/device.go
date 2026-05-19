@@ -26,7 +26,7 @@ import (
 // DeviceConfig is the JSON a member subprocess is launched with. Peers are
 // discovered by a filesystem rendezvous (RendezvousDir): every device only
 // learns the others' peerIDs and member pubkeys — never a direct address — so
-// the only path to a peer is the relay circuit ("全程经 relay" by construction,
+// the only path to a peer is the relay circuit ("all traffic via the relay" by construction,
 // not by convention).
 type DeviceConfig struct {
 	Index         int      `json:"index"`
@@ -384,7 +384,7 @@ func isSigner(signers []int, idx int) bool {
 }
 
 // allConnsViaRelay asserts every peer connection is a /p2p-circuit path, so
-// "全程经 relay" is verified, not assumed.
+// "all traffic via the relay" is verified, not assumed.
 func allConnsViaRelay(t *transport.Transport, peers peerTable, self int) bool {
 	for tag, pid := range peers {
 		if tag == partyTag(self) {

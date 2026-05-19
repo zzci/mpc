@@ -1,7 +1,7 @@
 import { Buffer } from 'node:buffer'
 
 // Byte/encoding helpers. base64 uses Node's Buffer (always present under Bun)
-// to match the api.md "字节字段 base64" wire convention exactly.
+// to match the api.md "byte fields base64" wire convention exactly.
 
 export function toB64(b: Uint8Array): string {
   return Buffer.from(b).toString('base64')

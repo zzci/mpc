@@ -33,7 +33,7 @@ type Config struct {
 	// Required; must be ≥ minTokenLen.
 	ControlToken string
 	// AllowedCIDRs, when non-empty, restricts every endpoint to source IPs
-	// inside one of these CIDRs (admin.md §5/§7bis "非公网可达"). Empty means
+	// inside one of these CIDRs (admin.md §5/§7bis "not public-internet reachable"). Empty means
 	// no in-process allowlist — admissible only behind an external network
 	// boundary; New logs a prominent hardening warning in that case.
 	AllowedCIDRs []string
@@ -41,7 +41,7 @@ type Config struct {
 
 // validate rejects an unsafe Config. Both tokens are mandatory, must meet the
 // length floor, and must differ, otherwise the read/control privilege
-// separation (admin.md §4, §7bis "读/控权限分离生效") would be vacuous.
+// separation (admin.md §4, §7bis "read/control privilege separation in effect") would be vacuous.
 func (c Config) validate() error {
 	if c.Listen == "" {
 		return fmt.Errorf("admin: empty listen address")

@@ -26,7 +26,7 @@ const (
 	// canonical envelope preimage (security hard reject).
 	CodeBadProposerSig = "BAD_PROPOSER_SIG"
 	// CodeDigestMismatch is the core double-binding failure: the recomputed
-	// chain digest ≠ digest32 (security hard reject — 拒签而非误签).
+	// chain digest ≠ digest32 (security hard reject — reject rather than mis-sign).
 	CodeDigestMismatch = "DIGEST_MISMATCH"
 	// CodeDecodeRejected means unsignedTx could not be parsed into the facts
 	// needed to recompute the digest (security hard reject).
@@ -44,7 +44,7 @@ const (
 	// in-process signing/reshare cannot proceed.
 	CodeNoShares = "NO_SHARES"
 	// CodeSessionMismatch is an inbound wire message dropped by sessionId /
-	// version isolation (串话 / replay defense).
+	// version isolation (cross-talk / replay defense).
 	CodeSessionMismatch = "SESSION_MISMATCH"
 	// CodeInternal is an unclassified internal failure (keygen/sign/reshare
 	// engine error, keystore I/O, serialization).

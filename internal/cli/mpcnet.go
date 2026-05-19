@@ -47,7 +47,7 @@ type sigResult struct {
 // IsBroadcast=true preserved (so the receiver still tss-parses it as a
 // broadcast). This deliberately does not use GossipSub: its mesh avoids
 // limited (relayed) connections, and routing every MPC message through a
-// directed circuit stream makes "全程经 relay" hold for the broadcast rounds
+// directed circuit stream makes "all traffic via the relay" hold for the broadcast rounds
 // too, not only the point-to-point ones. self is always excluded.
 func sendOut(ctx context.Context, sess *transport.Session, self string, peers peerTable, msg tss.Message) error {
 	bz, _, err := msg.WireBytes()

@@ -20,7 +20,7 @@ var ErrDecodeRejected = errors.New("txdecode: decode failed, signing rejected")
 
 // ErrDigestMismatch is returned when the recomputed chain digest does not
 // equal req.Digest32. This is the core double-binding outcome: a decode bug
-// or a tampered envelope degrades to a hard rejection ("拒签而非误签",
+// or a tampered envelope degrades to a hard rejection ("reject rather than mis-sign",
 // docs/design/mcp/sdk.md §4). Decode returns no facts so callers cannot display
 // unverified data as the authoritative A-zone.
 var ErrDigestMismatch = errors.New("txdecode: recomputed digest != digest32, signing rejected")

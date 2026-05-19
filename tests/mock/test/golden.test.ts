@@ -17,7 +17,7 @@ import {
 import { bytesEqual, fromB64, fromHex, toHex } from '../src/shared/bytes.ts'
 import golden from '../testdata/golden.json'
 
-// Cross-language byte-exactness anchor (MEXT-001 "逐字节一致"). golden.json is
+// Cross-language byte-exactness anchor (MEXT-001 "byte-exact"). golden.json is
 // produced by the real Go internal/contract + internal/addr packages
 // (testdata/gen/main.go). Every assertion here proves the TypeScript port
 // reproduces Go's bytes exactly; a drift on either side fails CI.

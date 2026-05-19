@@ -100,8 +100,9 @@ func runCoord(ctx context.Context, cfg node.Config) error {
 	defer stopAdmin()
 
 	if encryptDisabled {
-		// dev/test 整库加密禁用(database.md §7.1):直接挂载未加密库,coord
-		// 启动即 UNLOCKED-等价、数据端点立即就绪——E2E 据此跑通完整环。
+		// dev/test whole-DB encryption disabled (database.md §7.1): mount
+		// the unencrypted DB directly; coord starts UNLOCKED-equivalent and
+		// data endpoints are immediately ready — E2E runs the full ring on this.
 		if err := store.OpenInsecure(ctx); err != nil {
 			return fmt.Errorf("coord open (encryption disabled): %w", err)
 		}

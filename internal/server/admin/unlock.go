@@ -11,7 +11,7 @@ import (
 
 // unlockGuard rate-limits unlock attempts with exponential backoff so a leaked
 // .db file cannot be brute-forced through the API (admin.md §8, database.md §7
-// "失败限速 + 退避防爆破"). It tracks consecutive failures and the earliest
+// "failure rate-limit + backoff anti-brute-force"). It tracks consecutive failures and the earliest
 // time the next attempt is allowed; a success resets it. Backoff constants
 // mirror the coord unlock loop (500ms base, 30s cap).
 type unlockGuard struct {
@@ -20,7 +20,7 @@ type unlockGuard struct {
 	// reserve check and settle (TOCTOU); unlock is admin-only and rare, and
 	// the Argon2id derivation already dominates latency, so serializing is
 	// free in practice and tightens the anti-brute-force guarantee
-	// (admin.md §8 "防爆破").
+	// (admin.md §8 "anti-brute-force").
 	inflight sync.Mutex
 
 	mu          sync.Mutex
@@ -34,8 +34,8 @@ const (
 	// maxUnlockFailures is the consecutive-failure count past which a
 	// sustained brute-force is assumed: the backoff is already pinned at the
 	// cap by then, but crossing it raises a distinct high-severity alarm so
-	// the attempt pattern is operator-visible (admin.md §8 "防爆破",
-	// security.md §5 "解锁尝试限速").
+	// the attempt pattern is operator-visible (admin.md §8
+	// "anti-brute-force", security.md §5 "unlock-attempt rate limit").
 	maxUnlockFailures = 5
 )
 
@@ -94,7 +94,7 @@ func (s *Server) hUnlock(w http.ResponseWriter, r *http.Request) {
 	// rejected outright instead of queueing. Blocking would let an attacker
 	// pile up goroutines that each force an Argon2id derivation, amplifying
 	// brute-force and memory pressure past the backoff window (admin.md §8
-	// "防爆破" concurrency hardening).
+	// "anti-brute-force" concurrency hardening).
 	if !s.unlock.inflight.TryLock() {
 		s.log.Warn("admin unlock rejected: another unlock in progress", "src", clientIP(r))
 		s.writeErr(w, errRateLimited("an unlock attempt is already in progress"))
@@ -134,7 +134,7 @@ func (s *Server) hUnlock(w http.ResponseWriter, r *http.Request) {
 	}
 	s.unlock.settle(now, true)
 	// Now UNLOCKED: back-fill the success into admin_audit (admin.md §8
-	// "解锁成功后补记 admin_audit"). A non-fatal audit error is logged.
+	// "back-fill admin_audit after a successful unlock"). A non-fatal audit error is logged.
 	if aerr := s.audit(r.Context(), r, scopeControl, "db.unlock", nil); aerr != nil {
 		s.log.Error("admin unlock audit append failed", "err", aerr.Error())
 	}
@@ -163,7 +163,7 @@ func (s *Server) hRelock(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, http.StatusOK, map[string]any{"locked": true, "changed": true})
 }
 
-// hLockStatus reports only the lock boolean (admin.md §8 "查看锁定状态"). It is
+// hLockStatus reports only the lock boolean (admin.md §8 "view lock status"). It is
 // reachable under LOCKED and leaks no data.
 func (s *Server) hLockStatus(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, http.StatusOK, map[string]any{"locked": !s.store.IsUnlocked()})

@@ -1,8 +1,11 @@
-// Package contract 定义 protocol.md 权威类型（信封 SigningRequest / MpcMessage /
-// CapToken / START StartSigning）与 S-001 唯一规范化序列化：proposerSig 预映像
-// 与 metaHash 均从逻辑字段值确定性构造，绝不取 JSON/protobuf 线格式字节，故同一
-// 逻辑信封经 JSON 提交与经 protobuf 下发产出逐字节一致的待签/待哈希输入。另含
-// sessionId 隔离、senderAuth、version 协商。
-// 权威基线（只读）：docs/design/contract/protocol.md、docs/design/contract/api.md、
+// Package contract defines the protocol.md authoritative types
+// (envelope SigningRequest / MpcMessage / CapToken / START
+// StartSigning) and the S-001 unique canonical serialization: the
+// proposerSig preimage and metaHash are both deterministically built
+// from logical field values, never from JSON/protobuf wire bytes, so the
+// same logical envelope submitted via JSON or delivered via protobuf
+// yields byte-identical to-sign / to-hash inputs. Also covers sessionId
+// isolation, senderAuth, version negotiation.
+// Authoritative baseline (read-only): docs/design/contract/protocol.md, docs/design/contract/api.md,
 // docs/spec/envelope-canonical.md。
 package contract

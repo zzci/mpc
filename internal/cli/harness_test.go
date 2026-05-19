@@ -21,7 +21,7 @@ import (
 // with its own libp2p host/peer, dialing only through that real relay. Nothing
 // here stubs libp2p, the relay, or tss-lib — the only non-production
 // substitution is tss-lib's bundled keygen pre-params (skips the multi-minute
-// safe-prime search; docs/design/testing.md §6 sanctions "以 tss-lib 既有测试模式为基",
+// safe-prime search; docs/design/testing.md §6 sanctions "build on tss-lib's existing test mode",
 // and the no-server-supplied-preparams custody red line is unaffected — each
 // device loads its own locally).
 

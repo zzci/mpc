@@ -13,7 +13,7 @@ import (
 
 // pnet PSK handling implements server.md R4 layer 1 (private network): a peer
 // without the 32-byte swarm key cannot speak the protocol, so the relay is
-// invisible on the public internet. The key is a secret: server.md「密钥处理」
+// invisible on the public internet. The key is a secret: server.md "secret handling"
 // forbids plaintext in committed config, mandating env:/file: injection. N-001
 // validates the reference resolves but does not expose the resolved bytes
 // (resolveSecret is unexported and internal/node is out of N-002 scope), so
@@ -46,7 +46,7 @@ func resolvePSK(ref string) (pnet.PSK, error) {
 }
 
 // resolveSecretRef accepts only env:VAR / file:/path references, mirroring
-// N-001 (server.md「密钥处理」: secrets injected by reference, never plaintext).
+// N-001 (server.md "secret handling": secrets injected by reference, never plaintext).
 func resolveSecretRef(ref string) (string, error) {
 	ref = strings.TrimSpace(ref)
 	switch {

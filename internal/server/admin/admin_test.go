@@ -287,7 +287,7 @@ func TestRelayMetrics_DecoupledNote(t *testing.T) {
 	}
 }
 
-// --- controls + audit immutability (admin.md §1 可控 / §7bis) -------------
+// --- controls + audit immutability (admin.md §1 controllable / §7bis) -------------
 
 type stubRelay struct{ banned, quotas int }
 

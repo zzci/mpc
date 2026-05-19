@@ -37,7 +37,7 @@ type evmDecoder struct {
 // Recompute parses the EVM unsigned tx, then *recomputes* the signing digest
 // from the parsed structured fields (not by hashing the input): a decode bug
 // changes the re-encoded preimage so the digest no longer equals digest32 and
-// the framework hard-rejects — "拒签而非误签" (docs/design/mcp/sdk.md §4). A
+// the framework hard-rejects — "reject rather than mis-sign" (docs/design/mcp/sdk.md §4). A
 // malformed/unsupported encoding returns ErrDecodeRejected (cannot bind).
 func (d *evmDecoder) Recompute(unsignedTx []byte) (*Facts, [32]byte, error) {
 	var zero [32]byte

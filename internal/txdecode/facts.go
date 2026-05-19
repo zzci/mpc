@@ -54,7 +54,7 @@ const (
 	CallERC20TransferFrom CallKind = "erc20-transferFrom"
 	// CallUnrecognized means the selector was not positively recognized: the
 	// raw selector and calldata are surfaced with a caution warning and NO
-	// fabricated method name (docs/design/mcp/sdk.md §4 「未识别调用不臆造」).
+	// fabricated method name (docs/design/mcp/sdk.md §4: do not fabricate an unrecognized call).
 	CallUnrecognized CallKind = "unrecognized"
 )
 
@@ -82,7 +82,7 @@ type DecodedCall struct {
 // Facts is the A-zone: the to/value/chain/contract/method facts decoded from
 // unsignedTx. It is the *single* authority for fund safety and is returned
 // only after the recomputed chain digest has been asserted == digest32
-// (docs/design/PLAN.md §3 展示契约 A 区).
+// (docs/design/PLAN.md §3 display-contract A-zone).
 type Facts struct {
 	Chain  Chain
 	TxType TxType
@@ -124,7 +124,7 @@ type Facts struct {
 // claim that does not match the digest-bound A-zone fact. A/B mismatch is a
 // prominent warning for the human reviewer (B is out-of-band, not chain-
 // binding), NOT a hard rejection — only digest mismatch hard-rejects
-// (docs/design/PLAN.md §3 信任边界, docs/design/mcp/sdk.md §4).
+// (docs/design/PLAN.md §3 trust boundary, docs/design/mcp/sdk.md §4).
 type Mismatch struct {
 	Field    string
 	Expected string

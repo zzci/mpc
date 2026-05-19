@@ -83,7 +83,7 @@ func (e *APIError) Is(target error) bool {
 
 // retryable reports whether the error is a transient coord condition that a
 // bounded backoff retry may clear: 503 LOCKED (api.md:84), 5xx INTERNAL
-// (api.md:77 "可重试"), and 429 RATE_LIMITED (transient by definition).
+// (api.md:77 "retryable"), and 429 RATE_LIMITED (transient by definition).
 // Terminal 4xx (envelope/auth/forbidden/not-found/conflict/expired) are not
 // retried.
 func retryable(e *APIError) bool {

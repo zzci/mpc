@@ -18,7 +18,7 @@ import (
 // admin_audit lives in the encrypted store, so a write needs UNLOCKED. Under
 // LOCKED the underlying AppendAdminAudit returns coorddb.ErrLocked; unlock
 // attempts are instead recorded to the process log (see unlock.go) and the
-// success is back-filled here once UNLOCKED (admin.md §8 "成功后补记").
+// success is back-filled here once UNLOCKED (admin.md §8 "back-filled on success").
 func (s *Server) audit(ctx context.Context, r *http.Request, sc scope, action string, params map[string]any) error {
 	var p string
 	if params != nil {
@@ -32,7 +32,7 @@ func (s *Server) audit(ctx context.Context, r *http.Request, sc scope, action st
 		clientIP(r), time.Now().UTC().Format(time.RFC3339))
 }
 
-// clientIP is the audit `src_ip` (database.md §6 "来源"). RemoteAddr is
+// clientIP is the audit `src_ip` (database.md §6 "source"). RemoteAddr is
 // host:port; strip the port. Reverse-proxy header trust is a deployment
 // concern (admin.md §5 non-public) so X-Forwarded-For is intentionally not
 // honored here — the recorded source is the direct peer.

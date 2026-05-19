@@ -416,7 +416,7 @@ func (c *Coord) hGroupPublic(w http.ResponseWriter, r *http.Request) {
 }
 
 // groupPublicExtView is the api.md A1 GET /v1/groups/{groupId}/public response
-// for an external business service ("申请地址"). It is a deliberately minimal,
+// for an external business service ("request address"). It is a deliberately minimal,
 // independent DTO — never groupPublicView — so no member / groupPubkey / epoch
 // / activeMembers / degraded privileged group state can leak through the
 // external surface (api.md:16, L1 (b) split ruling 2026-05-18). ecdsa_pubkey

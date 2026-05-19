@@ -48,7 +48,7 @@ const groupsBaseDDL = `CREATE TABLE groups (
 const groupsBaseCols = `group_id, ecdsa_pubkey, threshold_t, parties_n, group_pubkey, epoch, created_at, updated_at`
 
 // upGroupChainAddresses adds evm_address / tron_address (TEXT NOT NULL
-// DEFAULT '', aligned with the ProvisionGroup INSERT columns so the read
+// DEFAULT ”, aligned with the ProvisionGroup INSERT columns so the read
 // path needs no NULL handling), then backfills derived addresses for
 // existing groups rows from ecdsa_pubkey (adds columns only if no rows).
 // Deterministic, reversible, idempotent (tracked by goose_db_version;

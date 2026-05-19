@@ -9,7 +9,7 @@ import (
 	"strconv"
 )
 
-// Read-only surface (admin.md §1 可见). Every query runs through
+// Read-only surface (admin.md §1 visible). Every query runs through
 // coorddb.Store.WithTx (D-001 public API) against the migration schema, so
 // LOCKED is enforced by the store itself (WithTx → coorddb.ErrLocked → 503
 // LOCKED upstream, fail-closed) and this package never modifies coorddb.
@@ -79,7 +79,8 @@ var statusSet = map[string]struct{}{
 func validStatus(s string) bool { _, ok := statusSet[s]; return ok }
 
 // hTransactions lists signing requests newest-first with optional filters and
-// a created_at cursor (admin.md §1 交易记录 / 历史签名会话 list view).
+// a created_at cursor (admin.md §1 transaction-record / historical
+// signing-session list view).
 func (s *Server) hTransactions(w http.ResponseWriter, r *http.Request) {
 	f, err := parseTxFilter(r)
 	if err != nil {
@@ -156,7 +157,8 @@ func (s *Server) hTransactions(w http.ResponseWriter, r *http.Request) {
 
 // hTransactionDetail returns one request's full decoded detail + complete
 // status timeline (request_events) + approvals + result {R,S,V}
-// (admin.md §1/§7bis "检索任一历史请求的解码详情 + 完整状态时间线 + 审批 + 结果").
+// (admin.md §1/§7bis "retrieve any historical request's decode detail
+// + full status timeline + approvals + result").
 func (s *Server) hTransactionDetail(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("requestId")
 	if id == "" {
@@ -254,7 +256,7 @@ func (s *Server) hTransactionDetail(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, http.StatusOK, detail)
 }
 
-// hAudit lists admin_audit newest-first (admin.md §1 审计 view). The trail is
+// hAudit lists admin_audit newest-first (admin.md §1 audit view). The trail is
 // read-only here and append-only at the store (no update/delete route exists),
 // so the administrator cannot tamper with it (admin.md §7bis).
 func (s *Server) hAudit(w http.ResponseWriter, r *http.Request) {

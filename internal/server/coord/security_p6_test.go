@@ -163,7 +163,7 @@ func TestProposerSigStrongValidation(t *testing.T) {
 
 // --- C8 attack-surface rows ----------------------------------------------
 
-// C8 "谎报某成员在线": a heartbeat forged with a non-member key fails the B1
+// C8 "falsely claim a member is online": a heartbeat forged with a non-member key fails the B1
 // identity-sig gate (401), so coord cannot fake a member online and quorum
 // never dispatches.
 func TestC8_FalseOnlineForgedHeartbeat(t *testing.T) {
@@ -198,7 +198,7 @@ func TestC8_FalseOnlineForgedHeartbeat(t *testing.T) {
 	}
 }
 
-// C8 "向不同成员发不同信封": coord rebuilds ONE envelope from the stored row
+// C8 "send different envelopes to different members": coord rebuilds ONE envelope from the stored row
 // and publishes it to every signer — the START each signer pulls is
 // byte-identical (same digest32 and proposerSig), so coord cannot split.
 func TestC8_NoEnvelopeSplit(t *testing.T) {
@@ -235,7 +235,7 @@ func TestC8_NoEnvelopeSplit(t *testing.T) {
 	}
 }
 
-// C8 "篡改 businessInfo 钓鱼": businessInfo altered after signing breaks
+// C8 "tamper businessInfo (phishing)": businessInfo altered after signing breaks
 // metaHash==H(businessInfo) -> 400, never enqueued (proposerSig+metaHash).
 func TestC8_TamperedBusinessInfo(t *testing.T) {
 	h := newHarness(t)
@@ -277,7 +277,7 @@ func TestC8_TamperedBusinessInfo(t *testing.T) {
 	}
 }
 
-// C8 "重放旧请求": a requestId that reached a terminal state is one-time
+// C8 "replay an old request": a requestId that reached a terminal state is one-time
 // (server/server.md C6(d)); a resubmit returns the original terminal status
 // and is never reset to PENDING / re-enqueued.
 func TestC8_TerminalRequestIdNoReuse(t *testing.T) {

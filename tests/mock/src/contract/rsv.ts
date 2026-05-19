@@ -6,7 +6,7 @@ import { BadSignatureError } from './errors.ts'
 // (api.md A4 / internal/server/coord/callback.go verifyRSV / internal/mpc
 // Signature.Compact): 65 bytes [V+27 || R(32) || S(32)], V the raw recovery
 // id in {0..3}. This is the trust-free check the external service repeats
-// against the group's A1 address (testing.md §3.1 "ecrecover/TRON 验签").
+// against the group's A1 address (testing.md §3.1 "ecrecover/TRON verify").
 
 export const RSV_LEN = 65
 

@@ -1,17 +1,25 @@
 package node
 
-// DB 解锁口令处理的接口位（docs/design/server/server.md C9b、server/database.md §7）。
+// Interface seam for DB unlock-passphrase handling (server.md C9b,
+// server/database.md §7).
 //
-// coord 持久库整库加密；派生密钥的运营方口令**绝不**进入配置文件 / 环境变量 / KMS
-// （入了即丧失防文件泄露意义）。因此本配置包不提供任何口令字段，Config 也不引用本
-// 接口；口令仅在 coord 运行期经 admin-api 解锁交互在内存提供、重锁即清零。
+// The coord store is whole-DB encrypted; the operator passphrase that
+// derives the key NEVER enters config files / environment variables /
+// KMS (doing so would defeat the file-leak protection). So this config
+// package exposes no passphrase field and Config does not reference this
+// interface; the passphrase is provided in memory only, at coord
+// runtime, via the admin-api unlock interaction, and zeroized on relock.
 //
-// 本任务（N-001）仅声明接口位，不实现解锁；解锁/重锁/限速退避属 X-001 / admin
-// territory（server/admin.md）。relay 角色无 DB，不涉及解锁。
+// N-001 only declares the seam; it does not implement unlock —
+// unlock/relock/rate-limit-backoff are X-001 / admin territory
+// (server/admin.md). The relay role has no DB and no unlock.
 
-// UnlockProvider 提供 coord 整库加密的内存驻留解锁口令。
-// 实现由 admin-api 在解锁交互时注入；调用方用毕应及时清零返回的字节。
+// UnlockProvider supplies the in-memory unlock passphrase for the coord
+// whole-DB encryption. The implementation is injected by the admin-api
+// during the unlock interaction; callers should zeroize the returned
+// bytes promptly when done.
 type UnlockProvider interface {
-	// Passphrase 返回当前内存中的解锁口令；LOCKED 期间应返回错误。
+	// Passphrase returns the current in-memory unlock passphrase; it
+	// should return an error while LOCKED.
 	Passphrase() ([]byte, error)
 }

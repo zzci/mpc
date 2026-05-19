@@ -13,7 +13,7 @@ import (
 // the digest-bound A-zone cannot confirm is itself a prominent discrepancy.
 // B is out-of-band (proposer-signed but not chain-binding); a mismatch is a
 // loud human-review warning, never a hard rejection — only digest mismatch
-// hard-rejects (docs/design/PLAN.md §3 信任边界, docs/design/mcp/sdk.md §4).
+// hard-rejects (docs/design/PLAN.md §3 trust boundary, docs/design/mcp/sdk.md §4).
 const (
 	hintChain  = "expectChain"
 	hintTo     = "expectTo"     // effective payee (token recipient if a token transfer)

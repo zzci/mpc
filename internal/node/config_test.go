@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// writeConfig 写入临时配置文件并将其指定为 NODE_CONFIG。
+// writeConfig writes a temp config file and points NODE_CONFIG at it.
 func writeConfig(t *testing.T, body string) {
 	t.Helper()
 	p := filepath.Join(t.TempDir(), "node.yaml")
@@ -19,7 +19,8 @@ func writeConfig(t *testing.T, body string) {
 
 func TestLoadDefaults(t *testing.T) {
 	t.Setenv("NODE_CONFIG", filepath.Join(t.TempDir(), "absent.yaml"))
-	// 显式指定但缺失的文件应报错（区别于默认路径缺省）。
+	// An explicitly-set but missing file must error (unlike a missing
+	// default path).
 	if _, err := Load(); err == nil {
 		t.Fatal("explicit missing NODE_CONFIG: want error, got nil")
 	}
@@ -29,7 +30,7 @@ func TestLoadDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	// 内置默认在文件未覆盖处保留。
+	// Built-in defaults remain where the file does not override.
 	if cfg.Log.Level != "info" || cfg.Log.Format != "json" {
 		t.Errorf("log defaults lost: %+v", cfg.Log)
 	}
@@ -224,7 +225,8 @@ func TestOptionalSecret(t *testing.T) {
 	}
 }
 
-// TestFullParamTableParse 用 server.md 配置章示例 YAML 验证参数表全项落地。
+// TestFullParamTableParse uses the server.md config-chapter sample YAML
+// to verify every parameter-table item lands.
 func TestFullParamTableParse(t *testing.T) {
 	writeConfig(t, `
 log:   { level: info, format: json }
@@ -295,7 +297,8 @@ coord:
 	}
 }
 
-// TestValidateFullValid 用全部必填/可选 secret 注入后整体放行。
+// TestValidateFullValid injects all required/optional secrets and
+// expects overall pass.
 func TestValidateFullValid(t *testing.T) {
 	t.Setenv("TSSNODE_RELAY__PNET_PSK", "psk")
 	t.Setenv("TSSNODE_COORD__DB_DSN", "postgres://x")

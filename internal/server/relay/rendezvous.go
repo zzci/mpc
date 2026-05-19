@@ -46,7 +46,7 @@ const defaultRegisterTTL = 2 * time.Minute
 // even an authorized member (a valid rendezvous-register grant) must not be
 // able to exhaust relay memory by registering an unbounded number of
 // multiaddrs or fanning out across unbounded namespaces (security.md §5
-// "单一恶意/被控成员"). A wallet member advertises a handful of transport
+// "single malicious/compromised member"). A wallet member advertises a handful of transport
 // addresses and belongs to very few groups, so these caps are generous in
 // practice while bounding the registry. The 16 KiB request frame
 // (maxRendezvousBytes) and the short TTL already bound a single request and
@@ -57,7 +57,7 @@ const (
 )
 
 // Registration rejection reasons (logged with detail; the wire reply stays
-// generic per security.md §7 "relay 仅计数/拒绝原因,不记 peer 间载荷").
+// generic per security.md §7 "relay only counts / rejection reasons, never inter-peer payload").
 var (
 	errNoAddrs           = errors.New("rendezvous: registration advertises no addrs")
 	errTooManyAddrs      = errors.New("rendezvous: registration exceeds addr cap")

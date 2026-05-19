@@ -141,7 +141,7 @@ func (d *tronDecoder) fillFromContract(f *Facts, c tronContract) {
 // warnIfInnerMalformed raises a prominent caution when the contract's inner
 // protobuf message is structurally invalid: the field readers tolerate a
 // partial parse, so without this a malformed message would display as a
-// "clean" recognized tx (docs/design/mcp/sdk.md §4 「未识别不臆造」 — incomplete
+// "clean" recognized tx (docs/design/mcp/sdk.md §4: do not fabricate the unrecognized — incomplete
 // decode must warn, not silently present zeroed fields).
 func warnIfInnerMalformed(f *Facts, name string, b []byte) {
 	if eachField(b, func(protowire.Number, protowire.Type, []byte, uint64) error { return nil }) != nil {

@@ -4,7 +4,7 @@ import (
 	"net/http"
 )
 
-// P6 anti-abuse hardening (docs/design/security.md §5 "拒绝服务" row, server/server.md
+// P6 anti-abuse hardening (docs/design/security.md §5 "denial of service" row, server/server.md
 // C7/C8). X-001 only rate-limited the self-attesting /v1/groups* endpoints; P6
 // extends defence-in-depth to the external (A) and member (B) surfaces and
 // strengthens external-service auth. Nothing here changes the C1-C10 semantics

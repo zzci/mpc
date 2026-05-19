@@ -11,7 +11,7 @@ import (
 // layer received from a peer (docs/design/mcp/sdk.md §2). It is the receive-side
 // security gate: a message is accepted only if its version is supported AND
 // its sessionId names a live session this device is running. Any other
-// message is dropped unconditionally — the 串话 / replay defense of
+// message is dropped unconditionally — the cross-talk / replay defense of
 // docs/design/contract/protocol.md:53 — and reported via a non-nil error so the
 // host/transport can log the drop reason without acting on it.
 //
