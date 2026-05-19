@@ -130,22 +130,42 @@ type CoordDBEncryptionConfig struct {
 // production is impossible, not merely discouraged.
 const allowInsecureDBEnv = "ALLOW_INSECURE_DB"
 
-// CoordExternalConfig is the external-service entry: auth is fixed
-// api_key, result delivery is fixed webhook (user ruling 2026-05-19).
-// Both APIKey and ResultWebhook are always required when coord is
-// enabled.
-type CoordExternalConfig struct {
-	APIKey        string `yaml:"api_key"`
-	ResultWebhook string `yaml:"result_webhook"`
+// OutboundWebhookConfig is a coord→external callback target with
+// anti-forgery callback auth (user ruling 2026-05-19, server.md
+// change-summary item 4 / api.md A4). URL is always required.
+// Secret/APIKey are the two auth modes — at least one must be set;
+// both set means signature is used:
+//   - Secret: HMAC-SHA256 over "<unix>.<raw body>" (preferred; body-bound,
+//     replay-resistant).
+//   - APIKey: a static Authorization: Bearer token (fallback for receivers
+//     that only support Bearer; no body binding, weaker).
+//
+// These outbound credentials are physically isolated from the inbound
+// CoordExternalConfig.APIKey (different direction, independent fields,
+// never reused). Any value may be a literal or an env:/file: reference.
+type OutboundWebhookConfig struct {
+	URL    string `yaml:"url"`
+	Secret string `yaml:"secret"`
+	APIKey string `yaml:"api_key"`
 }
 
-// CoordNotifyConfig is the single fixed notification webhook (user ruling
-// 2026-05-19): coord only POSTs notification events here; FCM/APNS/etc.
-// are translated and delivered by an external notification channel. coord
-// holds no push credentials and does not distinguish fcm/apns.
-type CoordNotifyConfig struct {
-	Webhook string `yaml:"webhook"`
+// CoordExternalConfig is the external-service entry: inbound auth is fixed
+// api_key (always required when coord is enabled), result delivery is the
+// fixed Result webhook with anti-forgery callback auth (user ruling
+// 2026-05-19; renamed from result_webhook to result to disambiguate from
+// notify).
+type CoordExternalConfig struct {
+	APIKey string                `yaml:"api_key"`
+	Result OutboundWebhookConfig `yaml:"result"`
 }
+
+// CoordNotifyConfig is the single fixed notification webhook, flattened to
+// {url, secret, api_key} (user ruling 2026-05-19): coord only POSTs
+// notification events here; FCM/APNS/etc. are translated and delivered by
+// an external notification channel. coord holds no push credentials and
+// does not distinguish fcm/apns. Callback auth is the same dual mode as
+// the result webhook.
+type CoordNotifyConfig OutboundWebhookConfig
 
 // CoordTTLConfig is the clock-skew tolerance.
 type CoordTTLConfig struct {
@@ -279,16 +299,18 @@ func (c Config) Validate() error {
 		if _, err := resolveValue(c.Coord.DB.DSN); err != nil {
 			return fmt.Errorf("coord enabled: db.dsn: %w", err)
 		}
-		// auth is fixed api_key, result delivery fixed webhook: both
-		// always required when coord is enabled (user ruling 2026-05-19).
+		// Inbound auth is fixed api_key (always required). Result delivery
+		// and notification are fixed webhooks with anti-forgery callback
+		// auth: url required, plus at least one of secret/api_key (user
+		// ruling 2026-05-19).
 		if _, err := resolveValue(c.Coord.External.APIKey); err != nil {
 			return fmt.Errorf("coord enabled: external.api_key: %w", err)
 		}
-		if _, err := resolveValue(c.Coord.External.ResultWebhook); err != nil {
-			return fmt.Errorf("coord enabled: external.result_webhook: %w", err)
+		if err := validateOutboundWebhook("external.result", c.Coord.External.Result); err != nil {
+			return err
 		}
-		if _, err := resolveValue(c.Coord.Notify.Webhook); err != nil {
-			return fmt.Errorf("coord enabled: notify.webhook: %w", err)
+		if err := validateOutboundWebhook("notify", OutboundWebhookConfig(c.Coord.Notify)); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -333,6 +355,28 @@ func resolveValue(v string) (string, error) {
 	default:
 		return v, nil
 	}
+}
+
+// errWebhookAuthNeitherSet means a coord→external webhook configured
+// neither secret nor api_key. Callback auth is mandatory (anti-forgery,
+// user ruling 2026-05-19): at least one mode must be set, else fail-fast.
+var errWebhookAuthNeitherSet = errors.New(
+	"callback auth missing: set secret (HMAC-SHA256, preferred) or api_key (Bearer)")
+
+// validateOutboundWebhook fail-fasts a coord→external callback target: the
+// url must resolve, and at least one auth mode (secret/api_key) must
+// resolve. When both are set the signer prefers the signature; validation
+// only requires one to be present.
+func validateOutboundWebhook(prefix string, w OutboundWebhookConfig) error {
+	if _, err := resolveValue(w.URL); err != nil {
+		return fmt.Errorf("coord enabled: %s.url: %w", prefix, err)
+	}
+	_, secErr := resolveValue(w.Secret)
+	_, keyErr := resolveValue(w.APIKey)
+	if secErr != nil && keyErr != nil {
+		return fmt.Errorf("coord enabled: %s: %w", prefix, errWebhookAuthNeitherSet)
+	}
+	return nil
 }
 
 // validateEnum checks a constrained string value (server.md enum column).

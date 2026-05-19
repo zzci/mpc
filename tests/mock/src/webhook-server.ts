@@ -1,10 +1,14 @@
 import type { Config } from './config.ts'
 import type { ResultPayload } from './contract/index.ts'
 import { ResultPayloadSchema } from './contract/index.ts'
+import { verifyWebhookAuth } from './webhook-auth.ts'
 
 // A4 webhook receiver: a minimal Bun.serve that accepts coord's terminal
-// callback POST and resolves a per-requestId waiter. Test-only; no auth/TLS —
-// it binds to localhost for the in-process E2E.
+// callback POST and resolves a per-requestId waiter. It enforces coord's
+// dual-mode anti-forgery callback auth (user ruling 2026-05-19) before
+// trusting the payload: an unverified POST is rejected 401 and never
+// delivered, so a forged {requestId,status,RSV} cannot drive the double.
+// Binds to localhost for the in-process E2E.
 
 export class WebhookServer {
   private server: ReturnType<typeof Bun.serve> | undefined
@@ -29,9 +33,16 @@ export class WebhookServer {
         const url = new URL(req.url)
         if (req.method !== 'POST' || url.pathname !== this.cfg.WEBHOOK_PATH)
           return new Response('not found', { status: 404 })
+        // Read the exact bytes for HMAC verification before parsing — the
+        // signature binds the raw body, so parse-then-reserialize would
+        // break verification.
+        const rawBody = await req.text()
+        const auth = verifyWebhookAuth(this.cfg, req.headers, rawBody, Math.floor(Date.now() / 1000))
+        if (!auth.ok)
+          return new Response(`unauthorized: ${auth.reason}`, { status: 401 })
         let payload: ResultPayload
         try {
-          payload = ResultPayloadSchema.parse(await req.json())
+          payload = ResultPayloadSchema.parse(JSON.parse(rawBody))
         }
         catch {
           return new Response('bad payload', { status: 400 })

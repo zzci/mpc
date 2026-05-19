@@ -40,13 +40,29 @@ func runCoord(ctx context.Context, cfg server.Config) error {
 	if err != nil {
 		return fmt.Errorf("coord external.api_key: %w", err)
 	}
-	resultWebhook, err := resolveRef(cc.External.ResultWebhook)
+	resultWebhook, err := resolveRef(cc.External.Result.URL)
 	if err != nil {
-		return fmt.Errorf("coord external.result_webhook: %w", err)
+		return fmt.Errorf("coord external.result.url: %w", err)
 	}
-	notifyWebhook, err := resolveRef(cc.Notify.Webhook)
+	resultSecret, err := resolveRef(cc.External.Result.Secret)
 	if err != nil {
-		return fmt.Errorf("coord notify.webhook: %w", err)
+		return fmt.Errorf("coord external.result.secret: %w", err)
+	}
+	resultAPIKey, err := resolveRef(cc.External.Result.APIKey)
+	if err != nil {
+		return fmt.Errorf("coord external.result.api_key: %w", err)
+	}
+	notifyWebhook, err := resolveRef(cc.Notify.URL)
+	if err != nil {
+		return fmt.Errorf("coord notify.url: %w", err)
+	}
+	notifySecret, err := resolveRef(cc.Notify.Secret)
+	if err != nil {
+		return fmt.Errorf("coord notify.secret: %w", err)
+	}
+	notifyAPIKey, err := resolveRef(cc.Notify.APIKey)
+	if err != nil {
+		return fmt.Errorf("coord notify.api_key: %w", err)
 	}
 
 	skew, err := time.ParseDuration(orDefault(cc.TTL.SkewTolerance, "30s"))
@@ -63,6 +79,8 @@ func runCoord(ctx context.Context, cfg server.Config) error {
 		DBPath:          dbPath,
 		APIKey:          apiKey,
 		CallbackURL:     resultWebhook,
+		CallbackSecret:  resultSecret,
+		CallbackAPIKey:  resultAPIKey,
 		NotifyWebhook:   notifyWebhook,
 		SkewTolerance:   skew,
 		SignerSelect:    orDefault(cc.Quorum.SignerSelect, "liveness"),
@@ -96,7 +114,7 @@ func runCoord(ctx context.Context, cfg server.Config) error {
 	// credentials and never blocks on delivery.
 	co, err := coord.New(ccfg, store, presence,
 		coord.WithLogger(logger),
-		coord.WithNotifier(newWebhookNotifier(notifyWebhook, logger)))
+		coord.WithNotifier(newWebhookNotifier(notifyWebhook, notifySecret, notifyAPIKey, logger)))
 	if err != nil {
 		return fmt.Errorf("coord init: %w", err)
 	}

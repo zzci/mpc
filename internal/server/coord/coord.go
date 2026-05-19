@@ -127,6 +127,8 @@ func New(cfg Config, store *coorddb.Store, presence *coorddb.Presence, opts ...O
 	}
 	c.callback = callbackSink{
 		url:    cfg.CallbackURL,
+		secret: cfg.CallbackSecret,
+		apiKey: cfg.CallbackAPIKey,
 		client: &http.Client{Timeout: 10 * time.Second},
 		log:    c.log,
 	}

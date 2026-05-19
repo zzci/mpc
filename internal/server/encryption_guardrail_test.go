@@ -18,11 +18,14 @@ func TestEncryptionDisableProductionGuardrail(t *testing.T) {
 	// the allow path rather than stalling on a missing secret.
 	coordCfg := func(encEnable bool) Config {
 		return Config{Coord: CoordConfig{
-			Enable:   true,
-			DB:       CoordDBConfig{DSN: "env:REF_GUARD_DSN", Encryption: CoordDBEncryptionConfig{Enable: encEnable}},
-			External: CoordExternalConfig{APIKey: "env:REF_GUARD_KEY", ResultWebhook: "env:REF_GUARD_RW"},
-			Notify:   CoordNotifyConfig{Webhook: "env:REF_GUARD_RW"},
-			Quorum:   CoordQuorumConfig{SignerSelect: "liveness"},
+			Enable: true,
+			DB:     CoordDBConfig{DSN: "env:REF_GUARD_DSN", Encryption: CoordDBEncryptionConfig{Enable: encEnable}},
+			External: CoordExternalConfig{
+				APIKey: "env:REF_GUARD_KEY",
+				Result: OutboundWebhookConfig{URL: "env:REF_GUARD_RW", APIKey: "guard-bearer"},
+			},
+			Notify: CoordNotifyConfig{URL: "env:REF_GUARD_RW", APIKey: "guard-bearer"},
+			Quorum: CoordQuorumConfig{SignerSelect: "liveness"},
 		}}
 	}
 

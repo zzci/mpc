@@ -72,13 +72,16 @@ coord:
   enable: true
   http: { listen: "127.0.0.1:${coordPort}" }
   db: { dsn: "env:COORD_DB_DSN", encryption: { enable: false } }
-  # Config framework v2 (user ruling 2026-05-19): external auth is fixed
-  # api_key, result delivery fixed webhook, notification a single fixed
-  # webhook (all required). This E2E fetches the result via the A4
-  # long-poll endpoint, so the webhook targets are unused localhost
-  # discard URLs and the background POST failing is harmless here.
-  external: { api_key: "env:COORD_API_KEY", result_webhook: "http://127.0.0.1:9/result" }
-  notify: { webhook: "http://127.0.0.1:9/notify" }
+  # Config framework v2 (user ruling 2026-05-19): external auth fixed
+  # api_key, result/notify fixed webhooks each with anti-forgery callback
+  # auth (url + at least one of secret/api_key). This E2E fetches the
+  # result via the A4 long-poll endpoint, so the webhook targets are
+  # unused localhost discard URLs and the background signed POST failing to
+  # connect is harmless; the discard api_key just satisfies fail-fast.
+  external:
+    api_key: "env:COORD_API_KEY"
+    result: { url: "http://127.0.0.1:9/result", api_key: "e2e-result-discard" }
+  notify: { url: "http://127.0.0.1:9/notify", api_key: "e2e-notify-discard" }
   ttl: { skew_tolerance: "2m" }
   quorum: { signer_select: stable }
   dispatch: { timeout: "2m" }

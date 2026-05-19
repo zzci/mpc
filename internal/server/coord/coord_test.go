@@ -82,6 +82,7 @@ func newHarness(t *testing.T, opts ...Option) *harness {
 		DBPath:          dbPath,
 		APIKey:          "secret-key",
 		CallbackURL:     cb.URL,
+		CallbackAPIKey:  "test-callback-bearer",
 		NotifyWebhook:   cb.URL,
 		SkewTolerance:   0,
 		SignerSelect:    signerStable,

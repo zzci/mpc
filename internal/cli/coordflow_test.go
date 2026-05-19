@@ -249,11 +249,14 @@ func TestE2ECoordEnvelopeFlowRealCoord(t *testing.T) {
 			Listen: addr,
 			DBPath: dbPath,
 			APIKey: "ext-secret",
-			// Result delivery is fixed webhook (user ruling 2026-05-19);
-			// this flow consumes the result via the A4 long-poll endpoint
-			// (resultHub + persisted row), so the webhook target is an
-			// unused dummy and the async POST failing is harmless here.
+			// Result delivery is fixed webhook with anti-forgery callback
+			// auth (user ruling 2026-05-19); this flow consumes the result
+			// via the A4 long-poll endpoint (resultHub + persisted row), so
+			// the webhook target is an unused dummy, the discard api_key
+			// only satisfies the at-least-one callback-auth fail-fast, and
+			// the async signed POST failing is harmless here.
 			CallbackURL:     "http://127.0.0.1:0/unused",
+			CallbackAPIKey:  "cli-e2e-discard",
 			NotifyWebhook:   "http://127.0.0.1:0/unused",
 			SkewTolerance:   2 * time.Minute,
 			SignerSelect:    "stable",

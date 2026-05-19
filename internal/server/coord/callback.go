@@ -21,7 +21,12 @@ import (
 // waiter is still signaled separately (the request row already holds
 // status/result). The result must always be returned (server.md C1).
 type callbackSink struct {
-	url    string
+	url string
+	// secret/apiKey are the dual-mode anti-forgery callback-auth credentials
+	// (user ruling 2026-05-19): secret → HMAC-SHA256 signature (preferred),
+	// else apiKey → Bearer. Applied by applyWebhookAuth on every POST.
+	secret string
+	apiKey string
 	client *http.Client
 	log    *slog.Logger
 }
@@ -73,6 +78,10 @@ func (s callbackSink) postOnce(ctx context.Context, body callbackBody) error {
 		return fmt.Errorf("coord: build callback request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	// Anti-forgery callback auth over the exact bytes sent (user ruling
+	// 2026-05-19): the external service rejects any callback that does not
+	// verify, so a forged {requestId,status,RSV} cannot drive its logic.
+	ApplyWebhookAuth(req, buf, time.Now(), s.secret, s.apiKey)
 	resp, err := s.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("coord: callback post: %w", err)

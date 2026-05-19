@@ -23,10 +23,16 @@ type Config struct {
 	// coord.external.api_key); constant-time compared in checkAPIKey.
 	APIKey string
 	// CallbackURL is the fixed result webhook URL
-	// (coord.external.result_webhook); the A4 result is always POSTed here.
+	// (coord.external.result.url); the A4 result is always POSTed here.
 	CallbackURL string
-	// NotifyWebhook is the single fixed notification webhook
-	// (coord.notify.webhook): coord POSTs notification events here and an
+	// CallbackSecret / CallbackAPIKey are the result-webhook anti-forgery
+	// callback-auth credentials (coord.external.result.{secret,api_key},
+	// user ruling 2026-05-19). At least one is set; with both, the secret
+	// (HMAC-SHA256 signature) wins over the api_key (Bearer) fallback.
+	CallbackSecret string
+	CallbackAPIKey string
+	// NotifyWebhook is the single fixed notification webhook URL
+	// (coord.notify.url): coord POSTs notification events here and an
 	// external channel translates/delivers them (FCM/APNS/etc.).
 	NotifyWebhook string
 	// SkewTolerance is the clock-skew slack; outside it expiry is judged
@@ -59,6 +65,9 @@ func (c Config) validate() error {
 	}
 	if c.CallbackURL == "" {
 		return fmt.Errorf("coord: external result webhook url is empty")
+	}
+	if c.CallbackSecret == "" && c.CallbackAPIKey == "" {
+		return fmt.Errorf("coord: external result webhook callback auth missing (need secret or api_key)")
 	}
 	if c.NotifyWebhook == "" {
 		return fmt.Errorf("coord: notify webhook url is empty")

@@ -23,14 +23,22 @@ import (
 // blocks the quorum engine (the long-poll dispatch channel remains the
 // authoritative wake path; this is an out-of-band nudge).
 type webhookNotifier struct {
-	url    string
+	url string
+	// secret/apiKey are the dual-mode anti-forgery callback-auth credentials
+	// (coord.notify.{secret,api_key}, user ruling 2026-05-19): same scheme
+	// as the result webhook — secret → HMAC-SHA256 signature (preferred),
+	// else apiKey → Bearer.
+	secret string
+	apiKey string
 	client *http.Client
 	log    *slog.Logger
 }
 
-func newWebhookNotifier(url string, log *slog.Logger) *webhookNotifier {
+func newWebhookNotifier(url, secret, apiKey string, log *slog.Logger) *webhookNotifier {
 	return &webhookNotifier{
 		url:    url,
+		secret: secret,
+		apiKey: apiKey,
 		client: &http.Client{Timeout: 10 * time.Second},
 		log:    log,
 	}
@@ -65,6 +73,9 @@ func (n *webhookNotifier) NotifyDispatch(ctx context.Context, groupID string, si
 			return
 		}
 		req.Header.Set("Content-Type", "application/json")
+		// Same anti-forgery callback auth as the result webhook over the
+		// exact bytes sent (user ruling 2026-05-19).
+		coord.ApplyWebhookAuth(req, body, time.Now(), n.secret, n.apiKey)
 		resp, err := n.client.Do(req)
 		if err != nil {
 			n.log.Warn("notify webhook post failed", "groupId", groupID, "err", err.Error())

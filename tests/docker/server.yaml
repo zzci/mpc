@@ -25,11 +25,14 @@ coord:
   http: { listen: "0.0.0.0:8080" }
   db: { dsn: "env:COORD_DB_DSN", encryption: { enable: false } }
   # Config framework v2 (user ruling 2026-05-19): external auth fixed
-  # api_key, result delivery fixed webhook, notification single fixed
-  # webhook (all required). The Docker E2E fetches results via the A4
-  # long-poll endpoint; the webhook targets are unused discard URLs.
-  external: { api_key: "env:COORD_API_KEY", result_webhook: "http://127.0.0.1:9/result" }
-  notify: { webhook: "http://127.0.0.1:9/notify" }
+  # api_key, result/notify fixed webhooks each with anti-forgery callback
+  # auth (url + at least one of secret/api_key). The Docker E2E fetches
+  # results via the A4 long-poll endpoint; the webhook targets are unused
+  # discard URLs, the discard api_key only satisfies fail-fast.
+  external:
+    api_key: "env:COORD_API_KEY"
+    result: { url: "http://127.0.0.1:9/result", api_key: "e2e-result-discard" }
+  notify: { url: "http://127.0.0.1:9/notify", api_key: "e2e-notify-discard" }
   ttl: { skew_tolerance: "2m" }
   quorum: { signer_select: stable }
   dispatch: { timeout: "2m" }

@@ -184,14 +184,20 @@ func TestValidateDoubleFalse(t *testing.T) {
 }
 
 // fullCoord builds a coord config whose required values are env: refs to
-// the non-schema REF_* names (set via t.Setenv by the caller).
+// the non-schema REF_* names (set via t.Setenv by the caller). rw/nw are
+// the result/notify webhook URLs; callback auth is satisfied with a
+// literal api_key so the at-least-one rule passes (its own failure mode is
+// covered by TestValidateCallbackAuthRequired).
 func fullCoord(dsn, key, rw, nw string) CoordConfig {
 	return CoordConfig{
-		Enable:   true,
-		DB:       CoordDBConfig{DSN: dsn, Encryption: CoordDBEncryptionConfig{Enable: true}},
-		External: CoordExternalConfig{APIKey: key, ResultWebhook: rw},
-		Notify:   CoordNotifyConfig{Webhook: nw},
-		Quorum:   CoordQuorumConfig{SignerSelect: "liveness"},
+		Enable: true,
+		DB:     CoordDBConfig{DSN: dsn, Encryption: CoordDBEncryptionConfig{Enable: true}},
+		External: CoordExternalConfig{
+			APIKey: key,
+			Result: OutboundWebhookConfig{URL: rw, APIKey: "result-bearer-literal"},
+		},
+		Notify: CoordNotifyConfig{URL: nw, APIKey: "notify-bearer-literal"},
+		Quorum: CoordQuorumConfig{SignerSelect: "liveness"},
 	}
 }
 
@@ -221,11 +227,11 @@ func TestValidateRequiredValueFailFast(t *testing.T) {
 			Config{Coord: fullCoord("env:"+refDSN, "env:REF_UNSET", "env:"+refRW, "env:"+refNW)},
 		},
 		{
-			"coord external.result_webhook missing",
+			"coord external.result.url missing",
 			Config{Coord: fullCoord("env:"+refDSN, "env:"+refKey, "", "env:"+refNW)},
 		},
 		{
-			"coord notify.webhook missing",
+			"coord notify.url missing",
 			Config{Coord: fullCoord("env:"+refDSN, "env:"+refKey, "env:"+refRW, "")},
 		},
 	}
@@ -236,6 +242,57 @@ func TestValidateRequiredValueFailFast(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestValidateCallbackAuthRequired exercises the anti-forgery callback-auth
+// rule (user ruling 2026-05-19): a coord→external webhook with a url but
+// neither secret nor api_key fail-fasts; either mode alone (or both) passes.
+func TestValidateCallbackAuthRequired(t *testing.T) {
+	t.Setenv(refDSN, "postgres://x")
+	t.Setenv(refKey, "k")
+
+	base := func() Config {
+		return Config{Coord: CoordConfig{
+			Enable: true,
+			DB:     CoordDBConfig{DSN: "env:" + refDSN, Encryption: CoordDBEncryptionConfig{Enable: true}},
+			External: CoordExternalConfig{
+				APIKey: "env:" + refKey,
+				Result: OutboundWebhookConfig{URL: "https://ext/result", APIKey: "rk"},
+			},
+			Notify: CoordNotifyConfig{URL: "https://ext/notify", APIKey: "nk"},
+			Quorum: CoordQuorumConfig{SignerSelect: "liveness"},
+		}}
+	}
+
+	t.Run("result neither secret nor api_key -> fail-fast", func(t *testing.T) {
+		c := base()
+		c.Coord.External.Result = OutboundWebhookConfig{URL: "https://ext/result"}
+		if err := c.Validate(); !errors.Is(err, errWebhookAuthNeitherSet) {
+			t.Fatalf("want errWebhookAuthNeitherSet, got %v", err)
+		}
+	})
+	t.Run("notify neither secret nor api_key -> fail-fast", func(t *testing.T) {
+		c := base()
+		c.Coord.Notify = CoordNotifyConfig{URL: "https://ext/notify"}
+		if err := c.Validate(); !errors.Is(err, errWebhookAuthNeitherSet) {
+			t.Fatalf("want errWebhookAuthNeitherSet, got %v", err)
+		}
+	})
+	t.Run("secret-only passes", func(t *testing.T) {
+		c := base()
+		c.Coord.External.Result = OutboundWebhookConfig{URL: "https://ext/result", Secret: "s"}
+		c.Coord.Notify = CoordNotifyConfig{URL: "https://ext/notify", Secret: "s"}
+		if err := c.Validate(); err != nil {
+			t.Fatalf("secret-only: want nil, got %v", err)
+		}
+	})
+	t.Run("api_key-only and both-set pass", func(t *testing.T) {
+		c := base()
+		c.Coord.External.Result = OutboundWebhookConfig{URL: "https://ext/result", Secret: "s", APIKey: "k"}
+		if err := c.Validate(); err != nil {
+			t.Fatalf("both-set: want nil, got %v", err)
+		}
+	})
 }
 
 // TestValidateLiteralAccepted: the v2 ruling relaxes the
@@ -336,9 +393,14 @@ coord:
   db: { dsn: env:REF_COORD_DSN }
   external:
     api_key: env:REF_COORD_KEY
-    result_webhook: env:REF_COORD_RESULT_WEBHOOK
+    result:
+      url: env:REF_COORD_RESULT_WEBHOOK
+      secret: env:REF_COORD_RESULT_SECRET
+      api_key: env:REF_COORD_RESULT_APIKEY
   notify:
-    webhook: env:REF_COORD_NOTIFY_WEBHOOK
+    url: env:REF_COORD_NOTIFY_WEBHOOK
+    secret: env:REF_COORD_NOTIFY_SECRET
+    api_key: env:REF_COORD_NOTIFY_APIKEY
   ttl: { skew_tolerance: "30s" }
   quorum: { signer_select: liveness }
   dispatch: { timeout: "120s" }
@@ -365,8 +427,12 @@ coord:
 		"coord.http.listen":                  cfg.Coord.HTTP.Listen == ":8080",
 		"coord.db.dsn":                       cfg.Coord.DB.DSN == "env:REF_COORD_DSN",
 		"coord.external.api_key":             cfg.Coord.External.APIKey == "env:REF_COORD_KEY",
-		"coord.external.result_webhook":      cfg.Coord.External.ResultWebhook == "env:REF_COORD_RESULT_WEBHOOK",
-		"coord.notify.webhook":               cfg.Coord.Notify.Webhook == "env:REF_COORD_NOTIFY_WEBHOOK",
+		"coord.external.result.url":          cfg.Coord.External.Result.URL == "env:REF_COORD_RESULT_WEBHOOK",
+		"coord.external.result.secret":       cfg.Coord.External.Result.Secret == "env:REF_COORD_RESULT_SECRET",
+		"coord.external.result.api_key":      cfg.Coord.External.Result.APIKey == "env:REF_COORD_RESULT_APIKEY",
+		"coord.notify.url":                   cfg.Coord.Notify.URL == "env:REF_COORD_NOTIFY_WEBHOOK",
+		"coord.notify.secret":                cfg.Coord.Notify.Secret == "env:REF_COORD_NOTIFY_SECRET",
+		"coord.notify.api_key":               cfg.Coord.Notify.APIKey == "env:REF_COORD_NOTIFY_APIKEY",
 		"coord.ttl.skew_tolerance":           cfg.Coord.TTL.SkewTolerance == "30s",
 		"coord.quorum.signer_select":         cfg.Coord.Quorum.SignerSelect == "liveness",
 		"coord.dispatch.timeout":             cfg.Coord.Dispatch.Timeout == "120s",

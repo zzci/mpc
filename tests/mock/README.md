@@ -1,48 +1,91 @@
-# mock-extsvc（外部业务服务仿真，测试专用）
+# mock-extsvc (external business service double, test-only)
 
-> MEXT-001。**非产品服务**——仅为 E2E（`docs/design/testing.md §3.1`）提供"外部业务服务侧"测试替身，位于 `tests/mock/`（与 `tests/e2e/` 同级），遵 `pma-bun`。
+> MEXT-001. **Not a product service** — only a test double for the
+> "external business service side" of the E2E (`docs/design/testing.md
+> §3.1`), located at `tests/mock/` (a sibling of `tests/e2e/`), following
+> `pma-bun`.
 
-## 职责（testing.md §3.1 三能力）
+## Responsibilities (testing.md §3.1, three capabilities)
 
-- **(a) 提交签名信封**：`POST /v1/requests`（api.md A2），自构 `metaHash` 与 `proposerSig`，与 Go `internal/contract` 规范化序列化**逐字节一致**。
-- **(b) 申请组地址**：`GET /v1/groups/{groupId}/public`（api.md A1 / XA-001），取 `evm_address` / `tron_address` / `ecdsa_pubkey`。
-- **(c) 接收并验签 {R,S,V}**：webhook（A4）或 longpoll（A3），用三链真实摘要做 `ecrecover`（ETH/BSC，EIP-55）与 TRON（Base58Check）地址比对，复核 coord 的组公钥门（callback.go `verifyRSV`）。
+- **(a) Submit the signing envelope**: `POST /v1/requests` (api.md A2),
+  self-constructing `metaHash` and `proposerSig` **byte-for-byte
+  identical** to the Go `internal/contract` canonical serialization.
+- **(b) Request the group address**: `GET /v1/groups/{groupId}/public`
+  (api.md A1 / XA-001), reading `evm_address` / `tron_address` /
+  `ecdsa_pubkey`.
+- **(c) Receive and verify {R,S,V}**: webhook (A4) or longpoll (A3),
+  `ecrecover` against the real three-chain digest, comparing the derived
+  ETH/BSC (EIP-55) and TRON (Base58Check) addresses, re-checking coord's
+  group-pubkey gate (callback.go `verifyRSV`).
+- **(c′) Anti-forgery callback verification** (user ruling 2026-05-19,
+  api.md A4): the webhook receiver verifies coord's outbound callback auth
+  before trusting the payload, cross-language reconciled with
+  `internal/server/coord/webhookauth.go` — signature mode recomputes
+  HMAC-SHA256(`"<unix>.<raw body>"`), constant-time compares, and rejects
+  replay/forgery by the skew window; token mode constant-time compares
+  `Authorization: Bearer`; an unverified callback is 401 and never
+  delivered. See `src/webhook-auth.ts` and `test/webhook-auth.test.ts`.
 
-## 跨语言逐字节一致的保证
+## Cross-language byte-exactness guarantee
 
-`testdata/golden.json` 由**真实 Go 包**（`internal/contract` + `internal/addr`）经 `testdata/gen/main.go` 生成，是权威锚。`test/golden.test.ts` 断言 TS 实现对规范化预映像、`metaHash`(RFC 8785 JCS)、`proposerSig`(secp256k1 DER, RFC6979)、`EmptyMetaHash`、EVM/TRON 地址派生、RSV 恢复**逐字节复现** Go 输出；任一侧漂移即 CI 失败。
+`testdata/golden.json` is generated from the **real Go packages**
+(`internal/contract` + `internal/addr`) via `testdata/gen/main.go` and is
+the authoritative anchor. `test/golden.test.ts` asserts the TS
+implementation **byte-for-byte reproduces** the Go output for the
+canonical pre-image, `metaHash` (RFC 8785 JCS), `proposerSig` (secp256k1
+DER, RFC 6979), `EmptyMetaHash`, EVM/TRON address derivation, and RSV
+recovery; any drift on either side fails CI.
 
-重新生成（改动 contract 规范化或 addr 派生后，须在仓库根执行）：
+Regenerate (after changing the contract canonicalization or addr
+derivation; run from the repo root):
 
 ```bash
 go run ./mock-extsvc/testdata/gen > mock-extsvc/testdata/golden.json
 ```
 
-## 质量门
+## Quality gates
 
 ```bash
 bun install
 bun run lint        # eslint @antfu
 bun run typecheck   # tsc --noEmit (strict, noUncheckedIndexedAccess)
-bun test            # bun:test —— 56 用例（48 契约 + 8 控制面）
-bun test --coverage # >80 门
+bun test            # bun:test — 67 cases (incl. webhook callback-auth anti-forgery cases)
+bun test --coverage # >80 gate
 ```
 
-## 配置（启动时 Zod 校验，见 `src/config.ts`）
+## Configuration (Zod-validated at startup, see `src/config.ts`)
 
-`COORD_BASE_URL`（必填）、`COORD_API_KEY` / `COORD_API_KEY_HEADER`、`RESULT_MODE`=`webhook|longpoll`、`WEBHOOK_*`、`LONGPOLL_WAIT_S`、`RESULT_DEADLINE_MS`、`PORT`（控制面端口）、`MOCKEXT_PROPOSER_PRIVKEY_HEX`（提议者身份私钥，测试专用，确定性默认 `'11'*32`，便于 harness/coord 预知 proposer 公钥）。mTLS 不在进程内 E2E 范围；api_key 为支持的 `coord.external.auth` 模式。
+`COORD_BASE_URL` (required), `COORD_API_KEY` / `COORD_API_KEY_HEADER`,
+`RESULT_MODE`=`webhook|longpoll`, `WEBHOOK_HOST/PORT/PATH`, callback auth
+`WEBHOOK_SECRET` (signature mode, preferred) / `WEBHOOK_API_KEY` (Bearer
+fallback) / `WEBHOOK_SKEW_S` (signed-timestamp replay window, default
+±300s; **YELLOW**: the L1 design does not define the verifier-side
+tolerance, set to 300s per the dispatch instruction pending L1
+confirmation), `LONGPOLL_WAIT_S`, `RESULT_DEADLINE_MS`, `PORT` (control
+-plane port), `MOCKEXT_PROPOSER_PRIVKEY_HEX` (proposer identity key,
+test-only, deterministic default `'11'*32` so the harness/coord can
+predict the proposer pubkey). mTLS is out of scope for the in-process
+E2E; api_key is the supported `coord.external` inbound auth mode.
 
-## HTTP 控制面（E2E-001 子进程拓扑，testing.md §3.1）
+## HTTP control plane (E2E-001 subprocess topology, testing.md §3.1)
 
-`bun run start`（= `bun src/server.ts`）拉起长驻控制面（`src/server.ts` `ControlServer`，**薄包装既有已验证库 API，零改 byte-exact 密码学/契约**），读 env `PORT`/`COORD_BASE_URL`/`COORD_API_KEY`，harness 拥有生命周期（SIGKILL）。端点（契约 `e2e/src/lib/mock-extsvc.ts:42-55`）：
+`bun run start` (= `bun src/server.ts`) brings up a long-lived control
+plane (`src/server.ts` `ControlServer`, **a thin wrapper over the already
+-verified library API, with zero changes to the byte-exact
+crypto/contract**), reading env `PORT`/`COORD_BASE_URL`/`COORD_API_KEY`;
+the harness owns its lifecycle (SIGKILL). Endpoints (contract
+`e2e/src/lib/mock-extsvc.ts:42-55`):
 
-| 方法 路径 | 响应 |
+| Method Path | Response |
 |---|---|
-| `GET /healthz` | `200 {status:"ok"}`（harness 就绪轮询，<20s） |
-| `POST /control/request-address {groupId}` | `200 {ecdsaPubkeyB64,evmAddress,tronAddress}`（驱 coord A1） |
-| `POST /control/submit {groupId,chain,digest32Hex,unsignedTxHex,requestId,expiryMillis}` | `202 {requestId}`（驱 coord A2，复用 byte-exact proposerSig/metaHash） |
-| `GET /control/result/{requestId}` | `200 {status,rsvB64?,recovered?}`（coord A4 + 验签；未知 id→404） |
+| `GET /healthz` | `200 {status:"ok"}` (harness readiness poll, <20s) |
+| `POST /control/request-address {groupId}` | `200 {ecdsaPubkeyB64,evmAddress,tronAddress}` (drives coord A1) |
+| `POST /control/submit {groupId,chain,digest32Hex,unsignedTxHex,requestId,expiryMillis}` | `202 {requestId}` (drives coord A2, reusing byte-exact proposerSig/metaHash) |
+| `GET /control/result/{requestId}` | `200 {status,rsvB64?,recovered?}` (coord A4 + verification; unknown id → 404) |
 
-## E2E-001 库用法（备选）
+## E2E-001 library usage (alternative)
 
-`MockExtSvc.run(input, proposerPriv)` 跑完整环：A1 取组 → 自构信封 A2 提交 → 等终态 → `RETURNED` 时独立验 {R,S,V} 对 A1 地址；`EXPIRED/REJECTED/FAILED` 不验签直接回传（§3.2「外部收 EXPIRED」）。
+`MockExtSvc.run(input, proposerPriv)` runs the full loop: A1 fetch group
+→ self-construct envelope and A2 submit → await terminal → on `RETURNED`
+independently verify {R,S,V} against the A1 addresses; `EXPIRED/REJECTED/
+FAILED` return without verification (§3.2 "external receives EXPIRED").
