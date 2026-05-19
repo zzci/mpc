@@ -23,12 +23,18 @@ coord 无 keygen 协调 API。
   他方分片;keystore 仅封 share_i。
 - R2 **本地 PreParams**:PreParams 每设备本地生成(`mpc.KeygenConfig`
   注释红线),绝不由 coord/relay/任何对端下发或预生成。
-- R3 **coord 零私密材料**(精修 2026-05-19,用户裁 A):coord 永不见任何
-  分片 / PreParams / tss-lib party 内部状态 / 任何 keygen 私密产物;coord
-  **不**持任何 tss-lib party、**不**经手任何份额。coord **参与 keygen 协调层**
-  (发起/identity 校验/dispatch/事后组公钥记录),**不参与**密码学仪式本体
-  (tss-lib 多轮在成员设备之间经 relay+Noise 直接交换,coord 不在转发路径)。
-  签名沿用既有 coord B 侧。
+- R3 **coord 零私密 + 仅事件引导**(精修 2026-05-19,用户两轮裁定):
+  coord 永不见任何分片 / PreParams / tss-lib party 内部状态 / 任何 keygen
+  私密产物;coord **不持**任何 tss-lib party、**不经手**任何份额、**不在**
+  密码学消息路径(连密文中转都不做,relay 才负责)。coord 角色 = **纯事件
+  引导**:发布 keygen / reshare / state-reconciliation 事件、校验 identity、
+  记录事后公开元数据(组公钥 / chaincode / member identity)。所有密码学
+  仪式(包括 commit-reveal chaincode)在成员设备之间经 relay+Noise 直接
+  交换。签名沿用既有 coord B 侧(START dispatch 同属事件引导)。
+- R7 **coord 公钥 append-only**(用户裁 2026-05-19):一旦 `groups.ecdsa_pubkey`
+  写入,coord **不可删除、不可置空、不可由他值覆盖**(reshare 由设计保证
+  Q_master 不变,故无合法 update 路径)。`coorddb` 应以 CHECK 约束或事务
+  级守卫强制(详 §4)。运维误操作 / 恶意管理员均不可越此不变量。
 - R4 **relay 仅传输**:两方间 Noise 端到端会话,不在 relay 终结;relay 转发
   密文,不可读不可改(`server/server.md` 既定)。pnet PSK 隔离网络。
 - R5 **会话隔离**:每 keygen/sign/reshare 会话独立 `sessionID`;跨会话/重放
@@ -93,6 +99,42 @@ B(relay 自举,coord 完全不参与)曾为 L1 推荐备选,**未采纳**;若未
 **防捣乱**:强制配置匹配 + 各方身份签名 + commit-reveal 不可偏置
 + 上报一致性校验,异常方致会话失败 - 不影响他组。
 
+## 3.ter 客户端状态上报与协商(用户裁定 2026-05-19)
+
+**动机**:分片只在客户端 keystore,coord 不知任何客户端的真实持有状态。
+在(a)coord 库重建/迁移、(b)成员设备重装/重新登录、(c)keygen 异常中止后
+部分成员可能已持分片但 coord 状态不一致 等情形下,需要"**客户端为真**"的
+状态对账机制。
+
+**协议**:每成员设备在加入组 / 重连 / 主动触发时,向 coord 上报 attestation:
+
+```
+{ groupId, identityPubkey, holdsShare: bool, groupPubkeyHex?, chaincodeHex?, ts, sig }
+```
+
+其中 `groupPubkeyHex` / `chaincodeHex` 仅在 `holdsShare=true` 时附,且经
+本机 keystore 直接读出(无 MPC、无网络);`sig` = 该成员 identity 私钥
+对上述字段签名。
+
+**coord 聚合 + 协商**:
+- 全 n 强制集成员都上报 `holdsShare=true` 且 (groupPubkey, chaincode) 全员
+  一致 → 该 group **REGISTERED**,可接受 sign / reshare 请求(协调层使能)。
+- 任一成员 `holdsShare=false` 或 (pubkey, chaincode) 不一致 → coord 标
+  group 为 **NEEDS_RESHARE / NEEDS_KEYGEN / INCONSISTENT**(下游 client 可
+  据此决策):
+  - 全 n 都 `holdsShare=false` 且 coord 库无 `ecdsa_pubkey` → **需 keygen**
+    (走 §3 流程)。
+  - 部分 `holdsShare=true` 且与已有 `ecdsa_pubkey` 一致 + 部分 `holdsShare=
+    false` → **需 reshare**(走 §3.bis;新方需进强制集)或拒服务直至齐。
+  - 任一上报与已记录 pubkey 矛盾 → **INCONSISTENT 警告 + 拒服务**,运维介入。
+- coord 仅**记录 attestation 元数据 + 校验签名**,**永不**索取/见 share 本身
+  (R3 不变)。
+- attestation 重放防护:沿 B-side memberGate ts+nonce 模式(`contract.AcceptInbound`)。
+
+**与既有 D-001 / S-002 ProvisionGroup 关系**:本协议是 ProvisionGroup
+的**补充非替代**——ProvisionGroup 仍是 keygen 完成后首次写公钥的入口;
+attestation 是后续运行期的对账层。
+
 ## 3.bis Reshare(同身份层,用户裁定 #3)
 
 reshare 沿用 §2.1 同一身份模型:旧委员会 + 新委员会的 identity_pubkey 集
@@ -141,10 +183,14 @@ xpub,与 `address-derivation.md` §8 「reshare 不再生成新 c」一致)。
    (去文件 rendezvous,改由 START.peerMap 驱动连接);`internal/cli` 不动。
 3. **SDK 单方化** + 出站 wire 回调 + `OnWireMessage` 接活;`sdk` 再导出;
    `mcp/sdk.md` 修订。
-4. **coord keygen/reshare 协调契约**:`coord.external` 配置加 `expected_members`
-   强制集;`coorddb` 加 identity 注册(若现 schema 未覆盖)；新 api.md A 侧
-   `POST /v1/groups/{groupId}/keygen` 与 `…/reshare` 端点 + 上报路径 +
-   dispatchHub 扩展 keygen-START/reshare-START 类型(api.md 属 L1 权威,L1 改)。
+4. **coord 事件引导契约**(coord 仅事件、不参与生成,R3 收窄):`coord.external`
+   配置加 `expected_members` 强制集;`coorddb` 加 identity 注册;新 api.md
+   端点(L1 权威 L1 改):`POST /v1/groups/{groupId}/keygen` 发布 **new-group
+   事件**(用户裁 #2),`…/reshare` 发布 reshare 事件,`PUT /v1/groups/
+   {groupId}/attestation` 客户端状态上报(§3.ter,用户裁 #1)。dispatchHub
+   扩展 keygen-START / reshare-START / attestation-ACK 事件类型。**R7
+   append-only**:`groups.ecdsa_pubkey` 加 CHECK / 事务守卫保护,任何
+   DELETE / UPDATE 至 NULL / 不一致覆盖一律拒绝(用户裁 #4)。
 5. **host 传输接线**:PC CLI(libp2p,复用 transport)先行打通真三方
    keygen+sign+reshare E2E;移动原生桥同接口(同一 SDK,两端同获益)。
 6. **组记录** 同一事务校验全 n 方上报一致(§3.7)→ 与 address-derivation 的
@@ -161,10 +207,15 @@ xpub,与 `address-derivation.md` §8 「reshare 不再生成新 c」一致)。
 - ✅ §7.3 reshare 本轮纳入,同身份层(§3.bis);旧份额抹除强制;chaincode
   不变。
 
-**仍待用户裁定**:
-- ⏳ §7.4 **交付节奏**:严格逐层(每层提交+硬门绿+你确认才进下层)vs 分层
-  但连续推进(L2 全权调度,绿则续,红/yellow 才升 L1)。前者更安全更慢、
-  后者更快但中间状态依赖 L2 纪律。
+**已裁定 2026-05-19(追加 4 项设计精修 + 节奏):**
+- ✅ §7.4 交付节奏 = **严格逐层**(用户按 L1 推荐裁,2026-05-19):每层
+  finalize 后 L2 follow-up L1,L1 复核 + 用户确认方进下层。
+- ✅ §3.ter 客户端状态上报与协商(用户裁 #1):attestation 协议,客户端为真。
+- ✅ §3/§6 coord new-group 事件(用户裁 #2):事件化 keygen 触发。
+- ✅ R3 coord 纯事件引导(用户裁 #3):coord 不在密码学路径,只发事件
+  / 校验 identity / 记录元数据。
+- ✅ R7 pubkey append-only(用户裁 #4):`groups.ecdsa_pubkey` 不可删/不可
+  置空/不可不一致覆盖。
 
 **验收硬判据(不可破)**:跨 n 个**独立进程/设备**(各自 keystore)跑
 keygen,事后**每个 keystore 仅含 1 份** share;任意 t+1 进程可签、任意
