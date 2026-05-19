@@ -1,4 +1,4 @@
-// Package mobilesdk is the gomobile bind target: a thin, NON-internal
+// Package sdk is the gomobile bind target: a thin, NON-internal
 // re-export of internal/mobileapi.
 //
 // gomobile bind generates a `gobind` glue package OUTSIDE this module; Go's
@@ -9,7 +9,7 @@
 // same gomobile-flat signatures (string / []byte / error / callback
 // interfaces / opaque pointers), and adds no logic — every call delegates.
 // The cryptographic kernel stays in internal/mobileapi unchanged.
-package mobilesdk
+package sdk
 
 import api "github.com/zzci/mpc/internal/mobileapi"
 

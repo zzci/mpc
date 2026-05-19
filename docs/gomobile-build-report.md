@@ -114,7 +114,7 @@ github.com/zzci/mpc/internal/mobileapi not allowed`：gomobile 在模块外的
   `gomobile bind` 指向它 → 即得本报告全部实证。该文件**已在 finalize 前删除**，
   提交树无任何 Go 改动。
 - **后续建议**：新增一个**受控的非 internal re-export 包**（如
-  `mobile/` 或 `mobilesdk/`，转发 `internal/mobileapi` 扁平面），`gomobile bind`
+  `mobile/` 或 `sdk/`，转发 `internal/mobileapi` 扁平面），`gomobile bind`
   指向它。**属新增 Go 生产码，GM-001 明确范围外**（派发 FORBIDDEN: any Go
   production code），需独立任务 + L1 裁决。垫片实现见本报告 git 历史思路，可直接
   采纳为正式包骨架。
