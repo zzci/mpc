@@ -58,8 +58,7 @@ relay:
   listen: ["/ip4/0.0.0.0/tcp/4001"]
   pnet_psk: env:MPC_RELAY_PNET_PSK   # 字面量或 env:/file: 引用
   token_verify:
-    source: config                     # config | coord-sync
-    group_pubkeys: []                  # 自主式信任锚:组公钥集
+    group_pubkeys: []                  # 自主式信任锚:组公钥集(能力令牌验签锚)
   rendezvous: { enable: true }
   limits:
     reservation_per_token: 4
@@ -95,8 +94,7 @@ coord:
 | `relay.enable` | 启用 relay 角色 | |
 | `relay.listen` | libp2p 监听 multiaddrs | |
 | `relay.pnet_psk` | private network 32B swarm key | ✅ |
-| `relay.token_verify.source` | 能力令牌验签公钥来源:`config` / `coord-sync` | |
-| `relay.token_verify.group_pubkeys` | 自主式信任锚:钱包组公钥集 | |
+| `relay.token_verify.group_pubkeys` | 自主式信任锚:钱包组公钥集(能力令牌验签锚;relay 本地验签,**不依赖 coord**) | |
 | `relay.rendezvous.enable` | 启用 rendezvous 发现 | |
 | `relay.limits.*` | 预约/连接/带宽/circuit 时长配额(防 DoS) | |
 | `coord.enable` | 启用 coord 角色 | |
@@ -148,6 +146,15 @@ coord:
      独立、互不复用);均可字面量或 `env:`/`file:` 引用。
    `mock-extsvc`(测试替身)须实现签名与 token 两种验证以 E2E 实证防伪造;
    api.md A4 同步定义两种回调鉴权头。
+5. **relay 令牌验签固定 config-only(用户裁定 2026-05-19,解配置面误导)**:
+   `relay.token_verify` 删除 `source` 字段与 `coord-sync` 取值,仅保留
+   `group_pubkeys`。**根因**:`coord-sync` 既未实现(启动即拒)、又无对应
+   coord 地址字段可用、且违反「独立 relay 不依赖 coord」架构不变量(R5 /
+   §203),仅属 §196 P6 投机选项;暴露一个不可用且违背不变量的枚举值是误导
+   配置面。relay 始终本地以 `group_pubkeys`(自主式信任锚)验能力令牌签名,
+   零 coord 依赖;单值开关违反「不留无意义可配项」。`source` 同步从 config
+   schema/校验/默认值/example/.env 移除(RT-001 实施,串行于 WHA-001 合并后,
+   同改 config.go)。
 
 ## 密钥处理(随上款修订)
 
