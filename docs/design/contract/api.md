@@ -36,7 +36,7 @@ Resp 202 { requestId, status:"PENDING" }
   - **签名模式(首选)**:配 `coord.external.result.secret` 时,coord 用该 secret 对 `timestamp + "." + 原始 body` 做 HMAC-SHA256,置头:
     - `X-MCP-Timestamp: <unix 秒>`
     - `X-MCP-Signature: t=<unix 秒>,v1=<hex(HMAC-SHA256)>`
-    外部服务**必须**用同一 secret 重算、常时比较、并按时钟 skew 容差拒过期/重放;验签不过即丢弃(防攻击者向回调端点伪造 `{requestId,status,RSV}`)。
+    外部服务**必须**用同一 secret 重算、常时比较、并按时钟 skew 容差拒过期/重放;验签不过即丢弃(防攻击者向回调端点伪造 `{requestId,status,RSV}`)。**规范 skew 窗口(L1 裁定 2026-05-19,解 WHA-001 YELLOW)= `±300s`(5 分钟)**:外部服务**必须**拒绝 `|now − X-MCP-Timestamp| > 300s` 的回调,并在该窗口内去重 timestamp/已见签名以拒重放。此为 **receiver 侧策略**(coord 仅签发准确 `X-MCP-Timestamp`,不持该参数);与 `coord.ttl.skew_tolerance`(coord 自身请求过期轴,语义不同)无关、互不复用。300s 为 `t=,v1=` HMAC 方案业界惯例(覆盖跨主机投递 + 退避重试),集成方如有更严需求可自行收紧但不应放宽。
   - **token 模式(备选)**:未配 `secret` 但配 `coord.external.result.api_key` 时,coord 置头 `Authorization: Bearer <api_key>`;外部服务**必须**常时比较该 token,不匹配即丢弃。(兼容只支持 Bearer 的接收端;无 body 绑定、不抗重放,故弱于签名。)
   通知地址(server.md `coord.notify`,扁平 `{url, secret, api_key}`)用 `coord.notify.secret`/`coord.notify.api_key` 同法两模式鉴权。出站凭据与入站 `coord.external.api_key` 物理隔离、互不复用。
 - coord **回传前用组公钥验** `ECDSA(pub, digest32, R,S)`,无效 → `FAILED` 不回传伪结果。

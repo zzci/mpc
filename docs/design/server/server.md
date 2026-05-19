@@ -146,6 +146,12 @@ coord:
      独立、互不复用);均可字面量或 `env:`/`file:` 引用。
    `mock-extsvc`(测试替身)须实现签名与 token 两种验证以 E2E 实证防伪造;
    api.md A4 同步定义两种回调鉴权头。
+   - **规范 skew 窗口(L1 裁定 2026-05-19,解 WHA-001 YELLOW)**:回调签名
+     验签的时钟 skew 容差 = **`±300s`**,为 **receiver 侧策略**(coord 仅签发
+     准确 `X-MCP-Timestamp`,不持此参数;故无新增 coord 配置键)。与
+     `coord.ttl.skew_tolerance`(coord 请求过期轴,语义不同)无关。300s 为
+     `t=,v1=` 方案业界惯例(覆盖跨主机投递+退避重试);集成方可收紧不应放宽。
+     `mock-extsvc` 现 `WEBHOOK_SKEW_S=300` 即规范值(无需改码),api.md A4 已落。
 5. **relay 令牌验签固定 config-only(用户裁定 2026-05-19,解配置面误导)**:
    `relay.token_verify` 删除 `source` 字段与 `coord-sync` 取值,仅保留
    `group_pubkeys`。**根因**:`coord-sync` 既未实现(启动即拒)、又无对应
