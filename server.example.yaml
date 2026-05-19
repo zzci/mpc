@@ -83,15 +83,31 @@ coord:
       # server refuses to start (production iron-law guardrail, unchanged).
       enable: true
   external:
-    # External-service auth is fixed api_key (always required); result
-    # delivery is fixed webhook (result_webhook URL always required).
+    # External-service auth is fixed api_key (always required, inbound:
+    # external -> coord). Result delivery is a fixed address (coord ->
+    # external). Outbound callback auth is anti-forgery: set at least one of
+    # secret / api_key; when both are set, secret takes precedence.
+    #   secret  -> coord signs "<unix>.<raw body>" with HMAC-SHA256, headers
+    #              X-MCP-Timestamp + X-MCP-Signature: t=<unix>,v1=<hex>
+    #              (preferred: binds the body, replay-resistant)
+    #   api_key -> fallback Authorization: Bearer <api_key> (used only when
+    #              secret is unset; weaker, no body binding)
+    # Outbound result/notify credentials are physically isolated from the
+    # inbound api_key (different direction, never reused).
     api_key: "env:MPC_COORD_EXTERNAL_API_KEY"
-    result_webhook: "env:MPC_COORD_EXTERNAL_RESULT_WEBHOOK"
+    result:
+      url: "env:MPC_COORD_EXTERNAL_RESULT_URL"          # or a literal https URL
+      secret: "env:MPC_COORD_EXTERNAL_RESULT_SECRET"    # HMAC signing key (preferred)
+      api_key: "env:MPC_COORD_EXTERNAL_RESULT_API_KEY"  # fallback Bearer token
   notify:
-    # Single fixed notification webhook (always required): coord only POSTs
+    # Single fixed notification endpoint (flat, not nested): coord only POSTs
     # notification events here; FCM/APNS/etc. are translated and delivered
     # by an external notification channel. coord holds no push credentials.
-    webhook: "env:MPC_COORD_NOTIFY_WEBHOOK"
+    # Same dual-mode outbound auth as result (secret preferred, api_key
+    # fallback; at least one required).
+    url: "env:MPC_COORD_NOTIFY_URL"
+    secret: "env:MPC_COORD_NOTIFY_SECRET"
+    api_key: "env:MPC_COORD_NOTIFY_API_KEY"
   ttl:
     skew_tolerance: "30s"         # clock-skew tolerance for expiry checks
   quorum:
