@@ -67,18 +67,6 @@ func WithLogger(l *slog.Logger) Option { return func(co *Coord) { co.log = l } }
 // WithNotifier injects a real push Notifier.
 func WithNotifier(n Notifier) Option { return func(co *Coord) { co.notifier = n } }
 
-// WithProposerKeyResolver overrides proposer-key resolution (default: proposer
-// identifier is its hex secp256k1 public key, see auth.go).
-func WithProposerKeyResolver(r func(string) ([]byte, error)) Option {
-	return func(co *Coord) { co.resolveProposer = r }
-}
-
-// WithHTTPClient injects the HTTP client used for webhook result callbacks
-// (tests point it at an httptest server).
-func WithHTTPClient(h *http.Client) Option {
-	return func(co *Coord) { co.callback.client = h }
-}
-
 // WithExternalRateLimit tunes the P6 per-IP external (A) surface limiter
 // (max requests per minute). max<=0 leaves the generous default.
 func WithExternalRateLimit(max int) Option {

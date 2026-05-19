@@ -55,30 +55,11 @@ type Client struct {
 // Option customizes a Client (functional-options pattern).
 type Option func(*Client)
 
-// WithHTTPClient overrides the default *http.Client (e.g. to set TLS or a
-// transport timeout that bounds long-poll waits).
-func WithHTTPClient(hc *http.Client) Option {
-	return func(c *Client) {
-		if hc != nil {
-			c.hc = hc
-		}
-	}
-}
-
 // WithClock overrides the time source (test seam for ts/backoff).
 func WithClock(now func() time.Time) Option {
 	return func(c *Client) {
 		if now != nil {
 			c.now = now
-		}
-	}
-}
-
-// WithRand overrides the nonce entropy source (test seam).
-func WithRand(r io.Reader) Option {
-	return func(c *Client) {
-		if r != nil {
-			c.rng = r
 		}
 	}
 }
