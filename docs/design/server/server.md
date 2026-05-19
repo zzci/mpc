@@ -85,31 +85,48 @@ coord:
   dispatch: { timeout: "120s" }
 ```
 
-## 参数表
+## 参数表(完整 schema 派生键矩阵)
 
-| 键 | 说明 | 含 secret |
-|---|---|:--:|
-| `log.level` / `log.format` | 日志级别 / 格式 | |
-| `metrics.listen` | 健康检查与指标监听地址(不含载荷) | |
-| `relay.enable` | 启用 relay 角色 | |
-| `relay.listen` | libp2p 监听 multiaddrs | |
-| `relay.pnet_psk` | private network 32B swarm key | ✅ |
-| `relay.token_verify.group_pubkeys` | 自主式信任锚:钱包组公钥集(能力令牌验签锚;relay 本地验签,**不依赖 coord**) | |
-| `relay.rendezvous.enable` | 启用 rendezvous 发现 | |
-| `relay.limits.*` | 预约/连接/带宽/circuit 时长配额(防 DoS) | |
-| `coord.enable` | 启用 coord 角色 | |
-| `coord.http.listen` | 外部服务 + 成员 API 监听地址 | |
-| `coord.db.dsn` | 持久化连接串 | ✅ |
-| `coord.external.api_key` | 入站(外部→coord)API Key,鉴权**固定** api_key,恒必填 | ✅ |
-| `coord.external.result.url` | 结果回传地址(coord→外部,恒必填) | |
-| `coord.external.result.secret` | 结果回传**出站签名密钥**:coord 对每次回调 HMAC-SHA256 签名(首选模式),外部据此验真、拒伪造 | ✅ |
-| `coord.external.result.api_key` | 结果回传**备选 Bearer token**:未配 `secret` 时改用 `Authorization: Bearer`;`secret`/`api_key` 须至少配一 | ✅ |
-| `coord.notify.url` | 单一固定通知地址(coord 仅 POST 通知事件;FCM/APNS 等由外部通知渠道处理,coord 不持推送凭证) | |
-| `coord.notify.secret` | 通知**出站签名密钥**(HMAC-SHA256,首选,防伪造) | ✅ |
-| `coord.notify.api_key` | 通知**备选 Bearer token**(未配 `secret` 时启用);`secret`/`api_key` 须至少配一 | ✅ |
-| `coord.ttl.skew_tolerance` | 时钟偏移容差(超出保守判过期) | |
-| `coord.quorum.signer_select` | 签名子集选取策略:`stable` / `liveness` | |
-| `coord.dispatch.timeout` | 派发后等待签名完成超时(须 < 剩余 TTL) | |
+下表对 `internal/server/config.go` schema 的**每个叶子键**逐行枚举,三源
+1:1 等价。env 名 = `MPC_` + 点分键大写(`.` 与键内 `_` 一律为单 `_`,由
+schema 生成、精确匹配);CLI 形式 = `--<点分键>=<值>`;默认值取自
+`defaults()`(`(空)` = 未设默认值/启用角色时必填)。`[]string` 类型
+(`relay.listen`、`relay.token_verify.group_pubkeys`)在 env/CLI 下以
+**逗号分隔**多值(`a,b,c`,各项 trim 空白)。本表与 `.env.example` /
+`server.example.yaml` 由覆盖测试 `internal/server` `TestConfigDocKeyMatrix`
+断言始终与 schema 叶子集一致(改 schema 不同步文档即红灯,防漂移)。
+
+| 键(yaml) | env(`MPC_*`) | CLI | 默认值 | 含 secret |
+|---|---|---|---|:--:|
+| `log.level` | `MPC_LOG_LEVEL` | `--log.level=<值>` | `info` | |
+| `log.format` | `MPC_LOG_FORMAT` | `--log.format=<值>` | `json` | |
+| `metrics.listen` | `MPC_METRICS_LISTEN` | `--metrics.listen=<值>` | `:9090` | |
+| `relay.enable` | `MPC_RELAY_ENABLE` | `--relay.enable=<值>` | `false` | |
+| `relay.listen` | `MPC_RELAY_LISTEN` | `--relay.listen=<值>` | `(空)` | |
+| `relay.pnet_psk` | `MPC_RELAY_PNET_PSK` | `--relay.pnet_psk=<值>` | `(空)` | ✅ |
+| `relay.token_verify.group_pubkeys` | `MPC_RELAY_TOKEN_VERIFY_GROUP_PUBKEYS` | `--relay.token_verify.group_pubkeys=<值>` | `(空)` | |
+| `relay.rendezvous.enable` | `MPC_RELAY_RENDEZVOUS_ENABLE` | `--relay.rendezvous.enable=<值>` | `true` | |
+| `relay.limits.reservation_per_token` | `MPC_RELAY_LIMITS_RESERVATION_PER_TOKEN` | `--relay.limits.reservation_per_token=<值>` | `4` | |
+| `relay.limits.reservation_per_group` | `MPC_RELAY_LIMITS_RESERVATION_PER_GROUP` | `--relay.limits.reservation_per_group=<值>` | `8` | |
+| `relay.limits.bandwidth_per_conn` | `MPC_RELAY_LIMITS_BANDWIDTH_PER_CONN` | `--relay.limits.bandwidth_per_conn=<值>` | `1MiB/s` | |
+| `relay.limits.circuit_max_duration` | `MPC_RELAY_LIMITS_CIRCUIT_MAX_DURATION` | `--relay.limits.circuit_max_duration=<值>` | `10m` | |
+| `coord.enable` | `MPC_COORD_ENABLE` | `--coord.enable=<值>` | `false` | |
+| `coord.http.listen` | `MPC_COORD_HTTP_LISTEN` | `--coord.http.listen=<值>` | `:8080` | |
+| `coord.db.dsn` | `MPC_COORD_DB_DSN` | `--coord.db.dsn=<值>` | `(空)` | ✅ |
+| `coord.db.encryption.enable` | `MPC_COORD_DB_ENCRYPTION_ENABLE` | `--coord.db.encryption.enable=<值>` | `true` | |
+| `coord.external.api_key` | `MPC_COORD_EXTERNAL_API_KEY` | `--coord.external.api_key=<值>` | `(空)` | ✅ |
+| `coord.external.result.url` | `MPC_COORD_EXTERNAL_RESULT_URL` | `--coord.external.result.url=<值>` | `(空)` | |
+| `coord.external.result.secret` | `MPC_COORD_EXTERNAL_RESULT_SECRET` | `--coord.external.result.secret=<值>` | `(空)` | ✅ |
+| `coord.external.result.api_key` | `MPC_COORD_EXTERNAL_RESULT_API_KEY` | `--coord.external.result.api_key=<值>` | `(空)` | ✅ |
+| `coord.notify.url` | `MPC_COORD_NOTIFY_URL` | `--coord.notify.url=<值>` | `(空)` | |
+| `coord.notify.secret` | `MPC_COORD_NOTIFY_SECRET` | `--coord.notify.secret=<值>` | `(空)` | ✅ |
+| `coord.notify.api_key` | `MPC_COORD_NOTIFY_API_KEY` | `--coord.notify.api_key=<值>` | `(空)` | ✅ |
+| `coord.ttl.skew_tolerance` | `MPC_COORD_TTL_SKEW_TOLERANCE` | `--coord.ttl.skew_tolerance=<值>` | `30s` | |
+| `coord.quorum.signer_select` | `MPC_COORD_QUORUM_SIGNER_SELECT` | `--coord.quorum.signer_select=<值>` | `liveness` | |
+| `coord.dispatch.timeout` | `MPC_COORD_DISPATCH_TIMEOUT` | `--coord.dispatch.timeout=<值>` | `120s` | |
+
+> 键语义见上方「配置文件示例(YAML)」与 `server.example.yaml`(逐字段注释);
+> `coord.quorum.signer_select` 限 `stable` / `liveness`。
 
 ## 变更摘要(用户裁定 2026-05-19)
 
