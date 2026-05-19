@@ -1,0 +1,79 @@
+# mcp-wallet server — complete example configuration.
+#
+# Copy to ./server.yaml (the default path) or point SERVER_CONFIG at it.
+# Precedence: built-in defaults < this file < environment variables.
+# Every key can be overridden by env as TSSSERVER_<UPPER_KEY> with nested
+# keys joined by "__" (e.g. TSSSERVER_COORD__HTTP__LISTEN=:9000).
+#
+# Secrets MUST be "env:VAR" or "file:/path" references — a plaintext literal
+# in this file is rejected at startup (fail-fast). Startup also fails if both
+# relay.enable and coord.enable are false, or a required secret is missing.
+#
+# Values shown are the built-in defaults unless noted. relay and coord may
+# run together (one process, dual role) or independently.
+
+log:
+  level: info          # debug | info | warn | error
+  format: json         # json | text
+
+metrics:
+  listen: ":9090"      # health-check + Prometheus metrics; no payload data
+
+# ── relay role ───────────────────────────────────────────────────────────
+# Stateless circuit-relay v2 + rendezvous; only forwards ciphertext, never
+# terminates Noise, never depends on coord.
+relay:
+  enable: true
+  listen:
+    - "/ip4/0.0.0.0/tcp/4001"     # libp2p multiaddrs to listen on
+  # pnet PSK (32-byte private-network swarm key): without it a peer cannot
+  # speak the protocol and the relay is invisible on the public internet.
+  pnet_psk_ref: "env:TSSSERVER_RELAY__PNET_PSK"   # secret
+  token_verify:
+    source: config                # config | coord-sync
+    # Authoritative trust anchor: the wallet-group public key set that signs
+    # capability tokens (base64). Required when source=config.
+    group_pubkeys:
+      - "<base64-group-pubkey>"
+  rendezvous:
+    enable: true                  # same-group member discovery
+  limits:                         # anti-DoS quotas
+    reservation_per_token: 4
+    reservation_per_group: 8
+    bandwidth_per_conn: "1MiB/s"
+    # Max lifetime of one circuit-v2 relayed link before reset. Empty = the
+    # libp2p default 2m, which would cut a proof-enabled keygen short; keep
+    # it keygen-aware (security.md invariant #10).
+    circuit_max_duration: "10m"
+
+# ── coord role ───────────────────────────────────────────────────────────
+# Trust-minimized orchestrator + external-business-service entry. Holds no
+# shares, never participates in MPC.
+coord:
+  enable: true
+  http:
+    listen: ":8080"               # external-service + member API
+  db:
+    # SQLite single-file DSN (signing queue / state / group pubkey / push
+    # tokens). Secret because the path/credential is deployment-sensitive.
+    dsn_ref: "env:TSSSERVER_COORD__DB_DSN"        # secret
+    encryption:
+      # Whole-DB encryption at rest (SQLCipher) + LOCKED-until-unlocked
+      # lifecycle. MUST stay true in production. Setting false is dev/test
+      # only and additionally requires the env ALLOW_INSECURE_DB=1, else the
+      # server refuses to start (production iron-law guardrail).
+      enable: true
+  external:
+    auth: mtls                    # mtls | api_key
+    # Required only when auth=api_key:
+    api_key_ref: "env:TSSSERVER_COORD__EXTERNAL__API_KEY"   # secret
+    result_callback: webhook      # webhook | longpoll
+  push:                           # optional; once set, same env:/file: rule
+    fcm_cred_ref: "env:TSSSERVER_COORD__PUSH__FCM"          # secret (optional)
+    apns_cred_ref: "env:TSSSERVER_COORD__PUSH__APNS"        # secret (optional)
+  ttl:
+    skew_tolerance: "30s"         # clock-skew tolerance for expiry checks
+  quorum:
+    signer_select: liveness       # stable | liveness
+  dispatch:
+    timeout: "120s"               # wait for signing completion after dispatch

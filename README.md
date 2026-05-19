@@ -8,7 +8,7 @@ TSS MPC 自托管共管钱包的**签名内核**：基于 [tss-lib v3](external/
 
 | 路径 | 说明 |
 |---|---|
-| `cmd/server` | 单一可执行：`node relay`（零信任哑管道）/ `node coord`（信任最小化协调），运行时独立部署、独立进程、不共享状态 |
+| `cmd/server` | 单一可执行：`server` 的 relay 角色（零信任哑管道）/ coord 角色（信任最小化协调），由配置开关启用，可单开或双开 |
 | `cmd/cli` | 端到端测试主载体（多进程模拟 2-of-3） |
 | `internal/` | mpc / envelope / transport / relay / coord / keystore / mobileapi / addr / cli |
 | `mobile/` | RN 原生桥 + 示例 App 骨架（gomobile 绑定目标） |
@@ -22,6 +22,15 @@ TSS MPC 自托管共管钱包的**签名内核**：基于 [tss-lib v3](external/
 ```bash
 go build ./...
 ```
+
+## 配置
+
+完整带注释的示例配置见 [`server.example.yaml`](server.example.yaml)（覆盖 log / metrics / relay / coord 全部字段、默认值与可选枚举）。
+
+- 复制为 `./server.yaml`（默认路径），或用 `SERVER_CONFIG` 指定路径。
+- 优先级：内置默认 < 配置文件 < 环境变量（`TSSSERVER_<大写键>`，嵌套以 `__` 连接）。
+- secret 一律 `env:VAR` / `file:/path` 引用，禁止明文；明文、双角色均关闭、必填 secret 缺失 → 启动 fail-fast。
+- `coord.db.encryption.enable` 生产必须为 `true`；置 `false` 仅限 dev/test 且须额外设 `ALLOW_INSECURE_DB=1`，否则拒绝启动。
 
 ## 质量门（一行执行）
 
