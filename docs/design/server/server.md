@@ -24,8 +24,13 @@
 与 Traefik 一致,便于运维临时覆盖)。三源**统一键空间**,任一键可由三种方式提供:
 
 - **配置文件**:默认 `./server.yaml`,可由 `SERVER_CONFIG` 或 CLI `--config <path>` 指定。
-- **环境变量**:前缀 `TSSSERVER_`,嵌套键用 `__`(双下划线)连接,大写。
-  例:`TSSSERVER_RELAY__ENABLE=true`、`TSSSERVER_COORD__HTTP__LISTEN=:8080`。
+- **环境变量(用户裁定 2026-05-19)**:前缀 `MPC_`,**单下划线**连接(无双下划线),
+  全大写。即 env 名 = `MPC_` + 点分键(`.` 与键内 `_` 一律为 `_`)大写。
+  例:`MPC_RELAY_ENABLE=true`、`MPC_COORD_HTTP_LISTEN=:8080`、
+  `MPC_COORD_TTL_SKEW_TOLERANCE=30s`、`MPC_LOG_LEVEL=info`。
+  > 消歧:嵌套分隔与键内下划线同为 `_`,故**不解析 env 名**,改由配置 schema
+  > 为每个已知叶子键**生成**其 `MPC_<UPPER>` 名再精确匹配(schema-driven
+  > generate-and-match,键集静态,无歧义)。
 - **CLI 参数**:`--<点分键>=<值>`,与配置键一一对应。
   例:`--coord.http.listen=:8080`、`--relay.enable=true`、`--log.level=debug`。
 - 启动校验:`relay.enable` 与 `coord.enable` 同为 false → 报错退出;已启用角色的
@@ -51,7 +56,7 @@ metrics: { listen: ":9090" }          # 健康检查 / 指标;不记录载荷
 relay:
   enable: true
   listen: ["/ip4/0.0.0.0/tcp/4001"]
-  pnet_psk: env:TSSSERVER_RELAY__PNET_PSK   # 字面量或 env:/file: 引用
+  pnet_psk: env:MPC_RELAY_PNET_PSK   # 字面量或 env:/file: 引用
   token_verify:
     source: config                     # config | coord-sync
     group_pubkeys: []                  # 自主式信任锚:组公钥集
@@ -65,12 +70,12 @@ relay:
 coord:
   enable: true
   http: { listen: ":8080" }            # 外部服务 + 成员 API
-  db: { dsn: env:TSSSERVER_COORD__DB_DSN }   # 字面量或引用
+  db: { dsn: env:MPC_COORD_DB_DSN }   # 字面量或引用
   external:
-    api_key: env:TSSSERVER_COORD__EXTERNAL__API_KEY        # 鉴权固定 api_key
-    result_webhook: env:TSSSERVER_COORD__EXTERNAL__RESULT_WEBHOOK  # 结果固定 webhook
+    api_key: env:MPC_COORD_EXTERNAL_API_KEY        # 鉴权固定 api_key
+    result_webhook: env:MPC_COORD_EXTERNAL_RESULT_WEBHOOK  # 结果固定 webhook
   notify:
-    webhook: env:TSSSERVER_COORD__NOTIFY__WEBHOOK  # 单一固定通知 webhook
+    webhook: env:MPC_COORD_NOTIFY_WEBHOOK  # 单一固定通知 webhook
   ttl: { skew_tolerance: "30s" }
   quorum: { signer_select: liveness }  # stable | liveness
   dispatch: { timeout: "120s" }
@@ -167,7 +172,7 @@ coord:
 
 ## R6. 配置 / 接口 / 运维
 
-- 配置:见上方「配置」章节 `relay.*`(配置文件 + `TSSSERVER_RELAY__*` 环境变量覆盖)。
+- 配置:见上方「配置」章节 `relay.*`(配置文件 + `MPC_RELAY_*` 环境变量覆盖)。
 - 协议:libp2p circuit-relay v2(HOP/STOP)、rendezvous、Noise、(broadcast 经 GossipSub 由客户端 `transport` 模块使用,relay 仅承载底层连接)。
 - 可观测:连接/预约/转发字节计数、拒绝原因(未授权/超配额)、健康检查端点;**不记录** peer 间载荷。
 - 安全:仅 libp2p 标准栈,无自实现加密;升级随 go-libp2p 跟进 CVE。
@@ -193,7 +198,7 @@ coord:
 - 法定人数 ≥ t 且已审批且未过期 → 选定签名子集并发「开始」。
 - TTL/过期一等公民处理。
 - 外部业务服务对接:提交入口 + `{R,S,V}` 回传(A1,**结果必须回传**)。
-- 成员侧:推送(FCM/APNs)+ 上线拉取(A4)。
+- 成员侧:通知(单一固定 webhook,见配置章 §变更摘要)+ 上线拉取(A4)。
 
 **非职责(硬边界)**
 - **不参与 MPC、不持分片**(A3)。
@@ -272,7 +277,7 @@ PENDING ──(≥t 在线且审批且未过期)──▶ DISPATCHED ──▶ S
 - 鉴权:mTLS 或 API Key + 请求签名(`proposerSig`)。
 
 **成员 SDK ↔ coord**
-- 注册推送 token;拉取本组未过期待签项(带剩余 TTL);提交审批/拒绝;心跳;接收 START;上报签名完成 + 最终 `{R,S,V}`(由签名子集中指定一方上报,coord 验签)。
+- 拉取本组未过期待签项(带剩余 TTL);提交审批/拒绝;心跳;接收 START;上报签名完成 + 最终 `{R,S,V}`(由签名子集中指定一方上报,coord 验签)。
 - 鉴权:成员身份密钥签名;按 `groupId` 隔离。
 
 ## C8. 信任边界与攻击面
@@ -293,7 +298,7 @@ PENDING ──(≥t 在线且审批且未过期)──▶ DISPATCHED ──▶ S
 
 - 单一逻辑权威,**SQLite 单节点持久化 + 文件备份**(容灾可选 Litestream/LiteFS 流式复制/只读副本);非多写 HA。宕机 = 不可发起新签名(可用性降级),**不影响资金安全**(security.md §1)。在线状态用内存 SQLite(不持久,重启由心跳重建)。
 - 默认与 relay 角色同二进制(`relay.enable=true`+`coord.enable=true`);可拆为仅 `coord.enable` + 多个仅 `relay.enable` 实例。
-- 持久化:待签列表 + 状态机 + 组公钥(公开信息)+ 审计 + 推送 token;**绝不存**分片/私钥/PSK 明文。历史长期保留以支撑管理面(server/database.md §6)。
+- 持久化:待签列表 + 状态机 + 组公钥(公开信息)+ 审计;**绝不存**分片/私钥/PSK 明文。历史长期保留以支撑管理面(server/database.md §6)。
 - **管理面**:coord 内置 `admin-api` + 独立 `admin-ui`(单一运维管理员:查交易/历史会话、防滥用、审计;不签发准入)。详见 `server/admin.md`。
 
 ## C9b. 锁定生命周期(整库加密,防 DB 文件泄露)
