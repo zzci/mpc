@@ -22,5 +22,4 @@
 //
 // Authoritative baseline (read-only): docs/design/server/server.md
 // "Part 1: relay role", docs/design/contract/protocol.md §6.
-// Implemented by N-002.
 package relay

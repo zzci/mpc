@@ -7,5 +7,5 @@
 // yields byte-identical to-sign / to-hash inputs. Also covers sessionId
 // isolation, senderAuth, version negotiation.
 // Authoritative baseline (read-only): docs/design/contract/protocol.md, docs/design/contract/api.md,
-// docs/spec/envelope-canonical.md。
+// docs/spec/envelope-canonical.md.
 package contract

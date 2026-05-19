@@ -32,5 +32,5 @@
 // calldata encoding / broadcast are out-of-scope (external business
 // service). Authoritative baseline (read-only): docs/design/mcp/sdk.md
 // §4, docs/design/PLAN.md §2/§3, docs/design/contract/protocol.md
-// (digest32 / envelope semantics), internal/contract (C-001).
+// (digest32 / envelope semantics), internal/contract.
 package txdecode
