@@ -27,6 +27,7 @@ Sign(startJSON string, cb SignCallback)              // startJSON=StartSigning
 Reshare(configJSON string, cb ReshareCallback)
 OnWireMessage(b []byte)                               // transport 收到的 MPC 消息回灌
 ExportShare(passphrase string) []byte / ImportShare(...)
+FetchTransactions(reqJSON string) (string, error)    // 经 coord 获取交易信息(见下)
 
 interface SignCallback {
   OnDecoded(aFactsJSON string, bInfoJSON string, mismatchJSON string)  // 待人审
@@ -35,6 +36,24 @@ interface SignCallback {
 }
 ```
 - 复杂 tss-lib 类型全封装 Go 侧;RN 仅见 string/[]byte/回调。
+
+### 2.1 经 coord 获取交易信息(用户裁定 2026-05-19)
+
+`FetchTransactions(reqJSON string) (string, error)` —— 设备主动经 **coord 成员
+API**(api.md B,签名鉴权)查询交易信息,供 App 列出/详情展示,不进入 MPC。
+
+- `reqJSON`:`{ coordBaseURL, groupId, memberId, since? , requestId? }`。给
+  `requestId` 则查单条状态(api.md A3 `GET /v1/requests/{id}`);否则拉取该组
+  待签列表(api.md B3 `GET /v1/groups/{groupId}/pending?since=`)。
+- 返回:JSON `{ serverTime, items:[ { requestId, status, remainingTTL,
+  envelope, aFacts(本地 tx-decode 重算的 A 区已校验事实), abMismatch } ] }`。
+  A 区由设备侧 `tx-decode` 重算(==digest32 双重绑定,§4),**绝不**采信 coord
+  下发的展示字段——「获取交易信息」仍受同一防盲签不变量约束。
+- 实现**复用既有 `coord-client`**(`coordclient.Client` 的 B 侧签名请求 +
+  `Pending`/状态查询)与设备 keystore 成员身份私钥;**纯增量**:不改 coord 服务
+  端、不改 MPC/契约/加密。gomobile 扁平:仅 string + error。
+- 安全:LOCKED 时 coord 端 `503 LOCKED` 原样透传为 error;无成员密钥/密钥未导入
+  时拒绝;不缓存明文敏感数据。
 
 ## 3. 签名设备侧流程(WYSIWYS)
 
