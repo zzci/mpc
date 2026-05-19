@@ -10,6 +10,10 @@
 // SCOPE here — they need a mobile toolchain unavailable in this environment
 // and are owned by B-003/B-004/B-006 (docs/design/P0-report.md), per
 // docs/design/testing.md §5.
+//
+// Any other invocation is the PC wallet party (internal/walletcli): an
+// interactive session over the same github.com/zzci/mpc/sdk the mobile app
+// drives, giving a PC the identical member capabilities and boundaries.
 package main
 
 import (
@@ -21,6 +25,7 @@ import (
 	"syscall"
 
 	"github.com/zzci/mpc/internal/cli"
+	"github.com/zzci/mpc/internal/walletcli"
 )
 
 func main() {
@@ -44,6 +49,8 @@ func main() {
 		cli.RunDevice(ctx, cfg)
 		return
 	}
-	fmt.Println("mcp-wallet cli — E2E acceptance carrier")
-	fmt.Println("run via: go test ./internal/cli/...  (orchestrates relay + members + coord)")
+	// Non-`member` invocations are the PC wallet party: a long-lived shell
+	// over the same github.com/zzci/mpc/sdk the mobile app drives. The
+	// `member` E2E carrier above is intentionally left untouched.
+	os.Exit(walletcli.Run(os.Args[1:]))
 }
