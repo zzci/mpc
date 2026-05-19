@@ -23,9 +23,12 @@ coord 无 keygen 协调 API。
   他方分片;keystore 仅封 share_i。
 - R2 **本地 PreParams**:PreParams 每设备本地生成(`mpc.KeygenConfig`
   注释红线),绝不由 coord/relay/任何对端下发或预生成。
-- R3 **coord 零分片 / keygen 零参与**:coord 不参与 keygen 仪式、不见任何
-  分片/PreParams;仅在 keygen 完成后由组**记录**结果组公钥(对齐
-  `spec/group-provisioning.md` §5.1 设计意图)。签名沿用既有 coord B 侧。
+- R3 **coord 零私密材料**(精修 2026-05-19,用户裁 A):coord 永不见任何
+  分片 / PreParams / tss-lib party 内部状态 / 任何 keygen 私密产物;coord
+  **不**持任何 tss-lib party、**不**经手任何份额。coord **参与 keygen 协调层**
+  (发起/identity 校验/dispatch/事后组公钥记录),**不参与**密码学仪式本体
+  (tss-lib 多轮在成员设备之间经 relay+Noise 直接交换,coord 不在转发路径)。
+  签名沿用既有 coord B 侧。
 - R4 **relay 仅传输**:两方间 Noise 端到端会话,不在 relay 终结;relay 转发
   密文,不可读不可改(`server/server.md` 既定)。pnet PSK 隔离网络。
 - R5 **会话隔离**:每 keygen/sign/reshare 会话独立 `sessionID`;跨会话/重放
@@ -33,38 +36,73 @@ coord 无 keygen 协调 API。
 - R6 **全 n 在线方可 keygen**:keygen 是 n 方交互协议,缺任一方即不可完成
   (失败/超时干净中止,无降级);签名仅需 t+1 子集(既有 coord START)。
 
-## 2. Rendezvous 决策:B(relay 自举,coord keygen 阶段零参与)
+## 2. Rendezvous 决策:A(coord 中介 keygen 会话)— 用户裁定 2026-05-19
 
-用户裁定取信任最小化:**B**。keygen 阶段 coord 完全不参与;设备经 libp2p
-relay 的 rendezvous(namespace 派生自 groupId)互相发现并跑仪式。A(coord
-中介 keygen 会话)作为 robust 化**备选**记录:若 B 的去中心化协调在生产中
-鲁棒性不足,可加 coord keygen-provisioning 契约(api.md 增项,L1 级),
-**但 R1–R5 红线在 A/B 下完全一致**(A 中 coord 仍零分片、仅协调连通元数据)。
+**A:由 coord 启动 keygen 请求并协调身份/连通,各 MPC 方据 coord dispatch
+开始密钥生成。** 用户裁定取**身份/路由复用既有 B-side 机制 + 运维可控
+robust**。R3(coord 零私密材料)在 A 下完整保留:coord 只触协调层
+(initiate / identity 校验 / START dispatch / 事后组公钥+chaincode 记录),
+**永不**触 tss-lib party 内部状态、份额、PreParams。密码学仪式本体在成员
+之间经 relay+Noise 直接交换,coord 不在转发路径。
 
-## 3. 分布式 keygen 仪式(B)
+**身份模型(§2.1)= 复用既有 `group_members.identity_pubkey` 自证机制**:
+每 MPC 方先在 coord 注册自身身份(secp256k1 公钥);**运营方以强制配置
+预声明组的成员公钥集**;coord 在 keygen/sign/reshare 发起时校验请求者与
+拟邀请方均在该强制集中,且各方对 START 的回应皆经其 identity 私钥签名
+(沿 api.md B-side memberGate 同款机制)。**新键 identity 永远不会自动
+注册**——必须经运营方配置匹配后方接受,防恶意方自加入组。
 
-参与者:一个**发起方**(initiator,组内任一成员设备)+ 其余 n−1 成员。
+B(relay 自举,coord 完全不参与)曾为 L1 推荐备选,**未采纳**;若未来需
+最大去中心化可重启评估,但本设计据 A 实施。
 
-1. **会话声明**:发起方生成 `sessionID`(随机,全局唯一),声明
-   `{groupId, sessionID, t, n, memberSet[], deadline}`,经成员身份私钥签名
-   (复用 `contract` senderAuth)。
-2. **发现/汇合**:全 n 方在 relay 注册 rendezvous,namespace =
-   `H(groupId || "keygen" || sessionID)`(复用 `internal/transport`
-   Advertise/FindPeers —— 当前未接线,本设计接活)。各方互建 Noise 会话
-   (pnet + circuit-relay v2)。
-3. **集合定版**:全 n 方在场且签名校验通过 → 冻结**有序 party 集**
-   (party_i 索引 = 成员在 `memberSet` 的确定性序,各方独立可算,无需信任
-   发起方排序)。任一不一致/缺员 → 全体干净中止(R6)。
-4. **本地 PreParams**(R2)→ 跑 tss-lib keygen 多轮:出站 tss 消息经引擎
-   → Noise/relay 投递指定对端;入站经 `contract.AcceptInbound`(R5)喂入。
-5. **产出**:每方得**仅 share_i**(R1),封入本机 keystore;各方独立算
-   `groupPubKey` 并交叉校验一致(不一致中止)。
-6. **组记录**(R3):keygen 成功后,成员经既有 coord B 侧/组开通路径
-   登记 `groupPubKey`(coord 仅存公开组公钥,永不见分片)。
+## 3. 分布式 keygen 仪式(A,coord 中介)
 
-中止/超时:任一阶段失败 → 全体终止会话、清理半态、不留分片;可换新
-`sessionID` 重试。防捣乱:成员签名 + 集合定版要求全员一致,异常成员致
-会话失败(keygen 本就需全 n,无可用降级,与 R6 一致)。
+参与者:**发起方**(组内某成员设备,经其 identity 私钥签名)+ 其余 n−1
+预注册成员 + **coord**(协调层,零私密)。
+
+1. **身份预注册**(一次性 / 前置):每方经既有 B-side `PUT /v1/members/self/
+   register` 等(或新等价端点)向 coord 注册其 `identity_pubkey`;**运营方
+   强制配置**(`coord.groups.<gid>.expected_members = [pubkey1,pubkey2,…]`)
+   声明该组允许成员公钥集;coord 启动校验配置/库一致。**未在强制集中的
+   identity 永不可参与 keygen/sign/reshare**(R1/防自加入)。
+2. **发起**:发起方调 coord 新端点 `POST /v1/groups/{groupId}/keygen`
+   (api.md L1 改),携 `{sessionID(随机),t,n,memberSet=expected pubkey 集,
+   deadline,proposerSig}`;coord 校验:(a) 发起方 identity 在强制集中
+   (b) memberSet ⊆ 强制集且 |memberSet|=n (c) signature 有效 (d) 该 group
+   尚无 group_pubkey(防重 keygen,既有 group 仅可 reshare)。
+3. **dispatch**:coord 经既有 dispatchHub 范式向**全 n 方**派发 keygen-START
+   `{sessionID, groupId, partyIndex(=memberSet 确定性序), peerMap(各方
+   relay 接入点), deadline}`;每方经身份签名信道接收。
+4. **互联**:各方经 relay 直接互建 Noise+pnet+circuit-relay v2 会话(coord
+   不在转发路径,R3)。
+5. **本地 PreParams**(R2)→ 跑 tss-lib keygen 多轮 + §3.6 commit-reveal
+   chaincode(`docs/design/mcp/address-derivation.md` §3:SHA-256 承诺 +
+   HKDF-SHA256 派生 + DST 域分隔 + group_id 绑定 + 严格 abort)。出站 tss
+   消息经引擎 → Noise/relay 投递指定对端;入站经 `contract.AcceptInbound`
+   (R5)喂入。
+6. **产出**:每方得**仅 share_i**(R1),封入本机 keystore;各方独立算
+   `groupPubKey` + `chaincode` 并各自经身份签名向 coord 上报。
+7. **组记录**:coord 校验**全 n 方**上报的 `(groupPubKey, chaincode)`
+   完全一致 → 同一事务持久化 `groups{ecdsa_pubkey, chaincode, evm/tron 派生}`
+   + `group_members{identity_pubkey}` 锁定;任一不一致或缺员 → coord 拒
+   持久化、整 keygen abort。
+
+**中止/超时**:任一阶段失败 → coord 标记 sessionID FAILED、各方清理半态
+不留分片;以新 sessionID 重试(R6:keygen 需全 n,无降级)。
+
+**防捣乱**:强制配置匹配 + 各方身份签名 + commit-reveal 不可偏置
++ 上报一致性校验,异常方致会话失败 - 不影响他组。
+
+## 3.bis Reshare(同身份层,用户裁定 #3)
+
+reshare 沿用 §2.1 同一身份模型:旧委员会 + 新委员会的 identity_pubkey 集
+**均**需在强制配置中预声明;coord 经新端点 `POST /v1/groups/{groupId}/
+reshare` 校验旧/新委员会签名后 dispatch reshare-START(类 keygen-START,
+但新方 partyIndex 由新 memberSet 序定);tss-lib reshare 多轮 + 新方
+PreParams 本地生成;旧方退出后 keystore 必须**抹掉旧份额**(R1 衍生:
+不可同时持新旧份额)。reshare 完成后 coord 更新 `groups.ecdsa_pubkey`
+(若 t/n 变 → 同时改 `group_members`);**chaincode 不变**(reshare 不动
+xpub,与 `address-derivation.md` §8 「reshare 不再生成新 c」一致)。
 
 ## 4. 生产网络引擎(复用 mpcnet)
 
@@ -94,32 +132,42 @@ relay 的 rendezvous(namespace 派生自 groupId)互相发现并跑仪式。A(co
 > gomobile 约束不变:回调/参数仍 flat(string/[]byte/接口);新增回调
 > 经 `sdk` 1:1 再导出。
 
-## 6. 分层交付(每层独立零回归门:build/vet/lint/-race/E2E;首笔提交排在
-当前后台 CI 门 `bcpe8mbb5` 绿之后)
+## 6. 分层交付(每层独立零回归门:build/vet/lint/-race/E2E;A 模型据用户
+裁定 2026-05-19)
 
-1. `internal/mpc` 单方 keygen/sign/reshare 入口(只己份;`internal/mpc`
-   既有全 n 模拟保留供测试,新增单方 API)。
-2. 抽取泛化 `internal/cli/mpcnet` → `internal/mpcnet` 生产引擎(去文件
-   rendezvous),`internal/cli` 不动。
-3. SDK 单方化 + 出站 wire 回调 + `OnWireMessage` 接活;`sdk` 再导出;
+1. **mpc 单方入口**:`internal/mpc` 单方 keygen/sign/reshare API(只己份;
+   既有全 n 模拟保留供测试)。
+2. **生产网络引擎**:抽取泛化 `internal/cli/mpcnet` → `internal/mpcnet`
+   (去文件 rendezvous,改由 START.peerMap 驱动连接);`internal/cli` 不动。
+3. **SDK 单方化** + 出站 wire 回调 + `OnWireMessage` 接活;`sdk` 再导出;
    `mcp/sdk.md` 修订。
-4. keygen 仪式(B):transport rendezvous 接活 + 会话声明/定版/中止子协议。
-5. host 传输接线:PC CLI(libp2p,复用 transport)先行打通真三方
-   keygen+sign E2E;移动原生桥同接口(同一 SDK,两端同获益)。
-6. 组记录对齐既有 coord B 侧 / group-provisioning(coord 零分片校验)。
+4. **coord keygen/reshare 协调契约**:`coord.external` 配置加 `expected_members`
+   强制集;`coorddb` 加 identity 注册(若现 schema 未覆盖)；新 api.md A 侧
+   `POST /v1/groups/{groupId}/keygen` 与 `…/reshare` 端点 + 上报路径 +
+   dispatchHub 扩展 keygen-START/reshare-START 类型(api.md 属 L1 权威,L1 改)。
+5. **host 传输接线**:PC CLI(libp2p,复用 transport)先行打通真三方
+   keygen+sign+reshare E2E;移动原生桥同接口(同一 SDK,两端同获益)。
+6. **组记录** 同一事务校验全 n 方上报一致(§3.7)→ 与 address-derivation 的
+   `groups.chaincode` 列(00004 迁移)对齐写入。
 
-## 7. 风险与开放项(评审需定)
+## 7. 风险与开放项(用户裁定状态)
 
-- B 的发现/定版子协议鲁棒性(NAT/掉线/部分到场);备选 A 触发条件。
-- party 索引确定性序的权威来源(memberSet 来自何处:组开通契约 /
-  group-provisioning §5.1 —— 需与 S-001/G-001 对齐)。
-- reshare 的旧/新委员会重叠在线要求(类 keygen,需另列时序)。
-- E2E:真多进程 n 方 keygen 验收(可由 PC CLI 充当 n 个独立 host 进程,
-  非单进程模拟 —— 这是"彻底分布式"的验收判据)。
+**已裁定 2026-05-19(用户经 L1 入档,A 模型 + 身份模型):**
+- ✅ §7.1 memberSet 权威源 = `coord.external.expected_members` **强制配置集**
+  (运营方预声明)+ coord `group_members.identity_pubkey` 自证;未配置即
+  不可参与(防自加入)。party 索引由 memberSet 确定性序定。
+- ✅ §7.2 鲁棒性 = A(coord 中介)即是 robust 路径;B 自举不采纳,无"备选
+  触发条件"项。
+- ✅ §7.3 reshare 本轮纳入,同身份层(§3.bis);旧份额抹除强制;chaincode
+  不变。
 
-## 8. 验收判据(彻底分布式成立的硬证据)
+**仍待用户裁定**:
+- ⏳ §7.4 **交付节奏**:严格逐层(每层提交+硬门绿+你确认才进下层)vs 分层
+  但连续推进(L2 全权调度,绿则续,红/yellow 才升 L1)。前者更安全更慢、
+  后者更快但中间状态依赖 L2 纪律。
 
-- 跨 n 个**独立进程/设备**(各自 keystore)跑 keygen,事后每个 keystore
-  **仅含 1 份** share;任意 t+1 进程可签、任意 ≤t 不可;任一进程的磁盘/
-  内存全程无他方分片;coord 日志/库无任何分片或 PreParams;relay 仅见
-  密文。任一条不满足即未达"安全的彻底三方"。
+**验收硬判据(不可破)**:跨 n 个**独立进程/设备**(各自 keystore)跑
+keygen,事后**每个 keystore 仅含 1 份** share;任意 t+1 进程可签、任意
+≤t 不可;任一进程的磁盘/内存全程无他方分片;coord 库/日志无任何分片
+或 PreParams;relay 仅见密文。任一条不满足即未达"安全的彻底三方"。
+
