@@ -73,13 +73,14 @@ coord:
   db: { dsn: env:MPC_COORD_DB_DSN }   # 字面量或引用
   external:
     api_key: env:MPC_COORD_EXTERNAL_API_KEY        # 入站鉴权固定 api_key(外部→coord)
-    result_webhook:                                # 结果回传固定 webhook(coord→外部)
+    result:                                        # 结果回传固定地址(coord→外部),避免与 notify 重名歧义
       url: https://biz.example.com/mcp/result      # demo;字面量或引用
-      secret: env:MPC_COORD_EXTERNAL_RESULT_WEBHOOK_SECRET  # 回调签名密钥(防伪造)
-  notify:
-    webhook:                                       # 单一固定通知 webhook(coord→外部)
-      url: https://biz.example.com/mcp/notify      # demo;字面量或引用
-      secret: env:MPC_COORD_NOTIFY_WEBHOOK_SECRET  # 回调签名密钥(防伪造)
+      secret: env:MPC_COORD_EXTERNAL_RESULT_SECRET # 出站签名密钥(HMAC-SHA256,首选,防伪造)
+      api_key: env:MPC_COORD_EXTERNAL_RESULT_API_KEY  # 备选 Bearer token(未配 secret 时用)
+  notify:                                          # 单一固定通知地址(coord→外部),固定 webhook 不分层
+    url: https://biz.example.com/mcp/notify        # demo;字面量或引用
+    secret: env:MPC_COORD_NOTIFY_SECRET            # 出站签名密钥(HMAC-SHA256,首选,防伪造)
+    api_key: env:MPC_COORD_NOTIFY_API_KEY          # 备选 Bearer token(未配 secret 时用)
   ttl: { skew_tolerance: "30s" }
   quorum: { signer_select: liveness }  # stable | liveness
   dispatch: { timeout: "120s" }
@@ -102,10 +103,12 @@ coord:
 | `coord.http.listen` | 外部服务 + 成员 API 监听地址 | |
 | `coord.db.dsn` | 持久化连接串 | ✅ |
 | `coord.external.api_key` | 入站(外部→coord)API Key,鉴权**固定** api_key,恒必填 | ✅ |
-| `coord.external.result_webhook.url` | 结果回传 webhook 地址(coord→外部,恒必填) | |
-| `coord.external.result_webhook.secret` | 结果回传**回调签名密钥**:coord 对每次回调 HMAC 签名,外部据此验真、拒伪造,恒必填 | ✅ |
-| `coord.notify.webhook.url` | 单一固定通知 webhook 地址(coord 仅 POST 通知事件;FCM/APNS 等由外部通知渠道处理,coord 不持推送凭证) | |
-| `coord.notify.webhook.secret` | 通知**回调签名密钥**(同上,防伪造,恒必填) | ✅ |
+| `coord.external.result.url` | 结果回传地址(coord→外部,恒必填) | |
+| `coord.external.result.secret` | 结果回传**出站签名密钥**:coord 对每次回调 HMAC-SHA256 签名(首选模式),外部据此验真、拒伪造 | ✅ |
+| `coord.external.result.api_key` | 结果回传**备选 Bearer token**:未配 `secret` 时改用 `Authorization: Bearer`;`secret`/`api_key` 须至少配一 | ✅ |
+| `coord.notify.url` | 单一固定通知地址(coord 仅 POST 通知事件;FCM/APNS 等由外部通知渠道处理,coord 不持推送凭证) | |
+| `coord.notify.secret` | 通知**出站签名密钥**(HMAC-SHA256,首选,防伪造) | ✅ |
+| `coord.notify.api_key` | 通知**备选 Bearer token**(未配 `secret` 时启用);`secret`/`api_key` 须至少配一 | ✅ |
 | `coord.ttl.skew_tolerance` | 时钟偏移容差(超出保守判过期) | |
 | `coord.quorum.signer_select` | 签名子集选取策略:`stable` / `liveness` | |
 | `coord.dispatch.timeout` | 派发后等待签名完成超时(须 < 剩余 TTL) | |
@@ -113,25 +116,38 @@ coord:
 ## 变更摘要(用户裁定 2026-05-19)
 
 1. **通知 = 单一固定 webhook**:删除 `coord.push.{fcm,apns}` 与一切推送凭证;
-   coord 仅向 `coord.notify.webhook` POST 通知事件,FCM/APNS/其它由**外部通知
-   渠道**翻译投递。coord 不再区分 fcm/apns、不再持推送凭证。
+   coord 仅向 `coord.notify`(单一固定地址,不分层)POST 通知事件,
+   FCM/APNS/其它由**外部通知渠道**翻译投递。coord 不再区分 fcm/apns、
+   不再持推送凭证。
 2. **external 鉴权固定 `api_key`**(删除 `auth` 枚举与 `mtls` 选项,`api_key`
-   恒必填);**结果回传固定 `webhook`**(删除 `result_callback` 枚举与
-   `longpoll` 路径,`result_webhook` URL 恒必填)。
+   恒必填);**结果回传固定地址**(删除 `result_callback` 枚举与
+   `longpoll` 路径,`coord.external.result.url` 恒必填)。
 3. **配置框架 = Traefik 式三源**:文件 + 环境变量 + CLI 参数,统一键空间、
    `默认<文件<env<CLI` 优先级;任一值可为**字面量或 `env:`/`file:` 引用**
    (解除「secret 必须为引用、明文禁止」硬约束)。DB 解锁口令例外与生产加密
    fail-closed 护栏**不变**。
-4. **出站 webhook 鉴权(用户裁定 2026-05-19,防回调伪造)**:`result_webhook`
-   与 `notify.webhook` 由「裸 URL」改为 `{ url, secret }`。**根因**:coord→外部
+4. **出站回调鉴权(用户裁定 2026-05-19,防回调伪造)**:**根因**:coord→外部
    的结果/通知回调此前无鉴权(callback 仅 POST,无签名),攻击者可向外部业务
    服务的回调端点伪造 `{requestId,status,RSV}` → 业务侧据伪造签名结果误动作。
-   **对策**:coord 每次回调以该 webhook 的 `secret` 对 `时间戳 + "." + 原始
-   body` 做 **HMAC-SHA256**,置于头 `X-MCP-Signature: t=<unix>,v1=<hex>`
-   (+ `X-MCP-Timestamp`);外部服务用同一 secret 重算、常时比较、并按时钟
-   skew 容差拒重放/伪造。secret 恒必填(字面量或 `env:`/`file:`),与入站
-   `external.api_key` 物理隔离(方向不同、互不复用)。`mock-extsvc`(测试替身)
-   须实现该验签以 E2E 实证防伪造;api.md A4 同步定义回调签名头。
+   **修订点(用户 2026-05-19 追加)**:
+   - **改名解歧义**:`coord.external.result_webhook` → **`coord.external.result`**
+     (原名与 `notify.webhook` 的 `webhook` 重复,易混淆)。
+   - **notify 扁平化**:固定 webhook 不再分层,`coord.notify.webhook.{url,secret}`
+     → **`coord.notify.{url, secret, api_key}`**。
+   - **两种鉴权模式**(请求签名 / token):
+     - **签名(首选)**:配 `secret` 时,coord 每次回调以 `secret` 对
+       `时间戳 + "." + 原始 body` 做 **HMAC-SHA256**,置头
+       `X-MCP-Signature: t=<unix>,v1=<hex>` + `X-MCP-Timestamp`;外部用同
+       secret 重算、常时比较、按 skew 容差拒重放/伪造(body 绑定、抗重放,
+       安全性最强)。
+     - **token(备选)**:未配 `secret` 但配 `api_key` 时,coord 改置
+       `Authorization: Bearer <api_key>`;外部常时比较该 token。
+       (兼容只支持 Bearer 的接收端;无 body 绑定,弱于签名,故为备选。)
+     - `secret` 与 `api_key` **至少配一**;两者皆配时 `secret` 优先(用签名)。
+   - 凭据为出站方向,与入站 `external.api_key` **物理隔离**(方向不同、字段
+     独立、互不复用);均可字面量或 `env:`/`file:` 引用。
+   `mock-extsvc`(测试替身)须实现签名与 token 两种验证以 E2E 实证防伪造;
+   api.md A4 同步定义两种回调鉴权头。
 
 ## 密钥处理(随上款修订)
 
