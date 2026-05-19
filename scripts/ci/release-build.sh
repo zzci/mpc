@@ -6,7 +6,7 @@
 #   - cmd/cli, internal/mobileapi : PURE GO -> fully reproducible. cli is
 #     cross-compiled CGO_ENABLED=0 -trimpath with a pinned, buildid-stripped
 #     ldflags set; identical inputs -> byte-identical outputs.
-#   - cmd/node : imports mutecomm/go-sqlcipher/v4 (cgo + SQLCipher) -> NOT
+#   - cmd/server : imports mutecomm/go-sqlcipher/v4 (cgo + SQLCipher) -> NOT
 #     cross-compilable / not bit-reproducible. Built linux/amd64 ONLY, native
 #     CGO on the runner toolchain. This limitation is recorded in provenance.
 #
@@ -44,7 +44,7 @@ for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
     go build -ldflags "${LDFLAGS}" -o "${bin}" ./cmd/cli
 done
 
-# --- cmd/node (server): cgo + SQLCipher, fully static, reproducible -------
+# --- cmd/server (server): cgo + SQLCipher, fully static, reproducible -------
 # SQLCipher whole-DB encryption (security.md #9) requires cgo. We link it
 # FULLY STATIC (-linkmode external -extldflags "-static") so the server is a
 # single self-contained binary with no shared-library / glibc runtime
@@ -57,15 +57,15 @@ done
 # dependency, fully self-contained networking (avoids the classic
 # static-glibc NSS caveat).
 NODE_LDFLAGS="${LDFLAGS} -linkmode external -extldflags \"-static -Wl,--build-id=none\""
-log "build cmd/node linux/amd64 (CGO_ENABLED=1, static SQLCipher, netgo, reproducible)"
+log "build cmd/server linux/amd64 (CGO_ENABLED=1, static SQLCipher, netgo, reproducible)"
 CGO_ENABLED=1 GOOS=linux GOARCH=amd64 \
   go build -tags 'osusergo netgo' -ldflags "${NODE_LDFLAGS}" \
-    -o "${OUT}/mcpwallet-node-linux-amd64" ./cmd/node
+    -o "${OUT}/mcpwallet-server-linux-amd64" ./cmd/server
 # Hard gate: the server MUST be statically linked (no dynamic interpreter).
-if file "${OUT}/mcpwallet-node-linux-amd64" | grep -q "dynamically linked"; then
-  fail "cmd/node is dynamically linked — static release invariant violated"
+if file "${OUT}/mcpwallet-server-linux-amd64" | grep -q "dynamically linked"; then
+  fail "cmd/server is dynamically linked — static release invariant violated"
 fi
-log "cmd/node: $(file "${OUT}/mcpwallet-node-linux-amd64" | sed 's/.*: //; s/,.*//') (static OK)"
+log "cmd/server: $(file "${OUT}/mcpwallet-server-linux-amd64" | sed 's/.*: //; s/,.*//') (static OK)"
 
 # --- mobile libs (built by the parallel Android/iOS jobs; passed through) -
 if [ -n "${AAR_PATH:-}" ] && [ -f "${AAR_PATH}" ]; then
@@ -97,15 +97,15 @@ built_at="$(date -u -d "@${SDE}" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u +%Y-
   echo "  \"builder\": \"${GITHUB_REPOSITORY:-local}@${GITHUB_RUN_ID:-manual}\","
   echo '  "static": {'
   echo '    "mcpwallet-cli-*": true,'
-  echo '    "mcpwallet-node-linux-amd64": true'
+  echo '    "mcpwallet-server-linux-amd64": true'
   echo '  },'
   echo '  "reproducible": {'
   echo '    "mcpwallet-cli-*": true,'
-  echo '    "mcpwallet-node-linux-amd64": "true (pinned builder toolchain)",'
+  echo '    "mcpwallet-server-linux-amd64": "true (pinned builder toolchain)",'
   echo '    "mcpwallet.aar": "toolchain-dependent",'
   echo '    "Mcpwallet.xcframework.zip": "toolchain-dependent"'
   echo '  },'
-  echo '  "notes": "cmd/cli: pure Go (CGO_ENABLED=0) -> fully static, byte-reproducible across all OS/arch (-trimpath, -buildid=, SOURCE_DATE_EPOCH pinned to commit time). cmd/node (server): links mutecomm/go-sqlcipher/v4 (cgo + SQLCipher, required by security.md #9 whole-DB encryption) FULLY STATIC via -linkmode external -extldflags \"-static -Wl,--build-id=none\"; linux/amd64; byte-reproducible on the pinned builder toolchain (cross-toolchain bit-identical requires the same digest-pinned builder image — the CI release-verify job rebuilds and diffs SHA256 as trust evidence). The .aar (gomobile + Android NDK) and .xcframework (gomobile + Xcode) are pure-Go bindings but pass through host mobile toolchains, so byte-identical reproduction is not guaranteed; SHA256 below pins the exact published bytes.",'
+  echo '  "notes": "cmd/cli: pure Go (CGO_ENABLED=0) -> fully static, byte-reproducible across all OS/arch (-trimpath, -buildid=, SOURCE_DATE_EPOCH pinned to commit time). cmd/server (server): links mutecomm/go-sqlcipher/v4 (cgo + SQLCipher, required by security.md #9 whole-DB encryption) FULLY STATIC via -linkmode external -extldflags \"-static -Wl,--build-id=none\"; linux/amd64; byte-reproducible on the pinned builder toolchain (cross-toolchain bit-identical requires the same digest-pinned builder image — the CI release-verify job rebuilds and diffs SHA256 as trust evidence). The .aar (gomobile + Android NDK) and .xcframework (gomobile + Xcode) are pure-Go bindings but pass through host mobile toolchains, so byte-identical reproduction is not guaranteed; SHA256 below pins the exact published bytes.",'
   printf '  "artifacts": ['
   first=1
   while IFS= read -r line; do

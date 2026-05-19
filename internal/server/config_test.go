@@ -1,4 +1,4 @@
-package node
+package server
 
 import (
 	"errors"
@@ -7,22 +7,22 @@ import (
 	"testing"
 )
 
-// writeConfig writes a temp config file and points NODE_CONFIG at it.
+// writeConfig writes a temp config file and points SERVER_CONFIG at it.
 func writeConfig(t *testing.T, body string) {
 	t.Helper()
-	p := filepath.Join(t.TempDir(), "node.yaml")
+	p := filepath.Join(t.TempDir(), "server.yaml")
 	if err := os.WriteFile(p, []byte(body), 0o600); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
-	t.Setenv("NODE_CONFIG", p)
+	t.Setenv("SERVER_CONFIG", p)
 }
 
 func TestLoadDefaults(t *testing.T) {
-	t.Setenv("NODE_CONFIG", filepath.Join(t.TempDir(), "absent.yaml"))
+	t.Setenv("SERVER_CONFIG", filepath.Join(t.TempDir(), "absent.yaml"))
 	// An explicitly-set but missing file must error (unlike a missing
 	// default path).
 	if _, err := Load(); err == nil {
-		t.Fatal("explicit missing NODE_CONFIG: want error, got nil")
+		t.Fatal("explicit missing SERVER_CONFIG: want error, got nil")
 	}
 
 	writeConfig(t, "relay: { enable: true }\n")
@@ -47,7 +47,7 @@ func TestLoadDefaults(t *testing.T) {
 
 func TestPrecedenceDefaultFileEnv(t *testing.T) {
 	writeConfig(t, "log: { level: warn }\nrelay: { enable: true }\n")
-	t.Setenv("TSSNODE_LOG__LEVEL", "error")
+	t.Setenv("TSSSERVER_LOG__LEVEL", "error")
 
 	cfg, err := Load()
 	if err != nil {
@@ -66,17 +66,17 @@ func TestPrecedenceDefaultFileEnv(t *testing.T) {
 
 func TestEnvNestedOverride(t *testing.T) {
 	writeConfig(t, "coord: { enable: true }\n")
-	t.Setenv("TSSNODE_RELAY__ENABLE", "true")
-	t.Setenv("TSSNODE_COORD__HTTP__LISTEN", ":18080")
-	t.Setenv("TSSNODE_RELAY__LISTEN", "/ip4/0.0.0.0/tcp/1, /ip4/0.0.0.0/tcp/2")
-	t.Setenv("TSSNODE_RELAY__LIMITS__RESERVATION_PER_TOKEN", "9")
+	t.Setenv("TSSSERVER_RELAY__ENABLE", "true")
+	t.Setenv("TSSSERVER_COORD__HTTP__LISTEN", ":18080")
+	t.Setenv("TSSSERVER_RELAY__LISTEN", "/ip4/0.0.0.0/tcp/1, /ip4/0.0.0.0/tcp/2")
+	t.Setenv("TSSSERVER_RELAY__LIMITS__RESERVATION_PER_TOKEN", "9")
 
 	cfg, err := Load()
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
 	if !cfg.Relay.Enable {
-		t.Error("TSSNODE_RELAY__ENABLE not applied")
+		t.Error("TSSSERVER_RELAY__ENABLE not applied")
 	}
 	if cfg.Coord.HTTP.Listen != ":18080" {
 		t.Errorf("nested http listen: %q", cfg.Coord.HTTP.Listen)
@@ -104,7 +104,7 @@ func TestValidateRequiredSecretFailFast(t *testing.T) {
 			"relay pnet_psk missing",
 			Config{Relay: RelayConfig{
 				Enable:      true,
-				PnetPSKRef:  "env:TSSNODE_TEST_UNSET",
+				PnetPSKRef:  "env:TSSSERVER_TEST_UNSET",
 				TokenVerify: TokenVerifyConfig{Source: "config"},
 			}},
 		},
@@ -112,7 +112,7 @@ func TestValidateRequiredSecretFailFast(t *testing.T) {
 			"coord db.dsn missing",
 			Config{Coord: CoordConfig{
 				Enable:   true,
-				DB:       CoordDBConfig{DSNRef: "env:TSSNODE_TEST_UNSET", Encryption: CoordDBEncryptionConfig{Enable: true}},
+				DB:       CoordDBConfig{DSNRef: "env:TSSSERVER_TEST_UNSET", Encryption: CoordDBEncryptionConfig{Enable: true}},
 				External: CoordExternalConfig{Auth: "mtls", ResultCallback: "webhook"},
 				Quorum:   CoordQuorumConfig{SignerSelect: "liveness"},
 			}},
@@ -121,13 +121,13 @@ func TestValidateRequiredSecretFailFast(t *testing.T) {
 			"coord api_key missing when auth=api_key",
 			Config{Coord: CoordConfig{
 				Enable:   true,
-				DB:       CoordDBConfig{DSNRef: "env:TSSNODE_TEST_DSN", Encryption: CoordDBEncryptionConfig{Enable: true}},
-				External: CoordExternalConfig{Auth: "api_key", APIKeyRef: "env:TSSNODE_TEST_UNSET", ResultCallback: "webhook"},
+				DB:       CoordDBConfig{DSNRef: "env:TSSSERVER_TEST_DSN", Encryption: CoordDBEncryptionConfig{Enable: true}},
+				External: CoordExternalConfig{Auth: "api_key", APIKeyRef: "env:TSSSERVER_TEST_UNSET", ResultCallback: "webhook"},
 				Quorum:   CoordQuorumConfig{SignerSelect: "liveness"},
 			}},
 		},
 	}
-	t.Setenv("TSSNODE_TEST_DSN", "postgres://x")
+	t.Setenv("TSSSERVER_TEST_DSN", "postgres://x")
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			if err := tc.cfg.Validate(); err == nil {
@@ -150,28 +150,28 @@ func TestValidatePlaintextSecretRejected(t *testing.T) {
 }
 
 func TestValidateEnum(t *testing.T) {
-	t.Setenv("TSSNODE_TEST_PSK", "x")
-	t.Setenv("TSSNODE_TEST_DSN", "y")
+	t.Setenv("TSSSERVER_TEST_PSK", "x")
+	t.Setenv("TSSSERVER_TEST_DSN", "y")
 	bad := []struct {
 		name string
 		cfg  Config
 	}{
 		{"relay source", Config{Relay: RelayConfig{
-			Enable: true, PnetPSKRef: "env:TSSNODE_TEST_PSK",
+			Enable: true, PnetPSKRef: "env:TSSSERVER_TEST_PSK",
 			TokenVerify: TokenVerifyConfig{Source: "bogus"},
 		}}},
 		{"coord auth", Config{Coord: CoordConfig{
-			Enable: true, DB: CoordDBConfig{DSNRef: "env:TSSNODE_TEST_DSN", Encryption: CoordDBEncryptionConfig{Enable: true}},
+			Enable: true, DB: CoordDBConfig{DSNRef: "env:TSSSERVER_TEST_DSN", Encryption: CoordDBEncryptionConfig{Enable: true}},
 			External: CoordExternalConfig{Auth: "bogus", ResultCallback: "webhook"},
 			Quorum:   CoordQuorumConfig{SignerSelect: "liveness"},
 		}}},
 		{"coord result_callback", Config{Coord: CoordConfig{
-			Enable: true, DB: CoordDBConfig{DSNRef: "env:TSSNODE_TEST_DSN", Encryption: CoordDBEncryptionConfig{Enable: true}},
+			Enable: true, DB: CoordDBConfig{DSNRef: "env:TSSSERVER_TEST_DSN", Encryption: CoordDBEncryptionConfig{Enable: true}},
 			External: CoordExternalConfig{Auth: "mtls", ResultCallback: "bogus"},
 			Quorum:   CoordQuorumConfig{SignerSelect: "liveness"},
 		}}},
 		{"coord signer_select", Config{Coord: CoordConfig{
-			Enable: true, DB: CoordDBConfig{DSNRef: "env:TSSNODE_TEST_DSN", Encryption: CoordDBEncryptionConfig{Enable: true}},
+			Enable: true, DB: CoordDBConfig{DSNRef: "env:TSSSERVER_TEST_DSN", Encryption: CoordDBEncryptionConfig{Enable: true}},
 			External: CoordExternalConfig{Auth: "mtls", ResultCallback: "webhook"},
 			Quorum:   CoordQuorumConfig{SignerSelect: "bogus"},
 		}}},
@@ -186,13 +186,13 @@ func TestValidateEnum(t *testing.T) {
 }
 
 func TestResolveSecret(t *testing.T) {
-	t.Setenv("TSSNODE_SECRET_OK", "s3cret")
+	t.Setenv("TSSSERVER_SECRET_OK", "s3cret")
 	f := filepath.Join(t.TempDir(), "psk")
 	if err := os.WriteFile(f, []byte("  filesecret\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
-	if v, err := resolveSecret("env:TSSNODE_SECRET_OK"); err != nil || v != "s3cret" {
+	if v, err := resolveSecret("env:TSSSERVER_SECRET_OK"); err != nil || v != "s3cret" {
 		t.Errorf("env ref: v=%q err=%v", v, err)
 	}
 	if v, err := resolveSecret("file:" + f); err != nil || v != "filesecret" {
@@ -201,7 +201,7 @@ func TestResolveSecret(t *testing.T) {
 	if _, err := resolveSecret(""); !errors.Is(err, errSecretMissing) {
 		t.Errorf("empty: want errSecretMissing, got %v", err)
 	}
-	if _, err := resolveSecret("env:TSSNODE_DEFINITELY_UNSET"); !errors.Is(err, errSecretMissing) {
+	if _, err := resolveSecret("env:TSSSERVER_DEFINITELY_UNSET"); !errors.Is(err, errSecretMissing) {
 		t.Errorf("unset env: want errSecretMissing, got %v", err)
 	}
 	if _, err := resolveSecret("plaintext"); !errors.Is(err, errSecretPlaintext) {
@@ -213,11 +213,11 @@ func TestResolveSecret(t *testing.T) {
 }
 
 func TestOptionalSecret(t *testing.T) {
-	t.Setenv("TSSNODE_OPT_OK", "v")
+	t.Setenv("TSSSERVER_OPT_OK", "v")
 	if err := optionalSecret(""); err != nil {
 		t.Errorf("empty optional: want nil, got %v", err)
 	}
-	if err := optionalSecret("env:TSSNODE_OPT_OK"); err != nil {
+	if err := optionalSecret("env:TSSSERVER_OPT_OK"); err != nil {
 		t.Errorf("set optional: want nil, got %v", err)
 	}
 	if err := optionalSecret("plainpush"); !errors.Is(err, errSecretPlaintext) {
@@ -235,7 +235,7 @@ metrics: { listen: ":9090" }
 relay:
   enable: true
   listen: ["/ip4/0.0.0.0/tcp/4001"]
-  pnet_psk_ref: env:TSSNODE_RELAY__PNET_PSK
+  pnet_psk_ref: env:TSSSERVER_RELAY__PNET_PSK
   token_verify:
     source: config
     group_pubkeys: ["pk1", "pk2"]
@@ -248,14 +248,14 @@ relay:
 coord:
   enable: true
   http: { listen: ":8080" }
-  db:   { dsn_ref: env:TSSNODE_COORD__DB_DSN }
+  db:   { dsn_ref: env:TSSSERVER_COORD__DB_DSN }
   external:
     auth: mtls
-    api_key_ref: env:TSSNODE_COORD__EXTERNAL__API_KEY
+    api_key_ref: env:TSSSERVER_COORD__EXTERNAL__API_KEY
     result_callback: webhook
   push:
-    fcm_cred_ref: env:TSSNODE_COORD__PUSH__FCM
-    apns_cred_ref: env:TSSNODE_COORD__PUSH__APNS
+    fcm_cred_ref: env:TSSSERVER_COORD__PUSH__FCM
+    apns_cred_ref: env:TSSSERVER_COORD__PUSH__APNS
   ttl: { skew_tolerance: "30s" }
   quorum: { signer_select: liveness }
   dispatch: { timeout: "120s" }
@@ -270,7 +270,7 @@ coord:
 		"metrics.listen":                     cfg.Metrics.Listen == ":9090",
 		"relay.enable":                       cfg.Relay.Enable,
 		"relay.listen":                       len(cfg.Relay.Listen) == 1 && cfg.Relay.Listen[0] == "/ip4/0.0.0.0/tcp/4001",
-		"relay.pnet_psk_ref":                 cfg.Relay.PnetPSKRef == "env:TSSNODE_RELAY__PNET_PSK",
+		"relay.pnet_psk_ref":                 cfg.Relay.PnetPSKRef == "env:TSSSERVER_RELAY__PNET_PSK",
 		"relay.token_verify.source":          cfg.Relay.TokenVerify.Source == "config",
 		"relay.token_verify.group_pubkeys":   len(cfg.Relay.TokenVerify.GroupPubkeys) == 2,
 		"relay.rendezvous.enable":            cfg.Relay.Rendezvous.Enable,
@@ -280,12 +280,12 @@ coord:
 		"relay.limits.circuit_max_duration":  cfg.Relay.Limits.CircuitMaxDuration == "10m",
 		"coord.enable":                       cfg.Coord.Enable,
 		"coord.http.listen":                  cfg.Coord.HTTP.Listen == ":8080",
-		"coord.db.dsn_ref":                   cfg.Coord.DB.DSNRef == "env:TSSNODE_COORD__DB_DSN",
+		"coord.db.dsn_ref":                   cfg.Coord.DB.DSNRef == "env:TSSSERVER_COORD__DB_DSN",
 		"coord.external.auth":                cfg.Coord.External.Auth == "mtls",
-		"coord.external.api_key_ref":         cfg.Coord.External.APIKeyRef == "env:TSSNODE_COORD__EXTERNAL__API_KEY",
+		"coord.external.api_key_ref":         cfg.Coord.External.APIKeyRef == "env:TSSSERVER_COORD__EXTERNAL__API_KEY",
 		"coord.external.result_callback":     cfg.Coord.External.ResultCallback == "webhook",
-		"coord.push.fcm_cred_ref":            cfg.Coord.Push.FCMCredRef == "env:TSSNODE_COORD__PUSH__FCM",
-		"coord.push.apns_cred_ref":           cfg.Coord.Push.APNSCredRef == "env:TSSNODE_COORD__PUSH__APNS",
+		"coord.push.fcm_cred_ref":            cfg.Coord.Push.FCMCredRef == "env:TSSSERVER_COORD__PUSH__FCM",
+		"coord.push.apns_cred_ref":           cfg.Coord.Push.APNSCredRef == "env:TSSSERVER_COORD__PUSH__APNS",
 		"coord.ttl.skew_tolerance":           cfg.Coord.TTL.SkewTolerance == "30s",
 		"coord.quorum.signer_select":         cfg.Coord.Quorum.SignerSelect == "liveness",
 		"coord.dispatch.timeout":             cfg.Coord.Dispatch.Timeout == "120s",
@@ -300,21 +300,21 @@ coord:
 // TestValidateFullValid injects all required/optional secrets and
 // expects overall pass.
 func TestValidateFullValid(t *testing.T) {
-	t.Setenv("TSSNODE_RELAY__PNET_PSK", "psk")
-	t.Setenv("TSSNODE_COORD__DB_DSN", "postgres://x")
-	t.Setenv("TSSNODE_COORD__PUSH__FCM", "fcm")
-	t.Setenv("TSSNODE_COORD__PUSH__APNS", "apns")
+	t.Setenv("TSSSERVER_RELAY__PNET_PSK", "psk")
+	t.Setenv("TSSSERVER_COORD__DB_DSN", "postgres://x")
+	t.Setenv("TSSSERVER_COORD__PUSH__FCM", "fcm")
+	t.Setenv("TSSSERVER_COORD__PUSH__APNS", "apns")
 	cfg := Config{
 		Relay: RelayConfig{
 			Enable:      true,
-			PnetPSKRef:  "env:TSSNODE_RELAY__PNET_PSK",
+			PnetPSKRef:  "env:TSSSERVER_RELAY__PNET_PSK",
 			TokenVerify: TokenVerifyConfig{Source: "config"},
 		},
 		Coord: CoordConfig{
 			Enable:   true,
-			DB:       CoordDBConfig{DSNRef: "env:TSSNODE_COORD__DB_DSN", Encryption: CoordDBEncryptionConfig{Enable: true}},
+			DB:       CoordDBConfig{DSNRef: "env:TSSSERVER_COORD__DB_DSN", Encryption: CoordDBEncryptionConfig{Enable: true}},
 			External: CoordExternalConfig{Auth: "mtls", ResultCallback: "webhook"},
-			Push:     CoordPushConfig{FCMCredRef: "env:TSSNODE_COORD__PUSH__FCM", APNSCredRef: "env:TSSNODE_COORD__PUSH__APNS"},
+			Push:     CoordPushConfig{FCMCredRef: "env:TSSSERVER_COORD__PUSH__FCM", APNSCredRef: "env:TSSSERVER_COORD__PUSH__APNS"},
 			Quorum:   CoordQuorumConfig{SignerSelect: "liveness"},
 		},
 	}

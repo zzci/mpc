@@ -1,6 +1,6 @@
 /**
  * Spawns the real `node` binary with the relay AND coord roles enabled in one
- * process (cmd/node supports double-role), then unlocks the LOCKED coord
+ * process (cmd/server supports double-role), then unlocks the LOCKED coord
  * store at runtime through the admin-api (A-001) — the only path to unlock
  * (server.md C9b: passphrase never in config/env/KMS). The relay config
  * mirrors the proven internal/cli `startRelay` harness.
@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
 
-export interface NodeHandle {
+export interface ServerHandle {
   proc: Subprocess
   relayPeerId: string
   relayAddrs: string[]
@@ -24,8 +24,8 @@ export interface NodeHandle {
   stop: () => Promise<void>
 }
 
-export interface NodeOptions {
-  nodeBin: string
+export interface ServerOptions {
+  serverBin: string
   /** base64-std of the compressed wallet-group cap-token issuer pubkey. */
   groupPubB64: string
   /** hex pnet PSK shared with the member subprocesses. */
@@ -52,7 +52,7 @@ async function freePort(): Promise<number> {
 const RELAY_STARTED = 'relay: started'
 
 /** Start node (relay+coord+admin), wait for relay + coord readiness, unlock. */
-export async function startNode(opts: NodeOptions): Promise<NodeHandle> {
+export async function startServer(opts: ServerOptions): Promise<ServerHandle> {
   const workdir = mkdtempSync(join(tmpdir(), 'e2e-node-'))
   const coordPort = await freePort()
   const adminPort = await freePort()
@@ -77,14 +77,14 @@ coord:
   quorum: { signer_select: stable }
   dispatch: { timeout: "2m" }
 `
-  const cfgPath = join(workdir, 'node.yaml')
+  const cfgPath = join(workdir, 'server.yaml')
   writeFileSync(cfgPath, cfg, { mode: 0o600 })
 
-  const proc = Bun.spawn([opts.nodeBin], {
+  const proc = Bun.spawn([opts.serverBin], {
     cwd: workdir,
     env: {
       ...process.env,
-      NODE_CONFIG: cfgPath,
+      SERVER_CONFIG: cfgPath,
       RELAY_PNET_PSK: opts.pskHex,
       COORD_DB_DSN: dbPath,
       COORD_API_KEY: apiKey,
@@ -93,15 +93,15 @@ coord:
       // iron-law guardrail requires this explicit non-production confirmation;
       // node fail-closes without it. E2E is non-production by definition.
       ALLOW_INSECURE_DB: '1',
-      TSSNODE_ADMIN__LISTEN: `127.0.0.1:${adminPort}`,
-      TSSNODE_ADMIN__READ_TOKEN: 'e2e-admin-read-token-0001',
-      TSSNODE_ADMIN__CONTROL_TOKEN: 'e2e-admin-control-token-0002',
+      TSSSERVER_ADMIN__LISTEN: `127.0.0.1:${adminPort}`,
+      TSSSERVER_ADMIN__READ_TOKEN: 'e2e-admin-read-token-0001',
+      TSSSERVER_ADMIN__CONTROL_TOKEN: 'e2e-admin-control-token-0002',
     },
     stdout: 'inherit',
     stderr: 'pipe',
   })
 
-  const handle: NodeHandle = {
+  const handle: ServerHandle = {
     proc,
     relayPeerId: '',
     relayAddrs: [],
@@ -127,7 +127,7 @@ coord:
 }
 
 /** Scan the structured JSON stderr for the relay's ephemeral peer + addrs. */
-async function parseRelayStarted(proc: Subprocess, handle: NodeHandle): Promise<void> {
+async function parseRelayStarted(proc: Subprocess, handle: ServerHandle): Promise<void> {
   if (proc.stderr == null || typeof proc.stderr === 'number')
     throw new Error('node: no stderr pipe')
   const deadline = Date.now() + 30_000

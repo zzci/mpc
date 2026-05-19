@@ -16,7 +16,7 @@ import (
 	circuitv2 "github.com/libp2p/go-libp2p/p2p/protocol/circuitv2/relay"
 	noise "github.com/libp2p/go-libp2p/p2p/security/noise"
 
-	"github.com/zzci/mpc/internal/node"
+	"github.com/zzci/mpc/internal/server"
 )
 
 // Relay is a running relay-role instance.
@@ -27,8 +27,8 @@ type Relay struct {
 }
 
 // New builds the relay host and wires circuit-relay v2, the cap-grant service
-// and the rendezvous service from a node.Config. The config must have
-// relay.enable=true and have passed node.Config.Validate (secret references
+// and the rendezvous service from a server.Config. The config must have
+// relay.enable=true and have passed server.Config.Validate (secret references
 // resolved). No coord field is read: the relay is coord-independent.
 //
 // Access control layering (server.md R4):
@@ -42,7 +42,7 @@ type Relay struct {
 //     gater; this realizes server.md R4's intent within the libp2p API.
 //   - layer 3 quota: per-token/per-group reservation caps in the ACL plus
 //     circuitv2 per-circuit Data/Duration limits.
-func New(cfg node.Config, log *slog.Logger) (*Relay, error) {
+func New(cfg server.Config, log *slog.Logger) (*Relay, error) {
 	if !cfg.Relay.Enable {
 		return nil, errors.New("relay: relay.enable is false")
 	}
@@ -73,7 +73,7 @@ func New(cfg node.Config, log *slog.Logger) (*Relay, error) {
 
 	// Ephemeral relay identity: N-001 carries no identity field and the relay
 	// is stateless (server.md R5); clients hold a configurable relay list and
-	// fail over. Stable identity persistence would need a node.Config identity
+	// fail over. Stable identity persistence would need a server.Config identity
 	// field, owned outside this package, so it is left to that owner (H-003
 	// scope is internal/server/relay only).
 	priv, _, err := crypto.GenerateEd25519Key(rand.Reader)

@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/zzci/mpc/internal/node"
+	"github.com/zzci/mpc/internal/server"
 	"github.com/zzci/mpc/internal/server/relay"
 )
 
@@ -20,7 +20,7 @@ import (
 // The relay+coord dual-role deployment runs this concurrently with runCoord on
 // the same ctx (FIX-002); the trust boundary is unchanged — runRelay reads only
 // cfg.Relay and internal/server/relay never imports internal/server/coord.
-func runRelay(ctx context.Context, cfg node.Config) error {
+func runRelay(ctx context.Context, cfg server.Config) error {
 	log := slog.New(slog.NewJSONHandler(os.Stderr, nil))
 
 	r, err := relay.New(cfg, log)

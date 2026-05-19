@@ -20,7 +20,7 @@ import (
 //                                              -> store_test.go TestStore_UnlockRelockLifecycle
 //   (e) production guardrail: the disable switch fail-closes under a
 //       simulated production marker
-//                                              -> internal/node TestEncryptionDisableProductionGuardrail
+//                                              -> internal/server TestEncryptionDisableProductionGuardrail
 // This file adds the §7.1 "dev/test encryption-disabled mode" tests and
 // contrasts with (a): disabled mode writes the .db in plaintext (hence
 // non-production only), enabled mode writes ciphertext.

@@ -68,7 +68,7 @@ type relayHandle struct {
 
 // startRelay launches the node binary in the relay role and parses its
 // structured stderr for the ephemeral peer id + listen addrs.
-func startRelay(t *testing.T, ctx context.Context, root, nodeBin, workdir, groupPubB64 string) *relayHandle {
+func startRelay(t *testing.T, ctx context.Context, root, serverBin, workdir, groupPubB64 string) *relayHandle {
 	t.Helper()
 	cfg := fmt.Sprintf(`log: {level: info, format: json}
 relay:
@@ -79,13 +79,13 @@ relay:
   rendezvous: {enable: false}
   limits: {reservation_per_token: 8, reservation_per_group: 16, bandwidth_per_conn: "4MiB/s"}
 `, groupPubB64)
-	cfgPath := filepath.Join(workdir, "node.yaml")
+	cfgPath := filepath.Join(workdir, "server.yaml")
 	if err := os.WriteFile(cfgPath, []byte(cfg), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	cmd := exec.CommandContext(ctx, nodeBin)
+	cmd := exec.CommandContext(ctx, serverBin)
 	cmd.Dir = workdir
-	cmd.Env = append(os.Environ(), "NODE_CONFIG="+cfgPath, "RELAY_PSK="+harnessPSKHex)
+	cmd.Env = append(os.Environ(), "SERVER_CONFIG="+cfgPath, "RELAY_PSK="+harnessPSKHex)
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
 		t.Fatal(err)

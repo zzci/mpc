@@ -101,7 +101,7 @@ jobs:
         run: |
           cp dist/release/SHA256SUMS /tmp/SUMS1
           for b in dist/release/mcpwallet-cli-linux-amd64 \
-                   dist/release/mcpwallet-node-linux-amd64; do
+                   dist/release/mcpwallet-server-linux-amd64; do
             if file "$b" | grep -q "dynamically linked"; then
               echo "::error::$b is dynamically linked (static invariant violated)"; exit 1
             fi
@@ -120,7 +120,7 @@ jobs:
           # so compare the binary checksum lines, not the manifest verbatim.)
           for name in mcpwallet-cli-linux-amd64 mcpwallet-cli-linux-arm64 \
                       mcpwallet-cli-darwin-amd64 mcpwallet-cli-darwin-arm64 \
-                      mcpwallet-node-linux-amd64; do
+                      mcpwallet-server-linux-amd64; do
             h1=$(grep "  ${name}\$" /tmp/SUMS1 | awk '{print $1}')
             h2=$(grep "  ${name}\$" dist/release/SHA256SUMS | awk '{print $1}')
             if [ -z "$h1" ] || [ "$h1" != "$h2" ]; then

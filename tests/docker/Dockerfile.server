@@ -13,7 +13,7 @@ WORKDIR /src
 # can only resolve with the full tree present — copy it all, then build (the
 # build resolves+downloads remote deps; the network is available at build).
 COPY . .
-RUN CGO_ENABLED=1 go build -trimpath -o /out/node ./cmd/node
+RUN CGO_ENABLED=1 go build -trimpath -o /out/server ./cmd/server
 
 FROM debian:stable-slim
 # wget backs the compose healthcheck; tini reaps libp2p goroutine children and
@@ -21,7 +21,7 @@ FROM debian:stable-slim
 RUN apt-get update \
   && apt-get install -y --no-install-recommends wget tini ca-certificates \
   && rm -rf /var/lib/apt/lists/*
-COPY --from=build /out/node /usr/local/bin/node
-COPY tests/docker/node-entrypoint.sh /usr/local/bin/node-entrypoint.sh
-RUN chmod +x /usr/local/bin/node-entrypoint.sh
-ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/node-entrypoint.sh"]
+COPY --from=build /out/server /usr/local/bin/server
+COPY tests/docker/server-entrypoint.sh /usr/local/bin/server-entrypoint.sh
+RUN chmod +x /usr/local/bin/server-entrypoint.sh
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/server-entrypoint.sh"]

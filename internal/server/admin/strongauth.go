@@ -35,7 +35,7 @@ func WithStrongAuth(sa StrongAuth) Option { return func(s *Server) { s.strongAut
 // WithTLS makes Start serve over TLS. For mTLS strong auth the deployment
 // supplies a *tls.Config with ClientAuth=RequireAndVerifyClientCert and a
 // client-cert pool; the package performs no certificate file IO so it stays
-// unit-testable (cmd/node builds the config after secret resolution).
+// unit-testable (cmd/server builds the config after secret resolution).
 func WithTLS(cfg *tls.Config) Option { return func(s *Server) { s.tlsCfg = cfg } }
 
 // principalKey carries the StrongAuth principal from the guard to the audit

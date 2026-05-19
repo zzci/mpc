@@ -15,16 +15,16 @@ import (
 // itself (server.md C9b: passphrase never in config/env/KMS, only via the
 // interactive admin-api).
 //
-// server.md's config chapter has no admin fields and internal/node is out of
-// this task's scope, so admin settings are read directly from TSSNODE_ADMIN__*
+// server.md's config chapter has no admin fields and internal/server is out of
+// this task's scope, so admin settings are read directly from TSSSERVER_ADMIN__*
 // environment variables — the same env-injection channel server.md's "secret handling"
 // approves for secrets, and the same local-env-override precedent already used
-// in coord.go for TSSNODE_COORD__EXTERNAL__CALLBACK_URL. Tokens are secrets:
+// in coord.go for TSSSERVER_COORD__EXTERNAL__CALLBACK_URL. Tokens are secrets:
 // they are injected via env only, never a committed literal.
 const (
-	envAdminListen       = "TSSNODE_ADMIN__LISTEN"
-	envAdminReadToken    = "TSSNODE_ADMIN__READ_TOKEN"
-	envAdminControlToken = "TSSNODE_ADMIN__CONTROL_TOKEN"
+	envAdminListen       = "TSSSERVER_ADMIN__LISTEN"
+	envAdminReadToken    = "TSSSERVER_ADMIN__READ_TOKEN"
+	envAdminControlToken = "TSSSERVER_ADMIN__CONTROL_TOKEN"
 	defaultAdminListen   = "127.0.0.1:9091" // admin.md §5: NOT public
 )
 

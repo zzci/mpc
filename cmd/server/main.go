@@ -1,6 +1,6 @@
 // Command node is the single executable entrypoint of mcp-wallet. The
 // relay / coord roles are selected by the config switches relay.enable /
-// coord.enable (node.yaml + TSSNODE_ env overrides); either or both may
+// coord.enable (server.yaml + TSSSERVER_ env overrides); either or both may
 // run. Not a subcommand, not a --role flag.
 //
 // Trust boundary (docs/design/server/server.md): co-locating in one
@@ -24,17 +24,17 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
-	"github.com/zzci/mpc/internal/node"
+	"github.com/zzci/mpc/internal/server"
 )
 
 func main() {
-	cfg, err := node.Load()
+	cfg, err := server.Load()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "node: load config:", err)
+		fmt.Fprintln(os.Stderr, "server: load config:", err)
 		os.Exit(1)
 	}
 	if err := cfg.Validate(); err != nil {
-		fmt.Fprintln(os.Stderr, "node: invalid config:", err)
+		fmt.Fprintln(os.Stderr, "server: invalid config:", err)
 		os.Exit(1)
 	}
 
@@ -46,7 +46,7 @@ func main() {
 	defer stop()
 
 	if err := run(ctx, cfg); err != nil {
-		fmt.Fprintln(os.Stderr, "node:", err)
+		fmt.Fprintln(os.Stderr, "server:", err)
 		os.Exit(1)
 	}
 }
@@ -65,7 +65,7 @@ var (
 // graceful stop. Single-role behavior is unchanged (the role just runs on ctx).
 // The relay↔coord trust boundary is unaffected — each role still reads only its
 // own config subtree and the two never cross-import (see this file's header).
-func run(ctx context.Context, cfg node.Config) error {
+func run(ctx context.Context, cfg server.Config) error {
 	switch {
 	case cfg.Relay.Enable && cfg.Coord.Enable:
 		g, gctx := errgroup.WithContext(ctx)

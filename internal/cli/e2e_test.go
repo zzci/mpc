@@ -38,8 +38,8 @@ func TestE2EMultiProcessKeygenSignReshareViaRelay(t *testing.T) {
 	}
 	root := repoRoot(t)
 	work := t.TempDir()
-	nodeBin := filepath.Join(work, "node")
-	buildBinary(t, root, "./cmd/node", nodeBin)
+	serverBin := filepath.Join(work, "server")
+	buildBinary(t, root, "./cmd/server", serverBin)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Minute)
 	defer cancel()
@@ -52,7 +52,7 @@ func TestE2EMultiProcessKeygenSignReshareViaRelay(t *testing.T) {
 	groupPubB64 := base64.StdEncoding.EncodeToString(groupKey.PubKey().SerializeCompressed())
 	groupKeyHex := hex.EncodeToString(groupKey.Serialize())
 
-	relay := startRelay(t, ctx, root, nodeBin, work, groupPubB64)
+	relay := startRelay(t, ctx, root, serverBin, work, groupPubB64)
 
 	const n, threshold = 3, 1
 	signers := []int{0, 1}

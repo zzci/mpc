@@ -14,8 +14,8 @@ False-positive sources that contain NO credentials by design:
                        contract addresses like USDT 0xdac17f..., xpubs).
   - docs/            : design/audit docs cite example digests/addresses.
 Real secrets are structurally impossible as literals here: every secret is
-an env:/file: reference, enforced at startup by node.errSecretPlaintext
-(internal/node/config.go). gitleaks therefore still meaningfully scans the
+an env:/file: reference, enforced at startup by server.errSecretPlaintext
+(internal/server/config.go). gitleaks therefore still meaningfully scans the
 real source (cmd/, internal/ non-test, scripts/) for accidental leaks.
 """
 paths = [

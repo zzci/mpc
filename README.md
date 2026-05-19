@@ -8,7 +8,7 @@ TSS MPC 自托管共管钱包的**签名内核**：基于 [tss-lib v3](external/
 
 | 路径 | 说明 |
 |---|---|
-| `cmd/node` | 单一可执行：`node relay`（零信任哑管道）/ `node coord`（信任最小化协调），运行时独立部署、独立进程、不共享状态 |
+| `cmd/server` | 单一可执行：`node relay`（零信任哑管道）/ `node coord`（信任最小化协调），运行时独立部署、独立进程、不共享状态 |
 | `cmd/cli` | 端到端测试主载体（多进程模拟 2-of-3） |
 | `internal/` | mpc / envelope / transport / relay / coord / keystore / mobileapi / addr / cli |
 | `mobile/` | RN 原生桥 + 示例 App 骨架（gomobile 绑定目标） |

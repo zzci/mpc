@@ -37,7 +37,7 @@ import (
 // the group master key -> external longpoll gets RETURNED. coord never holds a
 // share and never runs MPC.
 //
-// FORCED DEVIATION (documented for L2): cmd/node's coord role starts LOCKED
+// FORCED DEVIATION (documented for L2): cmd/server's coord role starts LOCKED
 // and only the admin-api (A-001, NOT a CLI-001 dependency, unmerged) can
 // inject the unlock passphrase — a spawned `node` coord subprocess 503s every
 // data endpoint, so the full envelope flow is unreachable through it within

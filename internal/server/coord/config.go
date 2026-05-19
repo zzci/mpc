@@ -5,8 +5,8 @@ import (
 	"time"
 )
 
-// Config is the resolved coord runtime configuration. cmd/node builds it from
-// node.CoordConfig (docs/design/server/server.md "config" chapter) after secrets are
+// Config is the resolved coord runtime configuration. cmd/server builds it from
+// server.CoordConfig (docs/design/server/server.md "config" chapter) after secrets are
 // resolved, so this package never reads files/env itself and stays unit
 // testable. Durations arrive pre-parsed.
 type Config struct {
@@ -42,7 +42,7 @@ const (
 )
 
 // validate rejects an internally inconsistent Config. Enum legality is already
-// enforced by node.Config.Validate; this guards the cross-field invariants
+// enforced by server.Config.Validate; this guards the cross-field invariants
 // coord itself relies on.
 func (c Config) validate() error {
 	if c.Listen == "" {

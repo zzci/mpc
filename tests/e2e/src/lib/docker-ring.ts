@@ -8,7 +8,7 @@
  * cryptographic/contract/MPC concern is delegated to the already finalized,
  * reused libs (coord-client, crypto, canonical, bytes, member-harness,
  * mock-extsvc, vectors) — this file only owns container lifecycle + wiring.
- * §3.1's local E2E-001 (ring.ts/node-process.ts/member-harness.ts) is
+ * §3.1's local E2E-001 (ring.ts/server-process.ts/member-harness.ts) is
  * untouched and stays GREEN.
  *
  * Environment constraints handled here (the daemon is a sibling, not local):
@@ -38,8 +38,8 @@ const SIGNERS = [0, 1]
 const RELAY_GROUP_ID = 'wallet-e2e-docker'
 const COORD_GROUP_ID = 'wallet-coord-e2e-docker'
 /** Members reach the relay ONLY by Docker DNS — never a direct/loopback addr. */
-const RELAY_ADDRS = ['/dns4/node/tcp/4001']
-const COORD_URL = 'http://node:8080'
+const RELAY_ADDRS = ['/dns4/server/tcp/4001']
+const COORD_URL = 'http://server:8080'
 const MOCK_URL = 'http://mock-extsvc:4500'
 const ALPINE = 'alpine:3.20'
 
@@ -136,7 +136,7 @@ const RELAY_STARTED = 'relay: started'
 
 async function parseRelayPeer(b: Base, deadlineMs: number): Promise<string> {
   while (Date.now() < deadlineMs) {
-    const r = await compose(b, ['logs', '--no-log-prefix', 'node'], 30_000)
+    const r = await compose(b, ['logs', '--no-log-prefix', 'server'], 30_000)
     for (const line of `${r.stdout}\n${r.stderr}`.split('\n')) {
       const at = line.indexOf('{')
       if (at < 0 || !line.includes(RELAY_STARTED))
@@ -152,7 +152,7 @@ async function parseRelayPeer(b: Base, deadlineMs: number): Promise<string> {
     }
     await Bun.sleep(500)
   }
-  throw new Error(`docker node: relay did not report "${RELAY_STARTED}" before deadline`)
+  throw new Error(`docker server: relay did not report "${RELAY_STARTED}" before deadline`)
 }
 
 async function waitHealthz(baseUrl: string, budgetMs: number): Promise<void> {
@@ -208,7 +208,7 @@ export async function inspectRz(ctx: DockerRingContext): Promise<{ files: string
 
 /**
  * Build images, render the per-run node config, create the stack, deliver the
- * node config privately, start node, attach this harness to the compose
+ * node config privately, start server, attach this harness to the compose
  * network, wait for coord/mock readiness and the relay peer id.
  */
 export async function setupDockerRing(): Promise<DockerRingContext> {
@@ -230,13 +230,13 @@ export async function setupDockerRing(): Promise<DockerRingContext> {
   for (let i = 0; i < N; i++)
     memberKeyHexByIndex.push(bytesToHex(randPriv()))
 
-  const tmpl = readFileSync(join(root, 'tests', 'docker', 'node.yaml'), 'utf8')
+  const tmpl = readFileSync(join(root, 'tests', 'docker', 'server.yaml'), 'utf8')
   const rendered = tmpl
     .split('\n')
     .filter(l => !l.startsWith('#') && l.trim() !== '')
     .join('\n')
     .replace('__GROUP_PUB_B64__', groupPubB64)
-  writeFileSync(join(ws, 'node.yaml'), `${rendered}\n`, { mode: 0o600 })
+  writeFileSync(join(ws, 'server.yaml'), `${rendered}\n`, { mode: 0o600 })
 
   const apiKey = 'ext-secret-e2e-docker'
   const env: Record<string, string> = {
@@ -271,8 +271,8 @@ export async function setupDockerRing(): Promise<DockerRingContext> {
     network = await byLabel('network', project, env)
     const volume = await byLabel('volume', project, env)
 
-    await composeOK(base, ['cp', join(ws, 'node.yaml'), 'node:/node.yaml'], 60_000)
-    await composeOK(base, ['start', 'node'], 60_000)
+    await composeOK(base, ['cp', join(ws, 'server.yaml'), 'server:/server.yaml'], 60_000)
+    await composeOK(base, ['start', 'server'], 60_000)
 
     // Attach the harness container to the compose network so service DNS
     // (node / mock-extsvc) resolves — the real cross-container path.

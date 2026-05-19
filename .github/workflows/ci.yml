@@ -46,7 +46,7 @@ jobs:
       # L1-calibrated verification gate (release merge red-line):
       # -race + -count=1 (no cache) + -timeout=1200s + -p 1 (packages
       # serialized — the calibrated fix for whole-tree -race timeouts, NOT a
-      # data race). CGO_ENABLED=1 is mandatory: -race needs cgo and cmd/node
+      # data race). CGO_ENABLED=1 is mandatory: -race needs cgo and cmd/server
       # links mutecomm/go-sqlcipher/v4 (cgo SQLCipher). The local runner wraps
       # this as `rtk test ...`; rtk is a dev-only PATH shim absent on CI
       # runners, so the raw calibrated invocation is encoded here verbatim.

@@ -29,7 +29,7 @@ log "scanning full git history for secrets"
 cd "${CI_REPO_ROOT}"
 # --config: scoped allowlist (vendored external/, test vectors/fixtures,
 # docs example digests) — real secrets are env:/file: refs by design
-# (node.errSecretPlaintext), so default rules false-positive only on
+# (server.errSecretPlaintext), so default rules false-positive only on
 # deterministic public test data, never on actual credentials.
 "${tmp}/gitleaks" detect --source . --config .gitleaks.toml \
   --redact --no-banner --verbose

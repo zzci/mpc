@@ -8,14 +8,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zzci/mpc/internal/node"
+	"github.com/zzci/mpc/internal/server"
 	"github.com/zzci/mpc/internal/server/coord"
 	"github.com/zzci/mpc/internal/server/coorddb"
 )
 
 // runCoord wires the real coord role (X-001). It builds the D-001 encrypted
 // store + in-memory presence, derives the coord runtime config from
-// node.CoordConfig, then serves the A/B/groups API. The store starts LOCKED by
+// server.CoordConfig, then serves the A/B/groups API. The store starts LOCKED by
 // design (server.md C9b): the API fail-closes 503 until an UnlockProvider
 // (admin-api, A-001) supplies the in-memory passphrase — never from
 // config/env/KMS. coord never imports internal/server/relay.
@@ -24,7 +24,7 @@ import (
 // main.go), then shuts the API + admin-api down gracefully. In the relay+coord
 // dual-role deployment this runs concurrently with runRelay on the same ctx
 // (FIX-002).
-func runCoord(ctx context.Context, cfg node.Config) error {
+func runCoord(ctx context.Context, cfg server.Config) error {
 	cc := cfg.Coord
 
 	dbPath, err := resolveRef(cc.DB.DSNRef)
@@ -46,11 +46,11 @@ func runCoord(ctx context.Context, cfg node.Config) error {
 	}
 
 	// api.md A4 needs a webhook target, but server.md config has no callback
-	// URL field; cmd/node accepts a local env override and otherwise falls
+	// URL field; cmd/server accepts a local env override and otherwise falls
 	// back to longpoll so the binary always starts (results are still served
 	// via A3/A4 longpoll). Callback-URL plumbing is a deployment concern.
 	callback := orDefault(cc.External.ResultCallback, "webhook")
-	callbackURL := os.Getenv("TSSNODE_COORD__EXTERNAL__CALLBACK_URL")
+	callbackURL := os.Getenv("TSSSERVER_COORD__EXTERNAL__CALLBACK_URL")
 	if callback == "webhook" && callbackURL == "" {
 		callback = "longpoll"
 	}
@@ -69,7 +69,7 @@ func runCoord(ctx context.Context, cfg node.Config) error {
 
 	// database.md §7.1: encryption.enable defaults true (encrypted + LOCKED,
 	// admin-api unlock). dev/test may set it false — the production iron-law
-	// guardrail in node.Config.Validate has already fail-closed any
+	// guardrail in server.Config.Validate has already fail-closed any
 	// unconfirmed disable before we reach here, so an encryptDisabled path is
 	// a confirmed non-production one.
 	encryptDisabled := !cc.DB.Encryption.Enable
@@ -131,7 +131,7 @@ func runCoord(ctx context.Context, cfg node.Config) error {
 func unlockProvider() coord.UnlockProvider { return nil }
 
 // resolveRef resolves an env:/file: secret reference (the same discipline
-// node.Config enforces). An empty ref yields an empty value; a plaintext value
+// server.Config enforces). An empty ref yields an empty value; a plaintext value
 // is rejected so secrets never come from a committed config literal.
 func resolveRef(ref string) (string, error) {
 	ref = strings.TrimSpace(ref)

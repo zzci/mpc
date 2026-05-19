@@ -29,7 +29,7 @@ type Store struct {
 	// (database.md §7.1): OpenInsecure mounts an unencrypted DB, derives
 	// no key, has no LOCKED state; Unlock is rejected. The production
 	// iron-law guardrail blocks misuse at node startup
-	// (internal/node Validate); this field only selects the mount mode.
+	// (internal/server Validate); this field only selects the mount mode.
 	plaintext bool
 
 	mu  sync.RWMutex
@@ -48,7 +48,7 @@ func NewStore(dbPath string) *Store {
 // (database.md §7.1). Still unmounted — the caller must OpenInsecure —
 // but it mounts an UNENCRYPTED DB, derives no key, and has no LOCKED
 // lifecycle. Non-production only; the production iron-law guardrail
-// fail-closes at node startup (internal/node Validate), so this type
+// fail-closes at node startup (internal/server Validate), so this type
 // does not re-check it.
 func NewPlaintextStore(dbPath string) *Store {
 	return &Store{dbPath: dbPath, plaintext: true}
@@ -57,7 +57,7 @@ func NewPlaintextStore(dbPath string) *Store {
 // Unlock derives the key from the passphrase, mounts the encrypted DB
 // and runs migrations forward, transitioning to UNLOCKED. The passphrase
 // is supplied by the caller (admin/X-001 via the N-001
-// node.UnlockProvider); this method does not copy or persist it — the
+// server.UnlockProvider); this method does not copy or persist it — the
 // caller should zeroize its own passphrase buffer after return.
 func (s *Store) Unlock(ctx context.Context, passphrase []byte) error {
 	if s.plaintext {

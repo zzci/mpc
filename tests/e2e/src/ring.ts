@@ -17,7 +17,7 @@ import { ExternalClient, MemberClient } from './lib/coord-client.ts'
 import { ethAddress, pubCompressed, tronAddress } from './lib/crypto.ts'
 import { buildBinary, repoRoot } from './lib/go-build.ts'
 import { runMembers } from './lib/member-harness.ts'
-import { startNode } from './lib/node-process.ts'
+import { startServer } from './lib/server-process.ts'
 import { EIP155_DIGEST, EIP155_RLP, HARNESS_PSK_HEX } from './lib/vectors.ts'
 
 const N = 3
@@ -41,22 +41,22 @@ export interface Phase1Result {
 
 export interface RingContext {
   workdir: string
-  nodeBin: string
+  serverBin: string
   cliBin: string
   groupKeyPriv: Uint8Array
   groupKeyPubCompressed: Uint8Array
   /** coord-side B1 member identities (m0..m2). */
   coordMembers: MemberKey[]
-  node: Awaited<ReturnType<typeof startNode>>
+  server: Awaited<ReturnType<typeof startServer>>
 }
 
 /** Build binaries + start node (relay+coord+admin, unlocked). */
 export async function setupRing(): Promise<RingContext> {
   const root = repoRoot()
   const workdir = mkdtempSync(join(tmpdir(), 'e2e-ring-'))
-  const nodeBin = join(workdir, 'node')
+  const serverBin = join(workdir, 'server')
   const cliBin = join(workdir, 'cli')
-  await buildBinary(root, './cmd/node', nodeBin)
+  await buildBinary(root, './cmd/server', serverBin)
   await buildBinary(root, './cmd/cli', cliBin)
 
   const groupKeyPriv = randPriv()
@@ -68,13 +68,13 @@ export async function setupRing(): Promise<RingContext> {
     coordMembers.push({ memberId: `m${i}`, priv, pub: pubCompressed(priv) })
   }
 
-  const node = await startNode({
-    nodeBin,
+  const server = await startServer({
+    serverBin,
     groupPubB64: Buffer.from(groupKeyPubCompressed).toString('base64'),
     pskHex: HARNESS_PSK_HEX,
   })
 
-  return { workdir, nodeBin, cliBin, groupKeyPriv, groupKeyPubCompressed, coordMembers, node }
+  return { workdir, serverBin, cliBin, groupKeyPriv, groupKeyPubCompressed, coordMembers, server }
 }
 
 /** Phase 1: relay-transported 2-of-3 keygen/sign(anchor)/reshare. */
@@ -86,8 +86,8 @@ export async function runPhase1(ctx: RingContext): Promise<Phase1Result> {
   const members = await runMembers({
     cliBin: ctx.cliBin,
     workdir: ctx.workdir,
-    relayPeerId: ctx.node.relayPeerId,
-    relayAddrs: ctx.node.relayAddrs,
+    relayPeerId: ctx.server.relayPeerId,
+    relayAddrs: ctx.server.relayAddrs,
     pskHex: HARNESS_PSK_HEX,
     groupKeyHex: bytesToHex(ctx.groupKeyPriv),
     groupId: RELAY_GROUP_ID,
@@ -121,7 +121,7 @@ export async function runPhase1(ctx: RingContext): Promise<Phase1Result> {
 
 /** Provision the coord group with the Phase-1 master key (S-002 canonical). */
 export async function provision(ctx: RingContext, masterPubUncompressed: Uint8Array): Promise<void> {
-  const ext = new ExternalClient(ctx.node.coordBaseUrl, ctx.node.apiKey)
+  const ext = new ExternalClient(ctx.server.coordBaseUrl, ctx.server.apiKey)
   await ext.provisionGroup(
     {
       version: 1,

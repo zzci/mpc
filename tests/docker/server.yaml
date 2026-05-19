@@ -2,15 +2,15 @@
 #
 # This is the canonical shape of the relay+coord dual-role config the Docker
 # E2E uses. It is byte-identical to the proven §3.1 config
-# (e2e/src/lib/node-process.ts) except the listen addresses bind 0.0.0.0
+# (e2e/src/lib/server-process.ts) except the listen addresses bind 0.0.0.0
 # instead of 127.0.0.1 so the relay/coord are reachable across the Docker
 # network boundary (no localhost shortcut).
 #
 # `relay.token_verify.group_pubkeys` is per-run (a fresh wallet-group key is
 # generated each run), so the live config is RENDERED by the harness
-# (e2e/src/lib/docker-ring.ts) into ${E2E_DOCKER_WS}/ctl/node.yaml with the
+# (e2e/src/lib/docker-ring.ts) into ${E2E_DOCKER_WS}/ctl/server.yaml with the
 # real base64 group pubkey substituted for __GROUP_PUB_B64__. Secrets stay in
-# env refs (resolved by node.Config.Validate), never inlined here.
+# env refs (resolved by server.Config.Validate), never inlined here.
 
 log: { level: info, format: json }
 relay:

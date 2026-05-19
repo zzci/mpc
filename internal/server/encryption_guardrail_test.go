@@ -1,4 +1,4 @@
-package node
+package server
 
 import (
 	"errors"
@@ -19,14 +19,14 @@ func TestEncryptionDisableProductionGuardrail(t *testing.T) {
 	coordCfg := func(encEnable bool) Config {
 		return Config{Coord: CoordConfig{
 			Enable:   true,
-			DB:       CoordDBConfig{DSNRef: "env:TSSNODE_GUARD_DSN", Encryption: CoordDBEncryptionConfig{Enable: encEnable}},
+			DB:       CoordDBConfig{DSNRef: "env:TSSSERVER_GUARD_DSN", Encryption: CoordDBEncryptionConfig{Enable: encEnable}},
 			External: CoordExternalConfig{Auth: "mtls", ResultCallback: "webhook"},
 			Quorum:   CoordQuorumConfig{SignerSelect: "liveness"},
 		}}
 	}
 
 	t.Run("disabled without confirmation -> fail-closed", func(t *testing.T) {
-		t.Setenv("TSSNODE_GUARD_DSN", "postgres://x")
+		t.Setenv("TSSSERVER_GUARD_DSN", "postgres://x")
 		// ALLOW_INSECURE_DB not set (simulates the production/release path).
 		err := coordCfg(false).Validate()
 		if !errors.Is(err, errInsecureDBNotConfirmed) {
@@ -35,7 +35,7 @@ func TestEncryptionDisableProductionGuardrail(t *testing.T) {
 	})
 
 	t.Run("disabled with wrong confirmation value -> still fail-closed", func(t *testing.T) {
-		t.Setenv("TSSNODE_GUARD_DSN", "postgres://x")
+		t.Setenv("TSSSERVER_GUARD_DSN", "postgres://x")
 		t.Setenv(allowInsecureDBEnv, "true") // only exact "1" counts as confirmation
 		err := coordCfg(false).Validate()
 		if !errors.Is(err, errInsecureDBNotConfirmed) {
@@ -44,7 +44,7 @@ func TestEncryptionDisableProductionGuardrail(t *testing.T) {
 	})
 
 	t.Run("disabled with explicit non-prod confirmation -> allowed", func(t *testing.T) {
-		t.Setenv("TSSNODE_GUARD_DSN", "postgres://x")
+		t.Setenv("TSSSERVER_GUARD_DSN", "postgres://x")
 		t.Setenv(allowInsecureDBEnv, "1")
 		if err := coordCfg(false).Validate(); err != nil {
 			t.Fatalf("confirmed non-prod disable: want nil, got %v", err)
@@ -52,7 +52,7 @@ func TestEncryptionDisableProductionGuardrail(t *testing.T) {
 	})
 
 	t.Run("encryption enabled -> guardrail never triggers", func(t *testing.T) {
-		t.Setenv("TSSNODE_GUARD_DSN", "postgres://x")
+		t.Setenv("TSSSERVER_GUARD_DSN", "postgres://x")
 		// Even if the confirm var is mis-set, the enable=true path is
 		// independent of the guardrail.
 		if err := coordCfg(true).Validate(); err != nil {
@@ -63,10 +63,10 @@ func TestEncryptionDisableProductionGuardrail(t *testing.T) {
 	t.Run("coord disabled -> guardrail not evaluated", func(t *testing.T) {
 		// relay-only node; with coord.enable=false the coord config does
 		// not participate in startup validation.
-		t.Setenv("TSSNODE_GUARD_PSK", "psk")
+		t.Setenv("TSSSERVER_GUARD_PSK", "psk")
 		cfg := Config{Relay: RelayConfig{
 			Enable:      true,
-			PnetPSKRef:  "env:TSSNODE_GUARD_PSK",
+			PnetPSKRef:  "env:TSSSERVER_GUARD_PSK",
 			TokenVerify: TokenVerifyConfig{Source: "config"},
 		}}
 		if err := cfg.Validate(); err != nil {

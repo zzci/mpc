@@ -40,7 +40,7 @@ export async function liveGate(): Promise<Gate> {
   if (!existsSync(join(repoRoot(), 'go.mod')))
     return { ok: false, reason: 'go.mod not found above e2e/' }
   if (!(await hasGoToolchain()))
-    return { ok: false, reason: 'Go toolchain unavailable (cannot build cmd/node + cmd/cli)' }
+    return { ok: false, reason: 'Go toolchain unavailable (cannot build cmd/server + cmd/cli)' }
   if (!xa001Merged()) {
     return {
       ok: false,

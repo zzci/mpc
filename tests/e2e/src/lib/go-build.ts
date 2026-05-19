@@ -1,7 +1,7 @@
 /**
  * Builds the Go binaries the suite drives as subprocesses, mirroring
  * internal/cli `repoRoot`/`buildBinary` (CGO_ENABLED=1, cwd = module root).
- * Nothing here stubs Go — the real `cmd/node` and `cmd/cli` are compiled.
+ * Nothing here stubs Go — the real `cmd/server` and `cmd/cli` are compiled.
  */
 import { existsSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'

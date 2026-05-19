@@ -12,7 +12,7 @@ import (
 // 16 is the hard reject threshold so a fat-fingered "x" cannot ship.
 const minTokenLen = 16
 
-// Config is the resolved admin-api runtime configuration. cmd/node builds it
+// Config is the resolved admin-api runtime configuration. cmd/server builds it
 // after secrets are resolved (env-only, never a committed literal), so this
 // package never reads files/env itself and stays unit testable.
 //

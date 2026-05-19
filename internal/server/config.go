@@ -1,7 +1,7 @@
 // Package node implements the node config system: built-in defaults <
 // config file < environment variables, role switches, and fail-fast
 // validation of required secrets for enabled roles (server.md "config").
-package node
+package server
 
 import (
 	"errors"
@@ -15,9 +15,9 @@ import (
 )
 
 const (
-	defaultConfigPath = "./node.yaml"
-	configPathEnv     = "NODE_CONFIG"
-	envPrefix         = "TSSNODE_"
+	defaultConfigPath = "./server.yaml"
+	configPathEnv     = "SERVER_CONFIG"
+	envPrefix         = "TSSSERVER_"
 	envNestSep        = "__"
 )
 
@@ -197,8 +197,8 @@ func defaults() Config {
 }
 
 // Load assembles config as built-in defaults < config file < env vars.
-// The path is NODE_CONFIG (default ./node.yaml); a missing default path
-// allows pure-env config, but a missing explicitly-set NODE_CONFIG errors.
+// The path is SERVER_CONFIG (default ./server.yaml); a missing default path
+// allows pure-env config, but a missing explicitly-set SERVER_CONFIG errors.
 func Load() (Config, error) {
 	cfg := defaults()
 
@@ -340,7 +340,7 @@ func applyEnvOverrides(cfg *Config) error {
 }
 
 // walkEnv recurses yaml-tagged structs, overriding scalars from
-// TSSNODE_<UPPER KEY> (nested keys joined by __).
+// TSSSERVER_<UPPER KEY> (nested keys joined by __).
 func walkEnv(v reflect.Value, prefix string) error {
 	t := v.Type()
 	for i := range t.NumField() {

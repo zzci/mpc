@@ -1,6 +1,6 @@
 # E2E-002 Docker build context trimming. The only Docker builds in this repo
 # are the E2E-002 images (tests/docker/*); none of these paths are needed to
-# build cmd/node, cmd/cli or the tests/mock module, and excluding them keeps
+# build cmd/server, cmd/cli or the tests/mock module, and excluding them keeps
 # the build context small and the build hermetic.
 .git
 **/node_modules

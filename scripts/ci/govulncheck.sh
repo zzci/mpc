@@ -11,6 +11,6 @@ log "installing govulncheck ${GOVULNCHECK_VERSION}"
 go install "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}"
 
 GOBIN="$(go env GOPATH)/bin"
-log "running govulncheck ./... (CGO_ENABLED=1 — cmd/node uses cgo SQLCipher)"
+log "running govulncheck ./... (CGO_ENABLED=1 — cmd/server uses cgo SQLCipher)"
 cd "${CI_REPO_ROOT}"
 CGO_ENABLED=1 "${GOBIN}/govulncheck" ./...

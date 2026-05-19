@@ -110,7 +110,7 @@ SigningRequest { requestId, chain, unsignedTx/intent(库视为不透明),
 >
 > **单程序双角色**:relay 与 coord 是同一二进制的两个角色,可同进程合并部署(默认,最简)或拆开独立部署/复制。**合并不削弱 relay 密码学零信任**:Noise 仍两 party 端到端、不在 relay 终结;coord 的明文信封经「外部服务→coord API」另一路径进入,不经 relay 转发。合并仅是两角色交同一运营方(信任域合并),设计保持角色内部解耦以支持随时拆分;relay 角色仍可独立复制/第三方运营。
 >
-> **配置**:`node` 经配置文件(默认 `./node.yaml`,`NODE_CONFIG` 可改)+ 环境变量覆盖(前缀 `TSSNODE_`,嵌套 `__`)控制;优先级 `默认 < 文件 < 环境变量`;secret 仅经 env/密钥文件注入,启动 fail-fast 校验。完整参数表见 `docs/design/server/server.md` 「配置」章节。
+> **配置**:`node` 经配置文件(默认 `./server.yaml`,`SERVER_CONFIG` 可改)+ 环境变量覆盖(前缀 `TSSSERVER_`,嵌套 `__`)控制;优先级 `默认 < 文件 < 环境变量`;secret 仅经 env/密钥文件注入,启动 fail-fast 校验。完整参数表见 `docs/design/server/server.md` 「配置」章节。
 
 ## 5. 重大风险与对策
 

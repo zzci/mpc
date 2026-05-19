@@ -52,7 +52,7 @@ describe('full ring (testing.md §3.1)', () => {
       await provision(ctx, master)
 
       const loc = locate()
-      mock = await startMockExtsvc(loc.dir!, ctx.node.coordBaseUrl, ctx.node.apiKey)
+      mock = await startMockExtsvc(loc.dir!, ctx.server.coordBaseUrl, ctx.server.apiKey)
       const mockClient = new MockExtsvcClient(mock.baseUrl)
 
       // External service requests the group address (api.md A1 / XA-001).
@@ -77,7 +77,7 @@ describe('full ring (testing.md §3.1)', () => {
       expect(submit.rejected ?? false).toBe(false)
 
       // Members heartbeat + approve -> quorum.
-      const members = new MemberClient(ctx.node.coordBaseUrl, COORD_GROUP_ID)
+      const members = new MemberClient(ctx.server.coordBaseUrl, COORD_GROUP_ID)
       for (const k of ctx.coordMembers.slice(0, 2)) {
         await members.heartbeat(k, `peer-${k.memberId}`)
         await members.decide(k, requestId, 'approved')
@@ -112,7 +112,7 @@ describe('full ring (testing.md §3.1)', () => {
       await members.postResult(ctx.coordMembers[0]!, requestId, rsvCompact(p1.signer))
 
       // External service longpolls and gets RETURNED + verifies.
-      const ext = new ExternalClient(ctx.node.coordBaseUrl, ctx.node.apiKey)
+      const ext = new ExternalClient(ctx.server.coordBaseUrl, ctx.server.apiKey)
       const lp = await ext.resultLongpoll(requestId, 15)
       expect(lp.status).toBe('RETURNED')
       expect(lp.rsvB64).toBeDefined()
@@ -130,7 +130,7 @@ describe('full ring (testing.md §3.1)', () => {
     }
     finally {
       await mock?.stop()
-      await ctx.node.stop()
+      await ctx.server.stop()
     }
   }, 15 * 60_000)
 })

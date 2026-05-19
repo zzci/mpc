@@ -89,10 +89,10 @@ simulated machine in its **own container** on a real Docker bridge network
 untouched and stays GREEN; this lives behind its own `E2E_DOCKER=1` switch.
 
 New artifacts only (per §3.3 "reuse, don't modify"): `docker/Dockerfile.{node,
-member,mock-extsvc}`, `docker/docker-compose.yml`, `docker/node.yaml`
+member,mock-extsvc}`, `docker/docker-compose.yml`, `docker/server.yaml`
 (reference template), `docker/*-entrypoint.sh`, the Bun/TS container adapter
 `src/lib/docker-ring.ts`, and `test/e2e-docker/`. The images build the
-*unmodified* `cmd/node`, `cmd/cli` and the finalized `mock-extsvc` module;
+*unmodified* `cmd/server`, `cmd/cli` and the finalized `mock-extsvc` module;
 no cryptographic/contract/MPC code is changed.
 
 **Topology & isolation.** One `node` container (relay+coord dual-role,

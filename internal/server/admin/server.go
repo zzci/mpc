@@ -58,7 +58,7 @@ func WithRelayMetrics(rm RelayMetrics) Option {
 }
 
 // New builds the admin-api over the shared coord store (D-001). The store
-// lifecycle (Unlock/Relock/Close) is co-owned: cmd/node creates it, coord
+// lifecycle (Unlock/Relock/Close) is co-owned: cmd/server creates it, coord
 // serves from it, and admin-api drives unlock/relock — all via the store's own
 // concurrency-safe public API.
 func New(cfg Config, store *coorddb.Store, opts ...Option) (*Server, error) {
@@ -165,7 +165,7 @@ func (s *Server) lockGate(next http.Handler) http.Handler {
 
 // Start binds the listener and serves until ctx is cancelled. The admin-api
 // must be up before coord can be unlocked (it owns the interactive unlock),
-// so cmd/node starts it ahead of the blocking coord serve.
+// so cmd/server starts it ahead of the blocking coord serve.
 func (s *Server) Start(ctx context.Context) error {
 	s.logHardeningPosture()
 	s.httpSrv = &http.Server{
@@ -213,7 +213,7 @@ func (s *Server) logHardeningPosture() {
 }
 
 // Stop shuts the HTTP server down (idempotent). It does not Relock the store —
-// store lifecycle is the caller's (cmd/node) responsibility.
+// store lifecycle is the caller's (cmd/server) responsibility.
 func (s *Server) Stop() {
 	if s.httpSrv != nil {
 		sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

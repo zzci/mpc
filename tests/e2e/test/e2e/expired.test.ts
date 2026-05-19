@@ -26,7 +26,7 @@ describe('expired path (testing.md §3.2)', () => {
       await provision(ctx, p1.masterPubUncompressed)
 
       const loc = locate()
-      mock = await startMockExtsvc(loc.dir!, ctx.node.coordBaseUrl, ctx.node.apiKey)
+      mock = await startMockExtsvc(loc.dir!, ctx.server.coordBaseUrl, ctx.server.apiKey)
       const mockClient = new MockExtsvcClient(mock.baseUrl)
 
       const requestId = REQUEST_ID
@@ -51,7 +51,7 @@ describe('expired path (testing.md §3.2)', () => {
     }
     finally {
       await mock?.stop()
-      await ctx.node.stop()
+      await ctx.server.stop()
     }
   }, 12 * 60_000)
 })

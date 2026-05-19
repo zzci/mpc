@@ -162,7 +162,7 @@ func (c *Coord) Start(ctx context.Context) error {
 
 // Stop stops the engine and the HTTP server (idempotent; used by tests and the
 // node shutdown path). It does not Relock the store — store lifecycle is the
-// caller's (cmd/node) responsibility.
+// caller's (cmd/server) responsibility.
 func (c *Coord) Stop() {
 	c.engine.stop()
 	if c.httpSrv != nil {
@@ -175,8 +175,8 @@ func (c *Coord) Stop() {
 // UnlockProvider supplies the in-memory whole-DB-encryption passphrase
 // (docs/design/server/server.md C9b: never in config/env/KMS). The implementation
 // is injected by the admin-api (A-001) at interactive unlock time; coord only
-// drives the unlock loop. It is structurally identical to node.UnlockProvider
-// so cmd/node can pass that implementation without coord importing internal/node.
+// drives the unlock loop. It is structurally identical to server.UnlockProvider
+// so cmd/server can pass that implementation without coord importing internal/server.
 type UnlockProvider interface {
 	Passphrase() ([]byte, error)
 }

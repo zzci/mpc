@@ -16,7 +16,7 @@ import (
 // invisible on the public internet. The key is a secret: server.md "secret handling"
 // forbids plaintext in committed config, mandating env:/file: injection. N-001
 // validates the reference resolves but does not expose the resolved bytes
-// (resolveSecret is unexported and internal/node is out of N-002 scope), so
+// (resolveSecret is unexported and internal/server is out of N-002 scope), so
 // the same env:/file: convention is mirrored here, restricted to producing the
 // pnet key.
 

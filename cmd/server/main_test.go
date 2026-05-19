@@ -7,22 +7,22 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zzci/mpc/internal/node"
+	"github.com/zzci/mpc/internal/server"
 )
 
 // swapRunners replaces the package role runners for the duration of a test and
 // restores them afterwards.
-func swapRunners(t *testing.T, relayFn, coordFn func(context.Context, node.Config) error) {
+func swapRunners(t *testing.T, relayFn, coordFn func(context.Context, server.Config) error) {
 	t.Helper()
 	origR, origC := runRelayFn, runCoordFn
 	runRelayFn, runCoordFn = relayFn, coordFn
 	t.Cleanup(func() { runRelayFn, runCoordFn = origR, origC })
 }
 
-func dualRoleCfg() node.Config {
-	return node.Config{
-		Relay: node.RelayConfig{Enable: true},
-		Coord: node.CoordConfig{Enable: true},
+func dualRoleCfg() server.Config {
+	return server.Config{
+		Relay: server.RelayConfig{Enable: true},
+		Coord: server.CoordConfig{Enable: true},
 	}
 }
 
@@ -33,8 +33,8 @@ func dualRoleCfg() node.Config {
 // must observe that it started even while relay is still blocking.
 func TestRunDualRoleStartsBothConcurrently(t *testing.T) {
 	var relayStarted, coordStarted atomic.Bool
-	block := func(started *atomic.Bool) func(context.Context, node.Config) error {
-		return func(ctx context.Context, _ node.Config) error {
+	block := func(started *atomic.Bool) func(context.Context, server.Config) error {
+		return func(ctx context.Context, _ server.Config) error {
 			started.Store(true)
 			<-ctx.Done()
 			return nil
@@ -77,8 +77,8 @@ func TestRunDualRoleEitherErrorFails(t *testing.T) {
 	wantErr := errors.New("relay boom")
 	var coordStopped atomic.Bool
 	swapRunners(t,
-		func(_ context.Context, _ node.Config) error { return wantErr },
-		func(ctx context.Context, _ node.Config) error {
+		func(_ context.Context, _ server.Config) error { return wantErr },
+		func(ctx context.Context, _ server.Config) error {
 			<-ctx.Done()
 			coordStopped.Store(true)
 			return nil
@@ -106,21 +106,21 @@ func TestRunDualRoleEitherErrorFails(t *testing.T) {
 func TestRunSingleRoleUnchanged(t *testing.T) {
 	cases := []struct {
 		name string
-		cfg  node.Config
+		cfg  server.Config
 	}{
-		{"relay-only", node.Config{Relay: node.RelayConfig{Enable: true}}},
-		{"coord-only", node.Config{Coord: node.CoordConfig{Enable: true}}},
+		{"relay-only", server.Config{Relay: server.RelayConfig{Enable: true}}},
+		{"coord-only", server.Config{Coord: server.CoordConfig{Enable: true}}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			var relayCalled, coordCalled atomic.Bool
 			swapRunners(t,
-				func(ctx context.Context, _ node.Config) error {
+				func(ctx context.Context, _ server.Config) error {
 					relayCalled.Store(true)
 					<-ctx.Done()
 					return nil
 				},
-				func(ctx context.Context, _ node.Config) error {
+				func(ctx context.Context, _ server.Config) error {
 					coordCalled.Store(true)
 					<-ctx.Done()
 					return nil

@@ -22,9 +22,9 @@
 
 `内置默认值  <  配置文件  <  环境变量`(环境变量覆盖文件;便于容器/CI/密钥注入)。
 
-- 配置文件路径:默认 `./node.yaml`,可由 `NODE_CONFIG` 指定。
-- 环境变量约定:前缀 `TSSNODE_`,嵌套键用 `__`(双下划线)连接,大写。
-  例:`TSSNODE_RELAY__ENABLE=true`、`TSSNODE_COORD__HTTP__LISTEN=:8080`、`TSSNODE_LOG__LEVEL=info`。
+- 配置文件路径:默认 `./server.yaml`,可由 `SERVER_CONFIG` 指定。
+- 环境变量约定:前缀 `TSSSERVER_`,嵌套键用 `__`(双下划线)连接,大写。
+  例:`TSSSERVER_RELAY__ENABLE=true`、`TSSSERVER_COORD__HTTP__LISTEN=:8080`、`TSSSERVER_LOG__LEVEL=info`。
 - 启动时校验:`relay.enable` 与 `coord.enable` 同为 false → 报错退出;声明为 secret 的必填项缺失 → fail-fast 退出。
 
 ## 配置文件示例(YAML)
@@ -36,7 +36,7 @@ metrics: { listen: ":9090" }          # 健康检查 / 指标;不记录载荷
 relay:
   enable: true
   listen: ["/ip4/0.0.0.0/tcp/4001"]
-  pnet_psk_ref: env:TSSNODE_RELAY__PNET_PSK   # secret,见下
+  pnet_psk_ref: env:TSSSERVER_RELAY__PNET_PSK   # secret,见下
   token_verify:
     source: config                     # config | coord-sync
     group_pubkeys: []                  # 自主式信任锚:组公钥集
@@ -49,14 +49,14 @@ relay:
 coord:
   enable: true
   http: { listen: ":8080" }            # 外部服务 + 成员 API
-  db:   { dsn_ref: env:TSSNODE_COORD__DB_DSN }   # secret;待签列表/状态/组公钥/推送token
+  db:   { dsn_ref: env:TSSSERVER_COORD__DB_DSN }   # secret;待签列表/状态/组公钥/推送token
   external:
     auth: mtls                         # mtls | api_key
-    api_key_ref: env:TSSNODE_COORD__EXTERNAL__API_KEY   # secret(auth=api_key 时)
+    api_key_ref: env:TSSSERVER_COORD__EXTERNAL__API_KEY   # secret(auth=api_key 时)
     result_callback: webhook           # webhook | longpoll
   push:
-    fcm_cred_ref: env:TSSNODE_COORD__PUSH__FCM   # secret
-    apns_cred_ref: env:TSSNODE_COORD__PUSH__APNS # secret
+    fcm_cred_ref: env:TSSSERVER_COORD__PUSH__FCM   # secret
+    apns_cred_ref: env:TSSSERVER_COORD__PUSH__APNS # secret
   ttl: { skew_tolerance: "30s" }
   quorum: { signer_select: liveness }  # stable | liveness
   dispatch: { timeout: "120s" }
@@ -141,7 +141,7 @@ coord:
 
 ## R6. 配置 / 接口 / 运维
 
-- 配置:见上方「配置」章节 `relay.*`(配置文件 + `TSSNODE_RELAY__*` 环境变量覆盖)。
+- 配置:见上方「配置」章节 `relay.*`(配置文件 + `TSSSERVER_RELAY__*` 环境变量覆盖)。
 - 协议:libp2p circuit-relay v2(HOP/STOP)、rendezvous、Noise、(broadcast 经 GossipSub 由客户端 `transport` 模块使用,relay 仅承载底层连接)。
 - 可观测:连接/预约/转发字节计数、拒绝原因(未授权/超配额)、健康检查端点;**不记录** peer 间载荷。
 - 安全:仅 libp2p 标准栈,无自实现加密;升级随 go-libp2p 跟进 CVE。

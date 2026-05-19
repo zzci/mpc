@@ -22,7 +22,7 @@ import (
 	ma "github.com/multiformats/go-multiaddr"
 
 	"github.com/zzci/mpc/internal/contract"
-	"github.com/zzci/mpc/internal/node"
+	"github.com/zzci/mpc/internal/server"
 )
 
 const testPSKHex = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
@@ -36,21 +36,21 @@ func testPSK(t *testing.T) []byte {
 	return k
 }
 
-// makeRelay builds a relay from a Relay-only node.Config (no coord field set):
+// makeRelay builds a relay from a Relay-only server.Config (no coord field set):
 // this is itself the coord-independence assertion (server.md R5).
 func makeRelay(t *testing.T, perToken, perGroup int, groupPubB64 string, rdv bool) *Relay {
 	t.Helper()
 	t.Setenv("TEST_RELAY_PSK", testPSKHex)
-	cfg := node.Config{
-		Relay: node.RelayConfig{
+	cfg := server.Config{
+		Relay: server.RelayConfig{
 			Enable:     true,
 			Listen:     []string{"/ip4/127.0.0.1/tcp/0"},
 			PnetPSKRef: "env:TEST_RELAY_PSK",
-			TokenVerify: node.TokenVerifyConfig{
+			TokenVerify: server.TokenVerifyConfig{
 				Source: "config", GroupPubkeys: []string{groupPubB64},
 			},
-			Rendezvous: node.RendezvousConfig{Enable: rdv},
-			Limits: node.RelayLimitsConfig{
+			Rendezvous: server.RendezvousConfig{Enable: rdv},
+			Limits: server.RelayLimitsConfig{
 				ReservationPerToken: perToken,
 				ReservationPerGroup: perGroup,
 				BandwidthPerConn:    "1MiB/s",
@@ -128,7 +128,7 @@ func TestRelayStartsCoordIndependent(t *testing.T) {
 	if r.ID() == "" {
 		t.Fatal("relay has no peer ID")
 	}
-	// node.Config above has a zero-value Coord (Enable=false): the relay
+	// server.Config above has a zero-value Coord (Enable=false): the relay
 	// constructed and runs without any coord configuration.
 }
 

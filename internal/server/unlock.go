@@ -1,4 +1,4 @@
-package node
+package server
 
 // Interface seam for DB unlock-passphrase handling (server.md C9b,
 // server/database.md §7).

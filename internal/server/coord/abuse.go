@@ -57,7 +57,7 @@ func (c *Coord) memberAllowed(ip string) bool {
 //
 //   - api_key: the presented X-API-Key must constant-time match the configured
 //     key. An empty/absent header is an explicit reject (fail-closed).
-//   - mtls: TLS termination/verification is the listener's job (cmd/node owns
+//   - mtls: TLS termination/verification is the listener's job (cmd/server owns
 //     the listener; out of this package). coord adds a defence-in-depth check:
 //     when the request actually carries TLS state, it MUST present a verified
 //     client certificate chain — a TLS connection with no/again-unverified
