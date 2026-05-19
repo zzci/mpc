@@ -1,4 +1,4 @@
-// Package node implements the node config system: built-in defaults <
+// Package server implements the server config system: built-in defaults <
 // config file < environment variables, role switches, and fail-fast
 // validation of required secrets for enabled roles (server.md "config").
 package server
