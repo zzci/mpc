@@ -2,7 +2,6 @@ package walletcli
 
 import (
 	"bufio"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -38,14 +37,24 @@ func wl(w io.Writer, a ...any) { _, _ = fmt.Fprintln(w, a...) }
 // mobile RN host that keeps a single SDK handle for the wallet's lifetime.
 // It returns a process exit code.
 func Run(args []string) int {
+	// `serve` is a subcommand (HTTP shell), not a flag — dispatch before
+	// flag parsing. Everything else is the interactive session.
+	if len(args) > 0 && args[0] == "serve" {
+		return serveHTTP(args[1:])
+	}
+
 	fs := flag.NewFlagSet("wallet", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	ksDir := fs.String("keystore", os.Getenv(keystoreEnv), "device keystore directory (or $"+keystoreEnv+")")
 	showVer := fs.Bool("version", false, "print version and exit")
 	fs.Usage = func() {
-		wf(os.Stderr, "usage: cli [--keystore DIR] [--version]\n\n"+
-			"PC wallet party — interactive session over the shared mobile SDK.\n"+
-			"Passphrase is read only from $%s.\n\n", passphraseEnv)
+		wf(os.Stderr, "usage:\n"+
+			"  cli [--keystore DIR]            interactive session\n"+
+			"  cli serve [--listen ADDR] [--keystore DIR]   HTTP service\n"+
+			"  cli --version\n\n"+
+			"PC wallet party over the shared mobile SDK. Passphrase is read\n"+
+			"only from $%s; the HTTP service binds loopback unless\n"+
+			"$"+httpTokenEnv+" is set.\n\n", passphraseEnv)
 		fs.PrintDefaults()
 		wf(os.Stderr, "\n"+helpText)
 	}
@@ -161,14 +170,12 @@ func (se *session) cmdKeygen(args []string) {
 		se.fail("%v", err)
 		return
 	}
-	cfg, _ := json.Marshal(map[string]any{"threshold": t, "parties": n, "passphrase": pass})
-	cb := newProgressCB(se.errw)
-	se.sdk.KeyGen(string(cfg), cb)
-	if o := <-cb.done; o.ok {
-		wl(se.out, o.payload)
-	} else {
-		se.fail("keygen %s: %s", o.code, o.msg)
+	summary, err := keygenOp(se.sdk, t, n, pass, se.errw)
+	if err != nil {
+		se.fail("keygen %v", err)
+		return
 	}
+	wl(se.out, summary)
 }
 
 func (se *session) cmdReshare(args []string) {
@@ -188,16 +195,12 @@ func (se *session) cmdReshare(args []string) {
 		se.fail("%v", err)
 		return
 	}
-	cfg, _ := json.Marshal(map[string]any{
-		"oldThreshold": ot, "newThreshold": nt, "newParties": nn, "passphrase": pass,
-	})
-	cb := newProgressCB(se.errw)
-	se.sdk.Reshare(string(cfg), cb)
-	if o := <-cb.done; o.ok {
-		wl(se.out, o.payload)
-	} else {
-		se.fail("reshare %s: %s", o.code, o.msg)
+	summary, err := reshareOp(se.sdk, ot, nt, nn, pass, se.errw)
+	if err != nil {
+		se.fail("reshare %v", err)
+		return
 	}
+	wl(se.out, summary)
 }
 
 func (se *session) cmdImport(args []string) {
@@ -215,7 +218,7 @@ func (se *session) cmdImport(args []string) {
 		se.fail("%v", err)
 		return
 	}
-	moniker, err := se.sdk.ImportShare(blob, pass)
+	moniker, err := importOp(se.sdk, blob, pass)
 	if err != nil {
 		se.fail("import: %v", err)
 		return
@@ -233,7 +236,7 @@ func (se *session) cmdExport(args []string) {
 		se.fail("%v", err)
 		return
 	}
-	blob, err := se.sdk.ExportShare(args[0], pass)
+	blob, err := exportOp(se.sdk, args[0], pass)
 	if err != nil {
 		se.fail("export: %v", err)
 		return
@@ -302,7 +305,7 @@ func (se *session) cmdFetch(args []string) {
 		se.fail("read req: %v", err)
 		return
 	}
-	res, err := se.sdk.FetchTransactions(string(reqJSON))
+	res, err := fetchOp(se.sdk, string(reqJSON))
 	if err != nil {
 		se.fail("fetch: %v", err)
 		return
@@ -320,7 +323,7 @@ func (se *session) cmdWire(args []string) {
 		se.fail("read msg: %v", err)
 		return
 	}
-	if err := se.sdk.OnWireMessage(b); err != nil {
+	if err := wireOp(se.sdk, b); err != nil {
 		se.fail("wire: %v", err)
 		return
 	}
