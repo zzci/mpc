@@ -49,9 +49,9 @@ relay:
   # Literal or env:/file: reference.
   pnet_psk: "env:MPC_RELAY_PNET_PSK"
   token_verify:
-    source: config                # config | coord-sync
     # Authoritative trust anchor: the wallet-group public key set that signs
-    # capability tokens (base64). Required when source=config.
+    # capability tokens (base64). The relay verifies tokens locally against
+    # these keys and never depends on coord. Required, non-empty.
     group_pubkeys:
       - "<base64-group-pubkey>"
   rendezvous:

@@ -29,9 +29,9 @@ import (
 // (groupSig = sign(groupKey, H(payload)); verify(groupPubkey, H, groupSig)).
 //
 // Trust anchor = the self-sovereign wallet-group public key set
-// (server.md:130,133). N-002 implements token_verify.source=config only; the
-// coord-sync source is rejected at startup because relay MUST NOT depend on
-// coord (server.md R5 / N-002 acceptance).
+// (server.md:130,133). The relay always verifies CapToken.groupSig
+// locally against this configured set and never depends on coord
+// (server.md R5 / change-summary item 5).
 
 // capTokenDomain separates the CapToken preimage from contract's envelope
 // ("TSS-ENVELOPE-CANONICAL-v1") and senderAuth ("TSS-SENDER-AUTH-CANONICAL-v1")
@@ -44,12 +44,6 @@ var capTokenDomain = append([]byte("TSS-CAPTOKEN-CANONICAL-v1"), 0x00)
 // registration on any such failure.
 var ErrUntrustedToken = errors.New("relay: capability token not trusted")
 
-// errCoordSyncUnsupported is returned at startup when token_verify.source is
-// coord-sync: relay must remain independent of coord (server.md R5), so N-002
-// supports only the self-sovereign config source.
-var errCoordSyncUnsupported = errors.New(
-	"relay: token_verify.source=coord-sync not supported (N-002 is config-only; relay must not depend on coord)")
-
 // trustAnchors holds the parsed self-sovereign wallet-group public keys the
 // relay verifies CapToken.groupSig against (server.md:130, R4 layer 2). Keys
 // are immutable after construction.
@@ -57,16 +51,9 @@ type trustAnchors struct {
 	pubkeys [][]byte // serialized secp256k1 public keys (compressed/uncompressed)
 }
 
-// newTrustAnchors parses the configured base64 group public key set. source
-// must be "config"; "coord-sync" is rejected to keep relay coord-independent.
-func newTrustAnchors(source string, b64Pubkeys []string) (*trustAnchors, error) {
-	switch source {
-	case "config":
-	case "coord-sync":
-		return nil, errCoordSyncUnsupported
-	default:
-		return nil, fmt.Errorf("relay: unknown token_verify.source %q", source)
-	}
+// newTrustAnchors parses the configured base64 group public key set
+// (relay-local, coord-independent; server.md change-summary item 5).
+func newTrustAnchors(b64Pubkeys []string) (*trustAnchors, error) {
 	if len(b64Pubkeys) == 0 {
 		return nil, errors.New("relay: token_verify.group_pubkeys is empty (no trust anchor)")
 	}

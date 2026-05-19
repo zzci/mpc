@@ -63,10 +63,11 @@ type RelayConfig struct {
 	Limits      RelayLimitsConfig `yaml:"limits"`
 }
 
-// TokenVerifyConfig is the capability-token verify-key source
-// (self-sovereign trust anchor).
+// TokenVerifyConfig holds the self-sovereign trust anchor for
+// capability-token verification: relay verifies CapToken.groupSig
+// locally against this group public key set and never depends on coord
+// (server.md R5 / change-summary item 5).
 type TokenVerifyConfig struct {
-	Source       string   `yaml:"source"`
 	GroupPubkeys []string `yaml:"group_pubkeys"`
 }
 
@@ -206,8 +207,7 @@ func defaults() Config {
 		Log:     LogConfig{Level: "info", Format: "json"},
 		Metrics: MetricsConfig{Listen: ":9090"},
 		Relay: RelayConfig{
-			TokenVerify: TokenVerifyConfig{Source: "config"},
-			Rendezvous:  RendezvousConfig{Enable: true},
+			Rendezvous: RendezvousConfig{Enable: true},
 			Limits: RelayLimitsConfig{
 				ReservationPerToken: 4,
 				ReservationPerGroup: 8,
@@ -277,10 +277,6 @@ func (c Config) Validate() error {
 		return ErrNoRoleEnabled
 	}
 	if c.Relay.Enable {
-		if err := validateEnum("relay.token_verify.source", c.Relay.TokenVerify.Source,
-			"config", "coord-sync"); err != nil {
-			return err
-		}
 		if _, err := resolveValue(c.Relay.PnetPSK); err != nil {
 			return fmt.Errorf("relay enabled: pnet_psk: %w", err)
 		}

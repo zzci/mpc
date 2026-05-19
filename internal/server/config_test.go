@@ -51,7 +51,7 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.Coord.HTTP.Listen != ":8080" {
 		t.Errorf("coord defaults lost: %+v", cfg.Coord)
 	}
-	if cfg.Relay.TokenVerify.Source != "config" || !cfg.Relay.Rendezvous.Enable {
+	if !cfg.Relay.Rendezvous.Enable {
 		t.Errorf("relay defaults lost: %+v", cfg.Relay)
 	}
 }
@@ -213,9 +213,8 @@ func TestValidateRequiredValueFailFast(t *testing.T) {
 		{
 			"relay pnet_psk missing",
 			Config{Relay: RelayConfig{
-				Enable:      true,
-				PnetPSK:     "env:REF_UNSET",
-				TokenVerify: TokenVerifyConfig{Source: "config"},
+				Enable:  true,
+				PnetPSK: "env:REF_UNSET",
 			}},
 		},
 		{
@@ -299,9 +298,8 @@ func TestValidateCallbackAuthRequired(t *testing.T) {
 // secret-must-be-a-reference rule — a plaintext literal is a valid value.
 func TestValidateLiteralAccepted(t *testing.T) {
 	cfg := Config{Relay: RelayConfig{
-		Enable:      true,
-		PnetPSK:     "a-literal-psk-value",
-		TokenVerify: TokenVerifyConfig{Source: "config"},
+		Enable:  true,
+		PnetPSK: "a-literal-psk-value",
 	}}
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("literal value: want nil, got %v", err)
@@ -318,10 +316,6 @@ func TestValidateEnum(t *testing.T) {
 		name string
 		cfg  Config
 	}{
-		{"relay source", Config{Relay: RelayConfig{
-			Enable: true, PnetPSK: "env:" + refPSK,
-			TokenVerify: TokenVerifyConfig{Source: "bogus"},
-		}}},
 		{"coord signer_select", func() Config {
 			c := fullCoord("env:"+refDSN, "env:"+refKey, "env:"+refRW, "env:"+refNW)
 			c.Quorum.SignerSelect = "bogus"
@@ -378,7 +372,6 @@ relay:
   listen: ["/ip4/0.0.0.0/tcp/4001"]
   pnet_psk: env:REF_RELAY_PSK
   token_verify:
-    source: config
     group_pubkeys: ["pk1", "pk2"]
   rendezvous: { enable: true }
   limits:
@@ -416,7 +409,6 @@ coord:
 		"relay.enable":                       cfg.Relay.Enable,
 		"relay.listen":                       len(cfg.Relay.Listen) == 1 && cfg.Relay.Listen[0] == "/ip4/0.0.0.0/tcp/4001",
 		"relay.pnet_psk":                     cfg.Relay.PnetPSK == "env:REF_RELAY_PSK",
-		"relay.token_verify.source":          cfg.Relay.TokenVerify.Source == "config",
 		"relay.token_verify.group_pubkeys":   len(cfg.Relay.TokenVerify.GroupPubkeys) == 2,
 		"relay.rendezvous.enable":            cfg.Relay.Rendezvous.Enable,
 		"relay.limits.reservation_per_token": cfg.Relay.Limits.ReservationPerToken == 4,
@@ -454,9 +446,8 @@ func TestValidateFullValid(t *testing.T) {
 	t.Setenv(refNW, "https://ext/notify")
 	cfg := Config{
 		Relay: RelayConfig{
-			Enable:      true,
-			PnetPSK:     "env:" + refPSK,
-			TokenVerify: TokenVerifyConfig{Source: "config"},
+			Enable:  true,
+			PnetPSK: "env:" + refPSK,
 		},
 		Coord: fullCoord("env:"+refDSN, "env:"+refKey, "env:"+refRW, "env:"+refNW),
 	}

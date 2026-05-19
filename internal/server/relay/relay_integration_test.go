@@ -47,7 +47,7 @@ func makeRelay(t *testing.T, perToken, perGroup int, groupPubB64 string, rdv boo
 			Listen:  []string{"/ip4/127.0.0.1/tcp/0"},
 			PnetPSK: "env:TEST_RELAY_PSK",
 			TokenVerify: server.TokenVerifyConfig{
-				Source: "config", GroupPubkeys: []string{groupPubB64},
+				GroupPubkeys: []string{groupPubB64},
 			},
 			Rendezvous: server.RendezvousConfig{Enable: rdv},
 			Limits: server.RelayLimitsConfig{

@@ -46,16 +46,13 @@ func validToken(scope contract.CapScope) *contract.CapToken {
 func TestNewTrustAnchors(t *testing.T) {
 	_, pub := mustGroupKey(t)
 
-	if _, err := newTrustAnchors("config", []string{pub}); err != nil {
-		t.Fatalf("config source: unexpected err %v", err)
+	if _, err := newTrustAnchors([]string{pub}); err != nil {
+		t.Fatalf("configured anchor set: unexpected err %v", err)
 	}
-	if _, err := newTrustAnchors("coord-sync", []string{pub}); !errors.Is(err, errCoordSyncUnsupported) {
-		t.Fatalf("coord-sync must be rejected (relay coord-independent), got %v", err)
-	}
-	if _, err := newTrustAnchors("config", nil); err == nil {
+	if _, err := newTrustAnchors(nil); err == nil {
 		t.Fatal("empty anchor set must error")
 	}
-	if _, err := newTrustAnchors("config", []string{"!!not-base64!!"}); err == nil {
+	if _, err := newTrustAnchors([]string{"!!not-base64!!"}); err == nil {
 		t.Fatal("bad base64 must error")
 	}
 }
@@ -90,7 +87,7 @@ func TestCapTokenDigestDeterministicAndBound(t *testing.T) {
 
 func TestVerifyCapToken(t *testing.T) {
 	priv, pub := mustGroupKey(t)
-	ta, err := newTrustAnchors("config", []string{pub})
+	ta, err := newTrustAnchors([]string{pub})
 	if err != nil {
 		t.Fatalf("anchors: %v", err)
 	}

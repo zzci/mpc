@@ -73,9 +73,8 @@ func TestEncryptionDisableProductionGuardrail(t *testing.T) {
 		// not participate in startup validation.
 		t.Setenv("REF_GUARD_PSK", "psk")
 		cfg := Config{Relay: RelayConfig{
-			Enable:      true,
-			PnetPSK:     "env:REF_GUARD_PSK",
-			TokenVerify: TokenVerifyConfig{Source: "config"},
+			Enable:  true,
+			PnetPSK: "env:REF_GUARD_PSK",
 		}}
 		if err := cfg.Validate(); err != nil {
 			t.Fatalf("relay-only with coord disabled: want nil, got %v", err)

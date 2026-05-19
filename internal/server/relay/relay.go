@@ -58,7 +58,7 @@ func New(cfg server.Config, log *slog.Logger) (*Relay, error) {
 	if err != nil {
 		return nil, fmt.Errorf("relay: pnet psk: %w", err)
 	}
-	anchors, err := newTrustAnchors(rc.TokenVerify.Source, rc.TokenVerify.GroupPubkeys)
+	anchors, err := newTrustAnchors(rc.TokenVerify.GroupPubkeys)
 	if err != nil {
 		return nil, err
 	}
