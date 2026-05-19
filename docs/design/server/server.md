@@ -18,25 +18,40 @@
 
 # 配置(配置文件 + 环境变量)
 
-## 来源与优先级
+## 来源与优先级(用户裁定 2026-05-19 —— Traefik 式三源)
 
-`内置默认值  <  配置文件  <  环境变量`(环境变量覆盖文件;便于容器/CI/密钥注入)。
+`内置默认值  <  配置文件  <  环境变量  <  CLI 参数`(后者覆盖前者,CLI 最高,
+与 Traefik 一致,便于运维临时覆盖)。三源**统一键空间**,任一键可由三种方式提供:
 
-- 配置文件路径:默认 `./server.yaml`,可由 `SERVER_CONFIG` 指定。
-- 环境变量约定:前缀 `TSSSERVER_`,嵌套键用 `__`(双下划线)连接,大写。
-  例:`TSSSERVER_RELAY__ENABLE=true`、`TSSSERVER_COORD__HTTP__LISTEN=:8080`、`TSSSERVER_LOG__LEVEL=info`。
-- 启动时校验:`relay.enable` 与 `coord.enable` 同为 false → 报错退出;声明为 secret 的必填项缺失 → fail-fast 退出。
+- **配置文件**:默认 `./server.yaml`,可由 `SERVER_CONFIG` 或 CLI `--config <path>` 指定。
+- **环境变量**:前缀 `TSSSERVER_`,嵌套键用 `__`(双下划线)连接,大写。
+  例:`TSSSERVER_RELAY__ENABLE=true`、`TSSSERVER_COORD__HTTP__LISTEN=:8080`。
+- **CLI 参数**:`--<点分键>=<值>`,与配置键一一对应。
+  例:`--coord.http.listen=:8080`、`--relay.enable=true`、`--log.level=debug`。
+- 启动校验:`relay.enable` 与 `coord.enable` 同为 false → 报错退出;已启用角色的
+  必填项缺失 → fail-fast 退出。
+
+## 取值:字面量或引用(用户裁定 2026-05-19)
+
+任一配置值既可写**字面量**,也可写 `env:VAR` / `file:/path` **引用**(运维自择;
+不再强制 secret 必须为引用)。引用在加载时解析,字面量原样使用。
+
+> 安全说明:允许字面量是运维灵活性的有意取舍;真实 secret 以明文写入**提交到
+> 仓库**的配置文件仍是运维须自行规避的风险(推荐 secret 用 `env:`/`file:` 或
+> CLI 注入)。**DB 解锁口令仍是绝对例外**:不得进配置文件/env/CLI/KMS,仅经
+> `admin-api` 解锁交互提供、内存驻留、重锁即清零(C9b、database.md §7)。生产
+> 整库加密 fail-closed 护栏不受本变更影响(database.md §7.1)。
 
 ## 配置文件示例(YAML)
 
 ```yaml
-log:   { level: info, format: json }
+log: { level: info, format: json }
 metrics: { listen: ":9090" }          # 健康检查 / 指标;不记录载荷
 
 relay:
   enable: true
   listen: ["/ip4/0.0.0.0/tcp/4001"]
-  pnet_psk_ref: env:TSSSERVER_RELAY__PNET_PSK   # secret,见下
+  pnet_psk: env:TSSSERVER_RELAY__PNET_PSK   # 字面量或 env:/file: 引用
   token_verify:
     source: config                     # config | coord-sync
     group_pubkeys: []                  # 自主式信任锚:组公钥集
@@ -45,18 +60,17 @@ relay:
     reservation_per_token: 4
     reservation_per_group: 8
     bandwidth_per_conn: "1MiB/s"
+    circuit_max_duration: "10m"        # keygen-aware(security.md #10)
 
 coord:
   enable: true
   http: { listen: ":8080" }            # 外部服务 + 成员 API
-  db:   { dsn_ref: env:TSSSERVER_COORD__DB_DSN }   # secret;待签列表/状态/组公钥/推送token
+  db: { dsn: env:TSSSERVER_COORD__DB_DSN }   # 字面量或引用
   external:
-    auth: mtls                         # mtls | api_key
-    api_key_ref: env:TSSSERVER_COORD__EXTERNAL__API_KEY   # secret(auth=api_key 时)
-    result_callback: webhook           # webhook | longpoll
-  push:
-    fcm_cred_ref: env:TSSSERVER_COORD__PUSH__FCM   # secret
-    apns_cred_ref: env:TSSSERVER_COORD__PUSH__APNS # secret
+    api_key: env:TSSSERVER_COORD__EXTERNAL__API_KEY        # 鉴权固定 api_key
+    result_webhook: env:TSSSERVER_COORD__EXTERNAL__RESULT_WEBHOOK  # 结果固定 webhook
+  notify:
+    webhook: env:TSSSERVER_COORD__NOTIFY__WEBHOOK  # 单一固定通知 webhook
   ttl: { skew_tolerance: "30s" }
   quorum: { signer_select: liveness }  # stable | liveness
   dispatch: { timeout: "120s" }
@@ -64,34 +78,46 @@ coord:
 
 ## 参数表
 
-| 键 | 说明 | secret |
+| 键 | 说明 | 含 secret |
 |---|---|:--:|
 | `log.level` / `log.format` | 日志级别 / 格式 | |
 | `metrics.listen` | 健康检查与指标监听地址(不含载荷) | |
 | `relay.enable` | 启用 relay 角色 | |
 | `relay.listen` | libp2p 监听 multiaddrs | |
 | `relay.pnet_psk` | private network 32B swarm key | ✅ |
-| `relay.token_verify.source` | 能力令牌验签公钥来源:`config` 或向 coord 同步 | |
+| `relay.token_verify.source` | 能力令牌验签公钥来源:`config` / `coord-sync` | |
 | `relay.token_verify.group_pubkeys` | 自主式信任锚:钱包组公钥集 | |
 | `relay.rendezvous.enable` | 启用 rendezvous 发现 | |
-| `relay.limits.*` | 预约/连接/带宽配额(防 DoS) | |
+| `relay.limits.*` | 预约/连接/带宽/circuit 时长配额(防 DoS) | |
 | `coord.enable` | 启用 coord 角色 | |
 | `coord.http.listen` | 外部服务 + 成员 API 监听地址 | |
-| `coord.db.dsn` | 持久化连接串(待签列表/状态机/组公钥/推送 token) | ✅ |
-| `coord.external.auth` | 外部服务鉴权方式:`mtls` / `api_key` | |
-| `coord.external.api_key` | 外部服务 API Key(auth=api_key 时) | ✅ |
-| `coord.external.result_callback` | 结果回传方式:`webhook` / `longpoll` | |
-| `coord.push.fcm` / `coord.push.apns` | 推送凭证 | ✅ |
+| `coord.db.dsn` | 持久化连接串 | ✅ |
+| `coord.external.api_key` | 外部服务 API Key(鉴权**固定** api_key,恒必填) | ✅ |
+| `coord.external.result_webhook` | 结果回传 webhook URL(结果回传**固定** webhook,恒必填) | ✅ |
+| `coord.notify.webhook` | **单一固定**通知 webhook:coord 仅 POST 通知事件,FCM/APNS 等由外部通知渠道处理(coord 不再持任何推送凭证) | ✅ |
 | `coord.ttl.skew_tolerance` | 时钟偏移容差(超出保守判过期) | |
 | `coord.quorum.signer_select` | 签名子集选取策略:`stable` / `liveness` | |
 | `coord.dispatch.timeout` | 派发后等待签名完成超时(须 < 剩余 TTL) | |
 
-## 密钥处理
+## 变更摘要(用户裁定 2026-05-19)
 
-- 标 secret 的项**禁止**写入提交到仓库的配置文件;一律经环境变量或挂载的密钥文件注入(配置中以 `env:VAR` / `file:/path` 引用)。
-- 启动时校验所有已启用角色的必填 secret 存在,缺失即 fail-fast,不带降级默认值。
+1. **通知 = 单一固定 webhook**:删除 `coord.push.{fcm,apns}` 与一切推送凭证;
+   coord 仅向 `coord.notify.webhook` POST 通知事件,FCM/APNS/其它由**外部通知
+   渠道**翻译投递。coord 不再区分 fcm/apns、不再持推送凭证。
+2. **external 鉴权固定 `api_key`**(删除 `auth` 枚举与 `mtls` 选项,`api_key`
+   恒必填);**结果回传固定 `webhook`**(删除 `result_callback` 枚举与
+   `longpoll` 路径,`result_webhook` URL 恒必填)。
+3. **配置框架 = Traefik 式三源**:文件 + 环境变量 + CLI 参数,统一键空间、
+   `默认<文件<env<CLI` 优先级;任一值可为**字面量或 `env:`/`file:` 引用**
+   (解除「secret 必须为引用、明文禁止」硬约束)。DB 解锁口令例外与生产加密
+   fail-closed 护栏**不变**。
+
+## 密钥处理(随上款修订)
+
+- 已启用角色的必填项缺失 → 启动 fail-fast,不带降级默认值。
 - 持久化层**绝不存**分片/私钥/PSK 明文(见 C9)。
-- **DB 解锁口令是例外**:**不得**进配置文件/env/KMS(入了即失去防文件泄露意义);仅经 `admin-api` 解锁时交互提供,内存驻留、重锁即清零(见 C9b、server/database.md §7)。
+- **DB 解锁口令绝对例外**:不得进配置文件/env/CLI/KMS;仅 `admin-api` 解锁交互
+  提供、内存驻留、重锁清零(C9b、server/database.md §7)。
 
 ---
 
