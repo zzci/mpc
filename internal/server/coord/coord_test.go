@@ -80,10 +80,9 @@ func newHarness(t *testing.T, opts ...Option) *harness {
 	cfg := Config{
 		Listen:          "127.0.0.1:0",
 		DBPath:          dbPath,
-		ExternalAuth:    authAPIKey,
 		APIKey:          "secret-key",
-		ResultCallback:  callbackWebhook,
 		CallbackURL:     cb.URL,
+		NotifyWebhook:   cb.URL,
 		SkewTolerance:   0,
 		SignerSelect:    signerStable,
 		DispatchTimeout: 2 * time.Minute,

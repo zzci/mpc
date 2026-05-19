@@ -16,15 +16,20 @@ log: { level: info, format: json }
 relay:
   enable: true
   listen: ["/ip4/0.0.0.0/tcp/4001"]
-  pnet_psk_ref: "env:RELAY_PNET_PSK"
+  pnet_psk: "env:RELAY_PNET_PSK"
   token_verify: { source: config, group_pubkeys: ["__GROUP_PUB_B64__"] }
   rendezvous: { enable: false }
   limits: { reservation_per_token: 8, reservation_per_group: 16, bandwidth_per_conn: "4MiB/s" }
 coord:
   enable: true
   http: { listen: "0.0.0.0:8080" }
-  db: { dsn_ref: "env:COORD_DB_DSN", encryption: { enable: false } }
-  external: { auth: api_key, api_key_ref: "env:COORD_API_KEY", result_callback: longpoll }
+  db: { dsn: "env:COORD_DB_DSN", encryption: { enable: false } }
+  # Config framework v2 (user ruling 2026-05-19): external auth fixed
+  # api_key, result delivery fixed webhook, notification single fixed
+  # webhook (all required). The Docker E2E fetches results via the A4
+  # long-poll endpoint; the webhook targets are unused discard URLs.
+  external: { api_key: "env:COORD_API_KEY", result_webhook: "http://127.0.0.1:9/result" }
+  notify: { webhook: "http://127.0.0.1:9/notify" }
   ttl: { skew_tolerance: "2m" }
   quorum: { signer_select: stable }
   dispatch: { timeout: "2m" }

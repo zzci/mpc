@@ -40,9 +40,12 @@ func TestResolvePSK(t *testing.T) {
 		}
 	})
 
-	t.Run("plaintext rejected", func(t *testing.T) {
-		if _, err := resolvePSK(hex.EncodeToString(key)); err == nil {
-			t.Fatal("plaintext literal must be rejected (env:/file: only)")
+	t.Run("literal accepted", func(t *testing.T) {
+		// Config framework v2 (user ruling 2026-05-19): a literal value is
+		// allowed alongside env:/file: references.
+		got, err := resolvePSK(hex.EncodeToString(key))
+		if err != nil || len(got) != pskLen {
+			t.Fatalf("literal psk: got %d bytes, err %v", len(got), err)
 		}
 	})
 

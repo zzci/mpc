@@ -73,7 +73,6 @@ func newMockCoord(t *testing.T, memberPub []byte, groupID string) *mockCoord {
 			h(w, r, params)
 		})
 	}
-	register("PUT /v1/members/self/push", "B2:push", false)
 	register("POST /v1/members/self/heartbeat", "B5:heartbeat", false)
 	register("GET /v1/groups/{groupId}/pending", "B3:pending", true)
 	register("POST /v1/requests/{requestId}/decision", "B4:decision:", false)
@@ -88,8 +87,6 @@ func newMockCoord(t *testing.T, memberPub []byte, groupID string) *mockCoord {
 // routeKey collapses a concrete request to the registered handler key.
 func routeKey(r *http.Request) string {
 	switch {
-	case r.URL.Path == "/v1/members/self/push":
-		return "push"
 	case r.URL.Path == "/v1/members/self/heartbeat":
 		return "heartbeat"
 	case hasSuffix(r.URL.Path, "/pending"):

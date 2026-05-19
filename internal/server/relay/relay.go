@@ -54,7 +54,7 @@ func New(cfg server.Config, log *slog.Logger) (*Relay, error) {
 		return nil, errors.New("relay: relay.listen is empty (a relay with no listen address is undialable)")
 	}
 
-	psk, err := resolvePSK(rc.PnetPSKRef)
+	psk, err := resolvePSK(rc.PnetPSK)
 	if err != nil {
 		return nil, fmt.Errorf("relay: pnet psk: %w", err)
 	}

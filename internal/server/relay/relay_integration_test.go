@@ -43,9 +43,9 @@ func makeRelay(t *testing.T, perToken, perGroup int, groupPubB64 string, rdv boo
 	t.Setenv("TEST_RELAY_PSK", testPSKHex)
 	cfg := server.Config{
 		Relay: server.RelayConfig{
-			Enable:     true,
-			Listen:     []string{"/ip4/127.0.0.1/tcp/0"},
-			PnetPSKRef: "env:TEST_RELAY_PSK",
+			Enable:  true,
+			Listen:  []string{"/ip4/127.0.0.1/tcp/0"},
+			PnetPSK: "env:TEST_RELAY_PSK",
 			TokenVerify: server.TokenVerifyConfig{
 				Source: "config", GroupPubkeys: []string{groupPubB64},
 			},

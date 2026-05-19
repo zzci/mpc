@@ -16,8 +16,9 @@ import (
 const maxDispatchWait = 60 * time.Second
 
 // ReceiveStart long-polls for a START signal
-// (api.md B6, GET /v1/groups/{groupId}/dispatch?wait=…). Push (FCM/APNs) is
-// the primary wake; this is the long-poll compensation (api.md:57). wait is
+// (api.md B6, GET /v1/groups/{groupId}/dispatch?wait=…). The single
+// notification webhook is an out-of-band nudge (ruling 2026-05-19); this
+// long-poll is the authoritative wake path (api.md:57). wait is
 // clamped to (0, 60s]; on timeout the coord returns an empty object and this
 // returns ok=false with a nil START (not an error) so the caller simply polls
 // again. A returned START still MUST be re-verified before MPC (protocol.md

@@ -7,9 +7,9 @@ import (
 )
 
 // dispatchHub delivers START to signer devices via the B6 long-poll channel
-// (api.md:57). Push (FCM/APNs) is the preferred wake but needs external
-// services; long-poll is the in-process-testable path and the contractual
-// fallback. A START is buffered per (groupId, memberId) so a signer that polls
+// (api.md:57). The single notification webhook is an out-of-band nudge
+// (ruling 2026-05-19); long-poll is the authoritative in-process-testable
+// path. A START is buffered per (groupId, memberId) so a signer that polls
 // slightly after dispatch still receives it.
 type dispatchHub struct {
 	mu      sync.Mutex

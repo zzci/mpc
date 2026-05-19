@@ -40,11 +40,13 @@ type Coord struct {
 	httpSrv *http.Server
 }
 
-// Notifier wakes a member device out-of-band when a START is dispatched (B6
-// FCM/APNs). Real push needs external credentials/services unavailable in the
-// in-process E2E environment; the long-poll dispatch channel (B6 fallback) is
-// the testable path, so the default Notifier is a no-op and a production
-// Notifier is injected via Options. coord never blocks on it.
+// Notifier wakes member devices out-of-band when a START is dispatched.
+// Per the single-fixed-webhook ruling 2026-05-19 coord only POSTs a
+// notification event to one webhook (no FCM/APNs distinction, no push
+// credentials); an external notification channel translates/delivers it.
+// The long-poll dispatch channel (B6) is the in-process-testable path, so
+// the default Notifier is a no-op and a real one is injected via Options.
+// coord never blocks on it.
 type Notifier interface {
 	NotifyDispatch(ctx context.Context, groupID string, signers []string)
 }
@@ -124,7 +126,6 @@ func New(cfg Config, store *coorddb.Store, presence *coorddb.Presence, opts ...O
 		memberRL:        newRateLimiter(memberDefaultMax, time.Minute),
 	}
 	c.callback = callbackSink{
-		mode:   cfg.ResultCallback,
 		url:    cfg.CallbackURL,
 		client: &http.Client{Timeout: 10 * time.Second},
 		log:    c.log,

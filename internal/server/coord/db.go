@@ -16,8 +16,8 @@ import (
 // another task and MUST NOT be modified; it exports Store.WithTx plus a few
 // helpers (ProvisionGroup/RecordTransition/RequestStatus/GroupEpoch/presence).
 // Everything coord needs beyond those helpers (group/member reads, full
-// envelope persistence incl. business_info, pending listing, approvals, push
-// tokens, signer/result columns, reshare) is done here as raw SQL against the
+// envelope persistence incl. business_info, pending listing, approvals,
+// signer/result columns, reshare) is done here as raw SQL against the
 // D-001 migration schema through Store.WithTx, which runs BEGIN IMMEDIATE on
 // the single-writer connection (database.md §5) so reads and writes serialize
 // correctly. LOCKED is enforced by Store itself: WithTx returns
@@ -389,21 +389,6 @@ func (d *db) decisions(ctx context.Context, requestID string) (map[string]string
 		return rows.Err()
 	})
 	return out, err
-}
-
-// savePushToken upserts a member's push token (B2, api.md:39).
-func (d *db) savePushToken(ctx context.Context, groupID, memberID, platform, token, atISO string) error {
-	return d.store.WithTx(ctx, func(tx *sql.Tx) error {
-		if _, err := tx.ExecContext(ctx,
-			`INSERT INTO push_tokens (group_id, member_id, platform, token, updated_at)
-			 VALUES (?, ?, ?, ?, ?)
-			 ON CONFLICT(group_id, member_id, platform)
-			 DO UPDATE SET token = excluded.token, updated_at = excluded.updated_at`,
-			groupID, memberID, platform, token, atISO); err != nil {
-			return fmt.Errorf("coord: save push token: %w", err)
-		}
-		return nil
-	})
 }
 
 // nullBytesAsText stores businessInfo JSON bytes in the TEXT column, or NULL

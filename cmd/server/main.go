@@ -1,7 +1,7 @@
 // Command node is the single executable entrypoint of mcp-wallet. The
 // relay / coord roles are selected by the config switches relay.enable /
-// coord.enable (server.yaml + TSSSERVER_ env overrides); either or both may
-// run. Not a subcommand, not a --role flag.
+// coord.enable (server.yaml + MPC_ env overrides + CLI flags); either or
+// both may run. Not a subcommand, not a --role flag.
 //
 // Trust boundary (docs/design/server/server.md): co-locating in one
 // process does not weaken the relay's cryptographic zero-trust — Noise

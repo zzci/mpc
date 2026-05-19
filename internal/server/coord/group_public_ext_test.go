@@ -31,7 +31,7 @@ func TestGroupPublicExt_ReturnsSlimAddresses(t *testing.T) {
 	h := newHarness(t)
 	g := h.provision(t, "grp-ext", 2, 3)
 
-	// h.do supplies X-API-Key (cfg ExternalAuth=api_key) — the external chain.
+	// h.do supplies X-API-Key (external auth is fixed api_key) — the external chain.
 	r := h.do(t, http.MethodGet, "/v1/groups/"+g.groupID+"/public", nil, nil)
 	if r.code != http.StatusOK {
 		t.Fatalf("ext public: %d %s", r.code, r.text())

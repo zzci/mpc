@@ -41,8 +41,9 @@ func (c *Coord) router() http.Handler {
 	mux.Handle("GET /v1/requests/{requestId}", c.lockGate(c.extGate(c.extAuth(c.hStatus))))
 	mux.Handle("GET /v1/requests/{requestId}/result", c.lockGate(c.extGate(c.extAuth(c.hResultLongpoll))))
 
-	// B — member SDK.
-	mux.Handle("PUT /v1/members/self/push", c.lockGate(http.HandlerFunc(c.hPush)))
+	// B — member SDK. (B2 register-push-token removed with the
+	// single-fixed-webhook ruling 2026-05-19: coord holds no push
+	// credentials/tokens; an external notification channel owns delivery.)
 	mux.Handle("POST /v1/members/self/heartbeat", c.lockGate(http.HandlerFunc(c.hHeartbeat)))
 	mux.Handle("GET /v1/groups/{groupId}/pending", c.lockGate(http.HandlerFunc(c.hPending)))
 	mux.Handle("POST /v1/requests/{requestId}/decision", c.lockGate(http.HandlerFunc(c.hDecision)))
@@ -78,10 +79,9 @@ func (c *Coord) lockGate(next http.Handler) http.Handler {
 }
 
 // extAuth enforces external-service auth (api.md A1) via the hardened
-// checkExternalAuth gate: api_key is constant-time compared and an absent key
-// is an explicit reject; mtls additionally rejects a TLS request that carries
-// no verified client-cert chain (defence-in-depth — see checkExternalAuth).
-// The envelope-level proposerSig (verified in ingest) remains the
+// checkExternalAuth gate: external auth is fixed api_key (user ruling
+// 2026-05-19), constant-time compared, and an absent key is an explicit
+// reject. The envelope-level proposerSig (verified in ingest) remains the
 // cryptographic binding regardless of transport auth.
 func (c *Coord) extAuth(next http.HandlerFunc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -170,34 +170,6 @@ func (c *Coord) hResultLongpoll(w http.ResponseWriter, r *http.Request) {
 }
 
 // --- B endpoints ---------------------------------------------------------
-
-// pushBody is the B2 payload (api.md:39).
-type pushBody struct {
-	GroupID  string `json:"groupId"`
-	MemberID string `json:"memberId"`
-	Platform string `json:"platform"`
-	Token    string `json:"token"`
-}
-
-func (c *Coord) hPush(w http.ResponseWriter, r *http.Request) {
-	var b pushBody
-	raw, ok := c.readJSON(w, r, &b)
-	if !ok {
-		return
-	}
-	if b.Platform != "fcm" && b.Platform != "apns" {
-		c.writeErr(w, errInvalidEnvelope("platform must be fcm or apns"))
-		return
-	}
-	if !c.memberGate(w, r, b.GroupID, b.MemberID, "B2:push", raw) {
-		return
-	}
-	if err := c.db.savePushToken(r.Context(), b.GroupID, b.MemberID, b.Platform, b.Token, nowISO(c)); err != nil {
-		c.writeErr(w, asAPIError(err))
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
 
 // heartbeatBody is the B5 payload (api.md:53).
 type heartbeatBody struct {

@@ -6,22 +6,29 @@ import (
 )
 
 // Config is the resolved coord runtime configuration. cmd/server builds it from
-// server.CoordConfig (docs/design/server/server.md "config" chapter) after secrets are
-// resolved, so this package never reads files/env itself and stays unit
-// testable. Durations arrive pre-parsed.
+// server.CoordConfig (docs/design/server/server.md "config" chapter) after
+// values are resolved, so this package never reads files/env itself and stays
+// unit testable. Durations arrive pre-parsed.
+//
+// Per the user ruling 2026-05-19 (config framework v2): external auth is
+// fixed api_key (no mtls), result delivery is fixed webhook (no longpoll),
+// and notification is a single fixed webhook. APIKey, CallbackURL and
+// NotifyWebhook are therefore always required when coord runs.
 type Config struct {
 	// Listen is the external+member API bind address (coord.http.listen).
 	Listen string
 	// DBPath is the encrypted single-file path resolved from coord.db.dsn.
 	DBPath string
-	// ExternalAuth is "mtls" or "api_key" (coord.external.auth).
-	ExternalAuth string
-	// APIKey is the external API key, set only when ExternalAuth=="api_key".
+	// APIKey is the external API key (auth is fixed api_key,
+	// coord.external.api_key); constant-time compared in checkAPIKey.
 	APIKey string
-	// ResultCallback is "webhook" or "longpoll" (coord.external.result_callback).
-	ResultCallback string
-	// CallbackURL is the external webhook URL (ResultCallback=="webhook").
+	// CallbackURL is the fixed result webhook URL
+	// (coord.external.result_webhook); the A4 result is always POSTed here.
 	CallbackURL string
+	// NotifyWebhook is the single fixed notification webhook
+	// (coord.notify.webhook): coord POSTs notification events here and an
+	// external channel translates/delivers them (FCM/APNS/etc.).
+	NotifyWebhook string
 	// SkewTolerance is the clock-skew slack; outside it expiry is judged
 	// conservatively (docs/design/server/server.md C6(e)).
 	SkewTolerance time.Duration
@@ -33,12 +40,8 @@ type Config struct {
 }
 
 const (
-	authMTLS         = "mtls"
-	authAPIKey       = "api_key"
-	callbackWebhook  = "webhook"
-	callbackLongpoll = "longpoll"
-	signerStable     = "stable"
-	signerLiveness   = "liveness"
+	signerStable   = "stable"
+	signerLiveness = "liveness"
 )
 
 // validate rejects an internally inconsistent Config. Enum legality is already
@@ -51,11 +54,14 @@ func (c Config) validate() error {
 	if c.DBPath == "" {
 		return fmt.Errorf("coord: empty db path")
 	}
-	if c.ExternalAuth == authAPIKey && c.APIKey == "" {
-		return fmt.Errorf("coord: auth=api_key but api key is empty")
+	if c.APIKey == "" {
+		return fmt.Errorf("coord: external api key is empty")
 	}
-	if c.ResultCallback == callbackWebhook && c.CallbackURL == "" {
-		return fmt.Errorf("coord: result_callback=webhook but callback url is empty")
+	if c.CallbackURL == "" {
+		return fmt.Errorf("coord: external result webhook url is empty")
+	}
+	if c.NotifyWebhook == "" {
+		return fmt.Errorf("coord: notify webhook url is empty")
 	}
 	if c.SkewTolerance < 0 || c.DispatchTimeout <= 0 {
 		return fmt.Errorf("coord: skew_tolerance must be >=0 and dispatch.timeout >0")

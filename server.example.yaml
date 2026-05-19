@@ -1,13 +1,31 @@
-# mcp-wallet server — complete example configuration.
+# mcp-wallet server — complete example configuration (config framework v2).
 #
-# Copy to ./server.yaml (the default path) or point SERVER_CONFIG at it.
-# Precedence: built-in defaults < this file < environment variables.
-# Every key can be overridden by env as TSSSERVER_<UPPER_KEY> with nested
-# keys joined by "__" (e.g. TSSSERVER_COORD__HTTP__LISTEN=:9000).
+# Copy to ./server.yaml (the default path), point SERVER_CONFIG at it, or
+# pass --config <path>.
 #
-# Secrets MUST be "env:VAR" or "file:/path" references — a plaintext literal
-# in this file is rejected at startup (fail-fast). Startup also fails if both
-# relay.enable and coord.enable are false, or a required secret is missing.
+# Traefik-style three sources, one unified key space (user ruling
+# 2026-05-19):
+#
+#   built-in defaults  <  config file  <  environment variables  <  CLI flags
+#
+#   - file:  this YAML.
+#   - env:   MPC_ + the upper-cased dotted key, every separator (nesting
+#            and any key-internal '_') a single '_'
+#            (e.g. MPC_COORD_HTTP_LISTEN=:9000,
+#            MPC_COORD_TTL_SKEW_TOLERANCE=30s, MPC_RELAY_PNET_PSK=...).
+#            Names are schema-generated and exact-matched, never parsed.
+#   - CLI:   --<dotted.key>=<value> (e.g. --coord.http.listen=:9000,
+#            --relay.enable=true, --log.level=debug). CLI is highest.
+#
+# Any value may be a literal OR an "env:VAR" / "file:/path" reference
+# (operator's choice; the secret-must-be-a-reference rule is relaxed).
+# Putting a real secret as a plaintext literal in a committed file remains
+# an operator-owned risk — prefer env:/file: or a CLI flag for secrets.
+#
+# Startup fails if both relay.enable and coord.enable are false, or a
+# required value of an enabled role is missing (fail-fast). The DB-unlock
+# passphrase is the absolute exception: it never enters file/env/CLI/KMS —
+# only the admin-api interactive unlock provides it (database.md §7).
 #
 # Values shown are the built-in defaults unless noted. relay and coord may
 # run together (one process, dual role) or independently.
@@ -28,7 +46,8 @@ relay:
     - "/ip4/0.0.0.0/tcp/4001"     # libp2p multiaddrs to listen on
   # pnet PSK (32-byte private-network swarm key): without it a peer cannot
   # speak the protocol and the relay is invisible on the public internet.
-  pnet_psk_ref: "env:TSSSERVER_RELAY__PNET_PSK"   # secret
+  # Literal or env:/file: reference.
+  pnet_psk: "env:MPC_RELAY_PNET_PSK"
   token_verify:
     source: config                # config | coord-sync
     # Authoritative trust anchor: the wallet-group public key set that signs
@@ -54,23 +73,25 @@ coord:
   http:
     listen: ":8080"               # external-service + member API
   db:
-    # SQLite single-file DSN (signing queue / state / group pubkey / push
-    # tokens). Secret because the path/credential is deployment-sensitive.
-    dsn_ref: "env:TSSSERVER_COORD__DB_DSN"        # secret
+    # SQLite single-file DSN (signing queue / state / group pubkey).
+    # Literal or env:/file: reference.
+    dsn: "env:MPC_COORD_DB_DSN"
     encryption:
       # Whole-DB encryption at rest (SQLCipher) + LOCKED-until-unlocked
       # lifecycle. MUST stay true in production. Setting false is dev/test
       # only and additionally requires the env ALLOW_INSECURE_DB=1, else the
-      # server refuses to start (production iron-law guardrail).
+      # server refuses to start (production iron-law guardrail, unchanged).
       enable: true
   external:
-    auth: mtls                    # mtls | api_key
-    # Required only when auth=api_key:
-    api_key_ref: "env:TSSSERVER_COORD__EXTERNAL__API_KEY"   # secret
-    result_callback: webhook      # webhook | longpoll
-  push:                           # optional; once set, same env:/file: rule
-    fcm_cred_ref: "env:TSSSERVER_COORD__PUSH__FCM"          # secret (optional)
-    apns_cred_ref: "env:TSSSERVER_COORD__PUSH__APNS"        # secret (optional)
+    # External-service auth is fixed api_key (always required); result
+    # delivery is fixed webhook (result_webhook URL always required).
+    api_key: "env:MPC_COORD_EXTERNAL_API_KEY"
+    result_webhook: "env:MPC_COORD_EXTERNAL_RESULT_WEBHOOK"
+  notify:
+    # Single fixed notification webhook (always required): coord only POSTs
+    # notification events here; FCM/APNS/etc. are translated and delivered
+    # by an external notification channel. coord holds no push credentials.
+    webhook: "env:MPC_COORD_NOTIFY_WEBHOOK"
   ttl:
     skew_tolerance: "30s"         # clock-skew tolerance for expiry checks
   quorum:

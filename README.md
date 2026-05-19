@@ -27,9 +27,11 @@ go build ./...
 
 完整带注释的示例配置见 [`server.example.yaml`](server.example.yaml)（覆盖 log / metrics / relay / coord 全部字段、默认值与可选枚举）。
 
-- 复制为 `./server.yaml`（默认路径），或用 `SERVER_CONFIG` 指定路径。
-- 优先级：内置默认 < 配置文件 < 环境变量（`TSSSERVER_<大写键>`，嵌套以 `__` 连接）。
-- secret 一律 `env:VAR` / `file:/path` 引用，禁止明文；明文、双角色均关闭、必填 secret 缺失 → 启动 fail-fast。
+- 复制为 `./server.yaml`（默认路径），或用 `SERVER_CONFIG` / CLI `--config <path>` 指定路径。
+- 优先级（Traefik 式三源，统一键空间）：内置默认 < 配置文件 < 环境变量 < CLI 参数。
+  - 环境变量：`MPC_` + 大写点分键，嵌套与键内 `_` 一律单 `_`（如 `MPC_COORD_HTTP_LISTEN`、`MPC_COORD_TTL_SKEW_TOLERANCE`）；由 schema 生成名后精确匹配，不解析 env 名。
+  - CLI：`--<点分键>=<值>`（如 `--coord.http.listen=:8080`、`--relay.enable=true`）。
+- 任一值可为字面量或 `env:VAR` / `file:/path` 引用（运维自择，不再强制 secret 必为引用）；双角色均关闭、已启用角色必填项缺失 → 启动 fail-fast。
 - `coord.db.encryption.enable` 生产必须为 `true`；置 `false` 仅限 dev/test 且须额外设 `ALLOW_INSECURE_DB=1`，否则拒绝启动。
 
 ## 质量门（一行执行）

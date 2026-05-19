@@ -1,6 +1,9 @@
-// Package server implements the server config system: built-in defaults <
-// config file < environment variables, role switches, and fail-fast
-// validation of required secrets for enabled roles (server.md "config").
+// Package server implements the config framework v2 (server.md "config"
+// chapter, user ruling 2026-05-19): a Traefik-style three-source assembly
+// — built-in defaults < config file < environment variables < CLI flags,
+// one unified key space — where any value may be a literal or an
+// env:VAR / file:/path reference, role switches, and fail-fast validation
+// of the required values of enabled roles.
 package server
 
 import (
@@ -17,8 +20,17 @@ import (
 const (
 	defaultConfigPath = "./server.yaml"
 	configPathEnv     = "SERVER_CONFIG"
-	envPrefix         = "TSSSERVER_"
-	envNestSep        = "__"
+	configPathFlag    = "config"
+	// envPrefix + the upper-cased dotted key (segments joined by envSep)
+	// is the env name (user ruling 2026-05-19, cbd278f). Because the
+	// nesting separator and any key-internal '_' are both '_', env names
+	// are AMBIGUOUS to parse — the env layer never parses an env name;
+	// it generates each known leaf key's name from the schema and
+	// exact-matches the environment (schema-driven generate-and-match).
+	envPrefix     = "MPC_"
+	envSep        = "_"
+	cliFlagPrefix = "--"
+	cliKeySep     = "."
 )
 
 // Config is the full node config (log/metrics/relay/coord).
@@ -45,7 +57,7 @@ type MetricsConfig struct {
 type RelayConfig struct {
 	Enable      bool              `yaml:"enable"`
 	Listen      []string          `yaml:"listen"`
-	PnetPSKRef  string            `yaml:"pnet_psk_ref"`
+	PnetPSK     string            `yaml:"pnet_psk"`
 	TokenVerify TokenVerifyConfig `yaml:"token_verify"`
 	Rendezvous  RendezvousConfig  `yaml:"rendezvous"`
 	Limits      RelayLimitsConfig `yaml:"limits"`
@@ -84,7 +96,7 @@ type CoordConfig struct {
 	HTTP     CoordHTTPConfig     `yaml:"http"`
 	DB       CoordDBConfig       `yaml:"db"`
 	External CoordExternalConfig `yaml:"external"`
-	Push     CoordPushConfig     `yaml:"push"`
+	Notify   CoordNotifyConfig   `yaml:"notify"`
 	TTL      CoordTTLConfig      `yaml:"ttl"`
 	Quorum   CoordQuorumConfig   `yaml:"quorum"`
 	Dispatch CoordDispatchConfig `yaml:"dispatch"`
@@ -95,10 +107,10 @@ type CoordHTTPConfig struct {
 	Listen string `yaml:"listen"`
 }
 
-// CoordDBConfig is the persistence DSN ref (secret) + whole-DB
-// encryption switch.
+// CoordDBConfig is the persistence DSN + whole-DB encryption switch. DSN
+// is a required value (literal or env:/file: reference).
 type CoordDBConfig struct {
-	DSNRef     string                  `yaml:"dsn_ref"`
+	DSN        string                  `yaml:"dsn"`
 	Encryption CoordDBEncryptionConfig `yaml:"encryption"`
 }
 
@@ -118,18 +130,21 @@ type CoordDBEncryptionConfig struct {
 // production is impossible, not merely discouraged.
 const allowInsecureDBEnv = "ALLOW_INSECURE_DB"
 
-// CoordExternalConfig is the external-service auth + result-callback
-// method.
+// CoordExternalConfig is the external-service entry: auth is fixed
+// api_key, result delivery is fixed webhook (user ruling 2026-05-19).
+// Both APIKey and ResultWebhook are always required when coord is
+// enabled.
 type CoordExternalConfig struct {
-	Auth           string `yaml:"auth"`
-	APIKeyRef      string `yaml:"api_key_ref"`
-	ResultCallback string `yaml:"result_callback"`
+	APIKey        string `yaml:"api_key"`
+	ResultWebhook string `yaml:"result_webhook"`
 }
 
-// CoordPushConfig is the push-credential refs (secret, optional).
-type CoordPushConfig struct {
-	FCMCredRef  string `yaml:"fcm_cred_ref"`
-	APNSCredRef string `yaml:"apns_cred_ref"`
+// CoordNotifyConfig is the single fixed notification webhook (user ruling
+// 2026-05-19): coord only POSTs notification events here; FCM/APNS/etc.
+// are translated and delivered by an external notification channel. coord
+// holds no push credentials and does not distinguish fcm/apns.
+type CoordNotifyConfig struct {
+	Webhook string `yaml:"webhook"`
 }
 
 // CoordTTLConfig is the clock-skew tolerance.
@@ -150,19 +165,17 @@ type CoordDispatchConfig struct {
 // ErrNoRoleEnabled means relay.enable and coord.enable are both false.
 var ErrNoRoleEnabled = errors.New("relay.enable and coord.enable are both false")
 
-var errSecretMissing = errors.New("required secret missing")
-
-// errSecretPlaintext means a secret appeared as a plaintext literal:
-// server.md requires every secret to be injected via env:VAR / file:/path;
-// plaintext in a committed config file is forbidden.
-var errSecretPlaintext = errors.New("secret must be an env: or file: reference (plaintext forbidden)")
+// errValueMissing means a required value (literal or resolved reference)
+// is absent. Plaintext literals are no longer rejected (user ruling
+// 2026-05-19: any value may be a literal or an env:/file: reference; the
+// secret-must-be-a-reference hard rule is relaxed).
+var errValueMissing = errors.New("required value missing")
 
 // errInsecureDBNotConfirmed is the production iron-law guardrail
 // (database.md §7.1): coord enabled with whole-DB encryption disabled but
 // no explicit ALLOW_INSECURE_DB=1 non-production confirmation →
-// fail-closed refuse to start. Disabling encryption in production =
-// plaintext fund-orchestration data at rest (a security red line); the
-// guardrail makes it impossible.
+// fail-closed refuse to start. This guardrail is explicitly unaffected by
+// the config-framework-v2 relaxation (user ruling 2026-05-19).
 var errInsecureDBNotConfirmed = fmt.Errorf(
 	"coord enabled with db.encryption.enable=false but %s=1 not set: "+
 		"whole-DB encryption may be disabled only in non-production "+
@@ -188,7 +201,6 @@ func defaults() Config {
 		Coord: CoordConfig{
 			HTTP:     CoordHTTPConfig{Listen: ":8080"},
 			DB:       CoordDBConfig{Encryption: CoordDBEncryptionConfig{Enable: true}},
-			External: CoordExternalConfig{Auth: "mtls", ResultCallback: "webhook"},
 			TTL:      CoordTTLConfig{SkewTolerance: "30s"},
 			Quorum:   CoordQuorumConfig{SignerSelect: "liveness"},
 			Dispatch: CoordDispatchConfig{Timeout: "120s"},
@@ -196,36 +208,50 @@ func defaults() Config {
 	}
 }
 
-// Load assembles config as built-in defaults < config file < env vars.
-// The path is SERVER_CONFIG (default ./server.yaml); a missing default path
-// allows pure-env config, but a missing explicitly-set SERVER_CONFIG errors.
+// Load assembles config as built-in defaults < config file < env vars <
+// CLI flags (the Traefik-style three sources, user ruling 2026-05-19).
+// The file path is the CLI --config flag, else SERVER_CONFIG, else
+// ./server.yaml; a missing default path allows pure-env/CLI config, but a
+// missing explicitly-set path errors. CLI flags are os.Args[1:].
 func Load() (Config, error) {
+	return loadFrom(os.Args[1:])
+}
+
+// loadFrom is Load with injectable CLI args (deterministic tests).
+func loadFrom(args []string) (Config, error) {
+	flags, err := parseCLIFlags(args)
+	if err != nil {
+		return Config{}, err
+	}
+
 	cfg := defaults()
 
-	path, explicit := configPath()
-	data, err := os.ReadFile(path)
+	path, explicit := configPath(flags)
+	data, rerr := os.ReadFile(path)
 	switch {
-	case err == nil:
+	case rerr == nil:
 		if err := yaml.Unmarshal(data, &cfg); err != nil {
 			return Config{}, fmt.Errorf("parse config %s: %w", path, err)
 		}
-	case errors.Is(err, os.ErrNotExist) && !explicit:
-		// Default path absent: allow pure-env injection (containers/CI).
+	case errors.Is(rerr, os.ErrNotExist) && !explicit:
+		// Default path absent: allow pure env/CLI injection (containers/CI).
 	default:
-		return Config{}, fmt.Errorf("read config %s: %w", path, err)
+		return Config{}, fmt.Errorf("read config %s: %w", path, rerr)
 	}
 
 	if err := applyEnvOverrides(&cfg); err != nil {
+		return Config{}, err
+	}
+	if err := applyCLIOverrides(&cfg, flags); err != nil {
 		return Config{}, err
 	}
 	return cfg, nil
 }
 
 // Validate runs startup checks: fail if both roles are off; enabled
-// roles' constrained enums must be valid; required secrets must resolve
-// and be env:/file: refs (plaintext = fail-fast); a configured optional
-// secret is held to the same ref discipline. Only enabled roles are
-// checked (a disabled role's config does not gate startup).
+// roles' constrained enums must be valid; required values of enabled
+// roles must resolve (literal or env:/file: reference; an empty/unset one
+// is fail-fast). Only enabled roles are checked.
 func (c Config) Validate() error {
 	if !c.Relay.Enable && !c.Coord.Enable {
 		return ErrNoRoleEnabled
@@ -235,94 +261,78 @@ func (c Config) Validate() error {
 			"config", "coord-sync"); err != nil {
 			return err
 		}
-		if _, err := resolveSecret(c.Relay.PnetPSKRef); err != nil {
+		if _, err := resolveValue(c.Relay.PnetPSK); err != nil {
 			return fmt.Errorf("relay enabled: pnet_psk: %w", err)
 		}
 	}
 	if c.Coord.Enable {
-		// Production iron-law guardrail (database.md §7.1): if whole-DB
-		// encryption is disabled, ALLOW_INSECURE_DB=1 must explicitly
-		// confirm non-production, else fail-closed. Default enable=true, so
-		// normal/production config is unaffected; this only triggers on an
-		// explicit enable=false.
+		// Production iron-law guardrail (database.md §7.1): unchanged by
+		// config-framework-v2. Default enable=true, so normal/production
+		// config is unaffected; this only triggers on explicit enable=false.
 		if !c.Coord.DB.Encryption.Enable && os.Getenv(allowInsecureDBEnv) != "1" {
 			return errInsecureDBNotConfirmed
-		}
-		if err := validateEnum("coord.external.auth", c.Coord.External.Auth,
-			"mtls", "api_key"); err != nil {
-			return err
-		}
-		if err := validateEnum("coord.external.result_callback", c.Coord.External.ResultCallback,
-			"webhook", "longpoll"); err != nil {
-			return err
 		}
 		if err := validateEnum("coord.quorum.signer_select", c.Coord.Quorum.SignerSelect,
 			"stable", "liveness"); err != nil {
 			return err
 		}
-		if _, err := resolveSecret(c.Coord.DB.DSNRef); err != nil {
+		if _, err := resolveValue(c.Coord.DB.DSN); err != nil {
 			return fmt.Errorf("coord enabled: db.dsn: %w", err)
 		}
-		if c.Coord.External.Auth == "api_key" {
-			if _, err := resolveSecret(c.Coord.External.APIKeyRef); err != nil {
-				return fmt.Errorf("coord enabled (auth=api_key): external.api_key: %w", err)
-			}
+		// auth is fixed api_key, result delivery fixed webhook: both
+		// always required when coord is enabled (user ruling 2026-05-19).
+		if _, err := resolveValue(c.Coord.External.APIKey); err != nil {
+			return fmt.Errorf("coord enabled: external.api_key: %w", err)
 		}
-		if err := optionalSecret(c.Coord.Push.FCMCredRef); err != nil {
-			return fmt.Errorf("coord enabled: push.fcm: %w", err)
+		if _, err := resolveValue(c.Coord.External.ResultWebhook); err != nil {
+			return fmt.Errorf("coord enabled: external.result_webhook: %w", err)
 		}
-		if err := optionalSecret(c.Coord.Push.APNSCredRef); err != nil {
-			return fmt.Errorf("coord enabled: push.apns: %w", err)
+		if _, err := resolveValue(c.Coord.Notify.Webhook); err != nil {
+			return fmt.Errorf("coord enabled: notify.webhook: %w", err)
 		}
 	}
 	return nil
 }
 
-func configPath() (path string, explicit bool) {
+func configPath(flags map[string]string) (path string, explicit bool) {
+	if p := flags[configPathFlag]; p != "" {
+		return p, true
+	}
 	if p := os.Getenv(configPathEnv); p != "" {
 		return p, true
 	}
 	return defaultConfigPath, false
 }
 
-// resolveSecret resolves a secret ref: only env:VAR / file:/path; empty =
-// missing; any other literal is treated as a plaintext secret and
-// rejected (server.md: no plaintext in committed config files).
-func resolveSecret(ref string) (string, error) {
-	ref = strings.TrimSpace(ref)
-	if ref == "" {
-		return "", errSecretMissing
+// resolveValue resolves a config value: env:VAR / file:/path are resolved
+// references; any other non-empty string is a literal and returned as-is
+// (user ruling 2026-05-19: literals are allowed, plaintext is no longer
+// rejected). Empty (or an unset/empty reference) = errValueMissing.
+func resolveValue(v string) (string, error) {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return "", errValueMissing
 	}
 	switch {
-	case strings.HasPrefix(ref, "env:"):
-		v := os.Getenv(strings.TrimPrefix(ref, "env:"))
-		if v == "" {
-			return "", errSecretMissing
+	case strings.HasPrefix(v, "env:"):
+		got := os.Getenv(strings.TrimPrefix(v, "env:"))
+		if got == "" {
+			return "", errValueMissing
 		}
-		return v, nil
-	case strings.HasPrefix(ref, "file:"):
-		b, err := os.ReadFile(strings.TrimPrefix(ref, "file:"))
+		return got, nil
+	case strings.HasPrefix(v, "file:"):
+		b, err := os.ReadFile(strings.TrimPrefix(v, "file:"))
 		if err != nil {
-			return "", fmt.Errorf("read secret file: %w", err)
+			return "", fmt.Errorf("read value file: %w", err)
 		}
-		v := strings.TrimSpace(string(b))
-		if v == "" {
-			return "", errSecretMissing
+		got := strings.TrimSpace(string(b))
+		if got == "" {
+			return "", errValueMissing
 		}
-		return v, nil
+		return got, nil
 	default:
-		return "", errSecretPlaintext
+		return v, nil
 	}
-}
-
-// optionalSecret validates an optional secret: skip if unset (empty ref);
-// once set, the same env:/file: ref discipline applies and it must resolve.
-func optionalSecret(ref string) error {
-	if strings.TrimSpace(ref) == "" {
-		return nil
-	}
-	_, err := resolveSecret(ref)
-	return err
 }
 
 // validateEnum checks a constrained string value (server.md enum column).
@@ -339,8 +349,13 @@ func applyEnvOverrides(cfg *Config) error {
 	return walkEnv(reflect.ValueOf(cfg).Elem(), envPrefix)
 }
 
-// walkEnv recurses yaml-tagged structs, overriding scalars from
-// TSSSERVER_<UPPER KEY> (nested keys joined by __).
+// walkEnv recurses yaml-tagged structs and, for every known leaf key,
+// GENERATES its env name (envPrefix + the upper-cased yaml path, segments
+// joined by envSep) and exact-matches the environment. It never parses an
+// env name back into a key: the nesting separator and any key-internal
+// '_' are both '_', so env names are inherently ambiguous to split —
+// schema-driven generate-and-match is unambiguous because the key set is
+// static (user ruling 2026-05-19, cbd278f).
 func walkEnv(v reflect.Value, prefix string) error {
 	t := v.Type()
 	for i := range t.NumField() {
@@ -354,7 +369,7 @@ func walkEnv(v reflect.Value, prefix string) error {
 
 		fv := v.Field(i)
 		if fv.Kind() == reflect.Struct {
-			if err := walkEnv(fv, key+envNestSep); err != nil {
+			if err := walkEnv(fv, key+envSep); err != nil {
 				return err
 			}
 			continue
@@ -368,6 +383,88 @@ func walkEnv(v reflect.Value, prefix string) error {
 		}
 	}
 	return nil
+}
+
+// parseCLIFlags collects --<dotted.key>=<value> (and --config <path> /
+// --config=<path>) from args into a dotted-key map. Non-"--" args are
+// ignored so `go test` single-dash flags never collide with the unified
+// key space. The CLI is the highest-priority source (Traefik-style).
+func parseCLIFlags(args []string) (map[string]string, error) {
+	out := map[string]string{}
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		if !strings.HasPrefix(a, cliFlagPrefix) {
+			continue
+		}
+		body := strings.TrimPrefix(a, cliFlagPrefix)
+		if body == "" {
+			continue
+		}
+		key, val, hasEq := strings.Cut(body, "=")
+		if !hasEq {
+			// --config <path>: the only space-separated form; every other
+			// key requires --key=value.
+			if key == configPathFlag && i+1 < len(args) {
+				out[key] = args[i+1]
+				i++
+				continue
+			}
+			return nil, fmt.Errorf("cli flag %s%s: want %s<key>=<value>", cliFlagPrefix, body, cliFlagPrefix)
+		}
+		if key == "" {
+			return nil, fmt.Errorf("cli flag %s: empty key", a)
+		}
+		out[key] = val
+	}
+	return out, nil
+}
+
+// applyCLIOverrides applies the dotted-key flags onto cfg by walking the
+// yaml-tag path (the same unified key space as file/env).
+func applyCLIOverrides(cfg *Config, flags map[string]string) error {
+	for key, val := range flags {
+		if key == configPathFlag {
+			continue // consumed by configPath
+		}
+		fv, err := fieldByYAMLPath(reflect.ValueOf(cfg).Elem(), strings.Split(key, cliKeySep))
+		if err != nil {
+			return fmt.Errorf("cli flag %s%s: %w", cliFlagPrefix, key, err)
+		}
+		if err := setScalar(fv, val); err != nil {
+			return fmt.Errorf("cli flag %s%s: %w", cliFlagPrefix, key, err)
+		}
+	}
+	return nil
+}
+
+// fieldByYAMLPath descends a struct following yaml-tag names, returning
+// the addressable scalar field the dotted path points at.
+func fieldByYAMLPath(v reflect.Value, path []string) (reflect.Value, error) {
+	if len(path) == 0 {
+		return reflect.Value{}, errors.New("empty key")
+	}
+	t := v.Type()
+	for i := range t.NumField() {
+		tag := t.Field(i).Tag.Get("yaml")
+		if tag == "" || tag == "-" {
+			continue
+		}
+		if strings.Split(tag, ",")[0] != path[0] {
+			continue
+		}
+		fv := v.Field(i)
+		if len(path) == 1 {
+			if fv.Kind() == reflect.Struct {
+				return reflect.Value{}, fmt.Errorf("%q is a section, not a value", path[0])
+			}
+			return fv, nil
+		}
+		if fv.Kind() != reflect.Struct {
+			return reflect.Value{}, fmt.Errorf("%q is not a section", path[0])
+		}
+		return fieldByYAMLPath(fv, path[1:])
+	}
+	return reflect.Value{}, fmt.Errorf("unknown key %q", path[0])
 }
 
 func setScalar(fv reflect.Value, raw string) error {

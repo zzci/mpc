@@ -7,6 +7,17 @@ import (
 	"testing"
 )
 
+// Reference env names used by literal-or-ref tests. They are deliberately
+// NOT of the form MPC_<schema key> so the schema-driven env layer never
+// matches them — the test controls exactly one source at a time.
+const (
+	refPSK = "REF_RELAY_PSK"
+	refDSN = "REF_COORD_DSN"
+	refKey = "REF_COORD_KEY"
+	refRW  = "REF_COORD_RESULT_WEBHOOK"
+	refNW  = "REF_COORD_NOTIFY_WEBHOOK"
+)
+
 // writeConfig writes a temp config file and points SERVER_CONFIG at it.
 func writeConfig(t *testing.T, body string) {
 	t.Helper()
@@ -37,7 +48,7 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.Metrics.Listen != ":9090" {
 		t.Errorf("metrics default lost: %q", cfg.Metrics.Listen)
 	}
-	if cfg.Coord.HTTP.Listen != ":8080" || cfg.Coord.External.Auth != "mtls" {
+	if cfg.Coord.HTTP.Listen != ":8080" {
 		t.Errorf("coord defaults lost: %+v", cfg.Coord)
 	}
 	if cfg.Relay.TokenVerify.Source != "config" || !cfg.Relay.Rendezvous.Enable {
@@ -47,7 +58,7 @@ func TestLoadDefaults(t *testing.T) {
 
 func TestPrecedenceDefaultFileEnv(t *testing.T) {
 	writeConfig(t, "log: { level: warn }\nrelay: { enable: true }\n")
-	t.Setenv("TSSSERVER_LOG__LEVEL", "error")
+	t.Setenv("MPC_LOG_LEVEL", "error")
 
 	cfg, err := Load()
 	if err != nil {
@@ -64,19 +75,90 @@ func TestPrecedenceDefaultFileEnv(t *testing.T) {
 	}
 }
 
-func TestEnvNestedOverride(t *testing.T) {
+// TestPrecedenceCLIWins exercises the Traefik-style fourth source: a CLI
+// flag beats env, which beats file, which beats the built-in default
+// (user ruling 2026-05-19).
+func TestPrecedenceCLIWins(t *testing.T) {
+	writeConfig(t, "log: { level: warn }\ncoord: { http: { listen: \":1111\" } }\nrelay: { enable: true }\n")
+	t.Setenv("MPC_LOG_LEVEL", "error")
+
+	cfg, err := loadFrom([]string{
+		"--log.level=debug",
+		"--coord.http.listen=:2222",
+		"--relay.enable=true",
+	})
+	if err != nil {
+		t.Fatalf("loadFrom: %v", err)
+	}
+	if cfg.Log.Level != "debug" {
+		t.Errorf("CLI did not beat env: log.level=%q want debug", cfg.Log.Level)
+	}
+	if cfg.Coord.HTTP.Listen != ":2222" {
+		t.Errorf("CLI did not beat file: coord.http.listen=%q want :2222", cfg.Coord.HTTP.Listen)
+	}
+	if !cfg.Relay.Enable {
+		t.Error("CLI bool flag not applied")
+	}
+}
+
+// TestCLIConfigFlag: --config selects the file (and outranks SERVER_CONFIG
+// for the path); --config=path and --config path both work.
+func TestCLIConfigFlag(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "cli.yaml")
+	if err := os.WriteFile(p, []byte("log: { level: warn }\nrelay: { enable: true }\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// SERVER_CONFIG points elsewhere (missing) — CLI --config must win.
+	t.Setenv("SERVER_CONFIG", filepath.Join(t.TempDir(), "absent.yaml"))
+
+	for _, args := range [][]string{
+		{"--config", p},
+		{"--config=" + p},
+	} {
+		cfg, err := loadFrom(args)
+		if err != nil {
+			t.Fatalf("loadFrom %v: %v", args, err)
+		}
+		if cfg.Log.Level != "warn" || !cfg.Relay.Enable {
+			t.Errorf("--config not honored for %v: %+v", args, cfg.Log)
+		}
+	}
+}
+
+func TestCLIMalformedFlag(t *testing.T) {
+	writeConfig(t, "relay: { enable: true }\n")
+	if _, err := loadFrom([]string{"--log.level"}); err == nil {
+		t.Fatal("missing =value: want error, got nil")
+	}
+	if _, err := loadFrom([]string{"--no.such.key=x"}); err == nil {
+		t.Fatal("unknown key: want error, got nil")
+	}
+	// Single-dash (go test) flags are ignored, not parsed.
+	if _, err := loadFrom([]string{"-test.v", "-test.run=X"}); err != nil {
+		t.Fatalf("single-dash args must be ignored: %v", err)
+	}
+}
+
+// TestEnvSchemaDrivenMatch verifies the env layer GENERATES MPC_<UPPER
+// dotted key> (segments joined by single '_') and exact-matches — no
+// env-name parsing. Keys with an internal '_' (pnet_psk,
+// reservation_per_token) land correctly because generation is from the
+// schema, not by splitting the env name.
+func TestEnvSchemaDrivenMatch(t *testing.T) {
 	writeConfig(t, "coord: { enable: true }\n")
-	t.Setenv("TSSSERVER_RELAY__ENABLE", "true")
-	t.Setenv("TSSSERVER_COORD__HTTP__LISTEN", ":18080")
-	t.Setenv("TSSSERVER_RELAY__LISTEN", "/ip4/0.0.0.0/tcp/1, /ip4/0.0.0.0/tcp/2")
-	t.Setenv("TSSSERVER_RELAY__LIMITS__RESERVATION_PER_TOKEN", "9")
+	t.Setenv("MPC_RELAY_ENABLE", "true")
+	t.Setenv("MPC_COORD_HTTP_LISTEN", ":18080")
+	t.Setenv("MPC_RELAY_LISTEN", "/ip4/0.0.0.0/tcp/1, /ip4/0.0.0.0/tcp/2")
+	t.Setenv("MPC_RELAY_LIMITS_RESERVATION_PER_TOKEN", "9")
+	t.Setenv("MPC_RELAY_PNET_PSK", "from-env-psk")
+	t.Setenv("MPC_COORD_TTL_SKEW_TOLERANCE", "45s")
 
 	cfg, err := Load()
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
 	if !cfg.Relay.Enable {
-		t.Error("TSSSERVER_RELAY__ENABLE not applied")
+		t.Error("MPC_RELAY_ENABLE not applied")
 	}
 	if cfg.Coord.HTTP.Listen != ":18080" {
 		t.Errorf("nested http listen: %q", cfg.Coord.HTTP.Listen)
@@ -85,7 +167,13 @@ func TestEnvNestedOverride(t *testing.T) {
 		t.Errorf("slice env override: %v", cfg.Relay.Listen)
 	}
 	if cfg.Relay.Limits.ReservationPerToken != 9 {
-		t.Errorf("int env override: %d", cfg.Relay.Limits.ReservationPerToken)
+		t.Errorf("internal-underscore key (reservation_per_token): %d", cfg.Relay.Limits.ReservationPerToken)
+	}
+	if cfg.Relay.PnetPSK != "from-env-psk" {
+		t.Errorf("internal-underscore key (pnet_psk): %q", cfg.Relay.PnetPSK)
+	}
+	if cfg.Coord.TTL.SkewTolerance != "45s" {
+		t.Errorf("internal-underscore key (skew_tolerance): %q", cfg.Coord.TTL.SkewTolerance)
 	}
 }
 
@@ -95,7 +183,23 @@ func TestValidateDoubleFalse(t *testing.T) {
 	}
 }
 
-func TestValidateRequiredSecretFailFast(t *testing.T) {
+// fullCoord builds a coord config whose required values are env: refs to
+// the non-schema REF_* names (set via t.Setenv by the caller).
+func fullCoord(dsn, key, rw, nw string) CoordConfig {
+	return CoordConfig{
+		Enable:   true,
+		DB:       CoordDBConfig{DSN: dsn, Encryption: CoordDBEncryptionConfig{Enable: true}},
+		External: CoordExternalConfig{APIKey: key, ResultWebhook: rw},
+		Notify:   CoordNotifyConfig{Webhook: nw},
+		Quorum:   CoordQuorumConfig{SignerSelect: "liveness"},
+	}
+}
+
+func TestValidateRequiredValueFailFast(t *testing.T) {
+	t.Setenv(refDSN, "postgres://x")
+	t.Setenv(refKey, "k")
+	t.Setenv(refRW, "https://rw")
+	t.Setenv(refNW, "https://nw")
 	cases := []struct {
 		name string
 		cfg  Config
@@ -104,30 +208,27 @@ func TestValidateRequiredSecretFailFast(t *testing.T) {
 			"relay pnet_psk missing",
 			Config{Relay: RelayConfig{
 				Enable:      true,
-				PnetPSKRef:  "env:TSSSERVER_TEST_UNSET",
+				PnetPSK:     "env:REF_UNSET",
 				TokenVerify: TokenVerifyConfig{Source: "config"},
 			}},
 		},
 		{
 			"coord db.dsn missing",
-			Config{Coord: CoordConfig{
-				Enable:   true,
-				DB:       CoordDBConfig{DSNRef: "env:TSSSERVER_TEST_UNSET", Encryption: CoordDBEncryptionConfig{Enable: true}},
-				External: CoordExternalConfig{Auth: "mtls", ResultCallback: "webhook"},
-				Quorum:   CoordQuorumConfig{SignerSelect: "liveness"},
-			}},
+			Config{Coord: fullCoord("env:REF_UNSET", "env:"+refKey, "env:"+refRW, "env:"+refNW)},
 		},
 		{
-			"coord api_key missing when auth=api_key",
-			Config{Coord: CoordConfig{
-				Enable:   true,
-				DB:       CoordDBConfig{DSNRef: "env:TSSSERVER_TEST_DSN", Encryption: CoordDBEncryptionConfig{Enable: true}},
-				External: CoordExternalConfig{Auth: "api_key", APIKeyRef: "env:TSSSERVER_TEST_UNSET", ResultCallback: "webhook"},
-				Quorum:   CoordQuorumConfig{SignerSelect: "liveness"},
-			}},
+			"coord external.api_key missing",
+			Config{Coord: fullCoord("env:"+refDSN, "env:REF_UNSET", "env:"+refRW, "env:"+refNW)},
+		},
+		{
+			"coord external.result_webhook missing",
+			Config{Coord: fullCoord("env:"+refDSN, "env:"+refKey, "", "env:"+refNW)},
+		},
+		{
+			"coord notify.webhook missing",
+			Config{Coord: fullCoord("env:"+refDSN, "env:"+refKey, "env:"+refRW, "")},
 		},
 	}
-	t.Setenv("TSSSERVER_TEST_DSN", "postgres://x")
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			if err := tc.cfg.Validate(); err == nil {
@@ -137,44 +238,38 @@ func TestValidateRequiredSecretFailFast(t *testing.T) {
 	}
 }
 
-func TestValidatePlaintextSecretRejected(t *testing.T) {
+// TestValidateLiteralAccepted: the v2 ruling relaxes the
+// secret-must-be-a-reference rule — a plaintext literal is a valid value.
+func TestValidateLiteralAccepted(t *testing.T) {
 	cfg := Config{Relay: RelayConfig{
 		Enable:      true,
-		PnetPSKRef:  "rawplaintextsecret",
+		PnetPSK:     "a-literal-psk-value",
 		TokenVerify: TokenVerifyConfig{Source: "config"},
 	}}
-	err := cfg.Validate()
-	if !errors.Is(err, errSecretPlaintext) {
-		t.Fatalf("plaintext secret: want errSecretPlaintext, got %v", err)
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("literal value: want nil, got %v", err)
 	}
 }
 
 func TestValidateEnum(t *testing.T) {
-	t.Setenv("TSSSERVER_TEST_PSK", "x")
-	t.Setenv("TSSSERVER_TEST_DSN", "y")
+	t.Setenv(refPSK, "x")
+	t.Setenv(refDSN, "y")
+	t.Setenv(refKey, "k")
+	t.Setenv(refRW, "https://rw")
+	t.Setenv(refNW, "https://nw")
 	bad := []struct {
 		name string
 		cfg  Config
 	}{
 		{"relay source", Config{Relay: RelayConfig{
-			Enable: true, PnetPSKRef: "env:TSSSERVER_TEST_PSK",
+			Enable: true, PnetPSK: "env:" + refPSK,
 			TokenVerify: TokenVerifyConfig{Source: "bogus"},
 		}}},
-		{"coord auth", Config{Coord: CoordConfig{
-			Enable: true, DB: CoordDBConfig{DSNRef: "env:TSSSERVER_TEST_DSN", Encryption: CoordDBEncryptionConfig{Enable: true}},
-			External: CoordExternalConfig{Auth: "bogus", ResultCallback: "webhook"},
-			Quorum:   CoordQuorumConfig{SignerSelect: "liveness"},
-		}}},
-		{"coord result_callback", Config{Coord: CoordConfig{
-			Enable: true, DB: CoordDBConfig{DSNRef: "env:TSSSERVER_TEST_DSN", Encryption: CoordDBEncryptionConfig{Enable: true}},
-			External: CoordExternalConfig{Auth: "mtls", ResultCallback: "bogus"},
-			Quorum:   CoordQuorumConfig{SignerSelect: "liveness"},
-		}}},
-		{"coord signer_select", Config{Coord: CoordConfig{
-			Enable: true, DB: CoordDBConfig{DSNRef: "env:TSSSERVER_TEST_DSN", Encryption: CoordDBEncryptionConfig{Enable: true}},
-			External: CoordExternalConfig{Auth: "mtls", ResultCallback: "webhook"},
-			Quorum:   CoordQuorumConfig{SignerSelect: "bogus"},
-		}}},
+		{"coord signer_select", func() Config {
+			c := fullCoord("env:"+refDSN, "env:"+refKey, "env:"+refRW, "env:"+refNW)
+			c.Quorum.SignerSelect = "bogus"
+			return Config{Coord: c}
+		}()},
 	}
 	for _, tc := range bad {
 		t.Run(tc.name, func(t *testing.T) {
@@ -185,57 +280,46 @@ func TestValidateEnum(t *testing.T) {
 	}
 }
 
-func TestResolveSecret(t *testing.T) {
-	t.Setenv("TSSSERVER_SECRET_OK", "s3cret")
-	f := filepath.Join(t.TempDir(), "psk")
-	if err := os.WriteFile(f, []byte("  filesecret\n"), 0o600); err != nil {
+func TestResolveValue(t *testing.T) {
+	t.Setenv("REF_VAL_OK", "s3cret")
+	f := filepath.Join(t.TempDir(), "v")
+	if err := os.WriteFile(f, []byte("  filevalue\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
-	if v, err := resolveSecret("env:TSSSERVER_SECRET_OK"); err != nil || v != "s3cret" {
+	if v, err := resolveValue("env:REF_VAL_OK"); err != nil || v != "s3cret" {
 		t.Errorf("env ref: v=%q err=%v", v, err)
 	}
-	if v, err := resolveSecret("file:" + f); err != nil || v != "filesecret" {
+	if v, err := resolveValue("file:" + f); err != nil || v != "filevalue" {
 		t.Errorf("file ref: v=%q err=%v", v, err)
 	}
-	if _, err := resolveSecret(""); !errors.Is(err, errSecretMissing) {
-		t.Errorf("empty: want errSecretMissing, got %v", err)
+	if v, err := resolveValue("plain-literal"); err != nil || v != "plain-literal" {
+		t.Errorf("literal: want pass-through, got v=%q err=%v", v, err)
 	}
-	if _, err := resolveSecret("env:TSSSERVER_DEFINITELY_UNSET"); !errors.Is(err, errSecretMissing) {
-		t.Errorf("unset env: want errSecretMissing, got %v", err)
+	if _, err := resolveValue(""); !errors.Is(err, errValueMissing) {
+		t.Errorf("empty: want errValueMissing, got %v", err)
 	}
-	if _, err := resolveSecret("plaintext"); !errors.Is(err, errSecretPlaintext) {
-		t.Errorf("plaintext: want errSecretPlaintext, got %v", err)
+	if _, err := resolveValue("env:REF_DEFINITELY_UNSET"); !errors.Is(err, errValueMissing) {
+		t.Errorf("unset env: want errValueMissing, got %v", err)
 	}
-	if _, err := resolveSecret("file:/no/such/path"); err == nil {
+	if _, err := resolveValue("file:/no/such/path"); err == nil {
 		t.Error("missing file: want error, got nil")
 	}
 }
 
-func TestOptionalSecret(t *testing.T) {
-	t.Setenv("TSSSERVER_OPT_OK", "v")
-	if err := optionalSecret(""); err != nil {
-		t.Errorf("empty optional: want nil, got %v", err)
-	}
-	if err := optionalSecret("env:TSSSERVER_OPT_OK"); err != nil {
-		t.Errorf("set optional: want nil, got %v", err)
-	}
-	if err := optionalSecret("plainpush"); !errors.Is(err, errSecretPlaintext) {
-		t.Errorf("plaintext optional: want errSecretPlaintext, got %v", err)
-	}
-}
-
-// TestFullParamTableParse uses the server.md config-chapter sample YAML
-// to verify every parameter-table item lands.
+// TestFullParamTableParse uses the server.md v2 config-chapter sample YAML
+// to verify every parameter-table item lands. The pnet_psk/api_key/etc.
+// refs point at REF_* (non-schema) names that are NOT set, so the env
+// layer leaves the ref strings intact for the assertions.
 func TestFullParamTableParse(t *testing.T) {
 	writeConfig(t, `
-log:   { level: info, format: json }
+log: { level: info, format: json }
 metrics: { listen: ":9090" }
 
 relay:
   enable: true
   listen: ["/ip4/0.0.0.0/tcp/4001"]
-  pnet_psk_ref: env:TSSSERVER_RELAY__PNET_PSK
+  pnet_psk: env:REF_RELAY_PSK
   token_verify:
     source: config
     group_pubkeys: ["pk1", "pk2"]
@@ -244,18 +328,17 @@ relay:
     reservation_per_token: 4
     reservation_per_group: 8
     bandwidth_per_conn: "1MiB/s"
+    circuit_max_duration: "10m"
 
 coord:
   enable: true
   http: { listen: ":8080" }
-  db:   { dsn_ref: env:TSSSERVER_COORD__DB_DSN }
+  db: { dsn: env:REF_COORD_DSN }
   external:
-    auth: mtls
-    api_key_ref: env:TSSSERVER_COORD__EXTERNAL__API_KEY
-    result_callback: webhook
-  push:
-    fcm_cred_ref: env:TSSSERVER_COORD__PUSH__FCM
-    apns_cred_ref: env:TSSSERVER_COORD__PUSH__APNS
+    api_key: env:REF_COORD_KEY
+    result_webhook: env:REF_COORD_RESULT_WEBHOOK
+  notify:
+    webhook: env:REF_COORD_NOTIFY_WEBHOOK
   ttl: { skew_tolerance: "30s" }
   quorum: { signer_select: liveness }
   dispatch: { timeout: "120s" }
@@ -270,7 +353,7 @@ coord:
 		"metrics.listen":                     cfg.Metrics.Listen == ":9090",
 		"relay.enable":                       cfg.Relay.Enable,
 		"relay.listen":                       len(cfg.Relay.Listen) == 1 && cfg.Relay.Listen[0] == "/ip4/0.0.0.0/tcp/4001",
-		"relay.pnet_psk_ref":                 cfg.Relay.PnetPSKRef == "env:TSSSERVER_RELAY__PNET_PSK",
+		"relay.pnet_psk":                     cfg.Relay.PnetPSK == "env:REF_RELAY_PSK",
 		"relay.token_verify.source":          cfg.Relay.TokenVerify.Source == "config",
 		"relay.token_verify.group_pubkeys":   len(cfg.Relay.TokenVerify.GroupPubkeys) == 2,
 		"relay.rendezvous.enable":            cfg.Relay.Rendezvous.Enable,
@@ -280,12 +363,10 @@ coord:
 		"relay.limits.circuit_max_duration":  cfg.Relay.Limits.CircuitMaxDuration == "10m",
 		"coord.enable":                       cfg.Coord.Enable,
 		"coord.http.listen":                  cfg.Coord.HTTP.Listen == ":8080",
-		"coord.db.dsn_ref":                   cfg.Coord.DB.DSNRef == "env:TSSSERVER_COORD__DB_DSN",
-		"coord.external.auth":                cfg.Coord.External.Auth == "mtls",
-		"coord.external.api_key_ref":         cfg.Coord.External.APIKeyRef == "env:TSSSERVER_COORD__EXTERNAL__API_KEY",
-		"coord.external.result_callback":     cfg.Coord.External.ResultCallback == "webhook",
-		"coord.push.fcm_cred_ref":            cfg.Coord.Push.FCMCredRef == "env:TSSSERVER_COORD__PUSH__FCM",
-		"coord.push.apns_cred_ref":           cfg.Coord.Push.APNSCredRef == "env:TSSSERVER_COORD__PUSH__APNS",
+		"coord.db.dsn":                       cfg.Coord.DB.DSN == "env:REF_COORD_DSN",
+		"coord.external.api_key":             cfg.Coord.External.APIKey == "env:REF_COORD_KEY",
+		"coord.external.result_webhook":      cfg.Coord.External.ResultWebhook == "env:REF_COORD_RESULT_WEBHOOK",
+		"coord.notify.webhook":               cfg.Coord.Notify.Webhook == "env:REF_COORD_NOTIFY_WEBHOOK",
 		"coord.ttl.skew_tolerance":           cfg.Coord.TTL.SkewTolerance == "30s",
 		"coord.quorum.signer_select":         cfg.Coord.Quorum.SignerSelect == "liveness",
 		"coord.dispatch.timeout":             cfg.Coord.Dispatch.Timeout == "120s",
@@ -297,26 +378,21 @@ coord:
 	}
 }
 
-// TestValidateFullValid injects all required/optional secrets and
-// expects overall pass.
+// TestValidateFullValid injects all required values (via REF_* refs) and
+// expects pass.
 func TestValidateFullValid(t *testing.T) {
-	t.Setenv("TSSSERVER_RELAY__PNET_PSK", "psk")
-	t.Setenv("TSSSERVER_COORD__DB_DSN", "postgres://x")
-	t.Setenv("TSSSERVER_COORD__PUSH__FCM", "fcm")
-	t.Setenv("TSSSERVER_COORD__PUSH__APNS", "apns")
+	t.Setenv(refPSK, "psk")
+	t.Setenv(refDSN, "postgres://x")
+	t.Setenv(refKey, "key")
+	t.Setenv(refRW, "https://ext/result")
+	t.Setenv(refNW, "https://ext/notify")
 	cfg := Config{
 		Relay: RelayConfig{
 			Enable:      true,
-			PnetPSKRef:  "env:TSSSERVER_RELAY__PNET_PSK",
+			PnetPSK:     "env:" + refPSK,
 			TokenVerify: TokenVerifyConfig{Source: "config"},
 		},
-		Coord: CoordConfig{
-			Enable:   true,
-			DB:       CoordDBConfig{DSNRef: "env:TSSSERVER_COORD__DB_DSN", Encryption: CoordDBEncryptionConfig{Enable: true}},
-			External: CoordExternalConfig{Auth: "mtls", ResultCallback: "webhook"},
-			Push:     CoordPushConfig{FCMCredRef: "env:TSSSERVER_COORD__PUSH__FCM", APNSCredRef: "env:TSSSERVER_COORD__PUSH__APNS"},
-			Quorum:   CoordQuorumConfig{SignerSelect: "liveness"},
-		},
+		Coord: fullCoord("env:"+refDSN, "env:"+refKey, "env:"+refRW, "env:"+refNW),
 	}
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("full valid config: want nil, got %v", err)

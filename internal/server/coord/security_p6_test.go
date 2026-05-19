@@ -3,8 +3,6 @@ package coord
 import (
 	"context"
 	"crypto/rand"
-	"crypto/tls"
-	"crypto/x509"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -55,37 +53,9 @@ func TestExtAuthAPIKeyHardening(t *testing.T) {
 	}
 }
 
-// mtls: checkExternalAuth is a pure decision — a TLS request with no verified
-// client-cert chain is rejected; a verified chain (or a plaintext request from
-// a proxy that already terminated mTLS) is allowed.
-func TestExtAuthMTLSHardening(t *testing.T) {
-	c := &Coord{cfg: Config{ExternalAuth: authMTLS}}
-	mkReq := func() *http.Request {
-		r, err := http.NewRequestWithContext(context.Background(),
-			http.MethodGet, "/v1/requests/x", nil)
-		if err != nil {
-			t.Fatalf("req: %v", err)
-		}
-		return r
-	}
-
-	// No TLS state (reverse proxy terminated mTLS) -> deferred, allowed.
-	if err := c.checkExternalAuth(mkReq()); err != nil {
-		t.Fatalf("nil TLS: want allow got %v", err)
-	}
-	// TLS present but no verified client cert chain -> rejected.
-	withTLS := mkReq()
-	withTLS.TLS = &tls.ConnectionState{}
-	if err := c.checkExternalAuth(withTLS); err == nil {
-		t.Fatal("TLS without verified chain: want reject got allow")
-	}
-	// TLS with a verified chain -> allowed.
-	verified := mkReq()
-	verified.TLS = &tls.ConnectionState{VerifiedChains: [][]*x509.Certificate{{{}}}}
-	if err := c.checkExternalAuth(verified); err != nil {
-		t.Fatalf("verified chain: want allow got %v", err)
-	}
-}
+// External auth is fixed api_key (user ruling 2026-05-19): the mtls
+// option and its hardening test were removed. TestExtAuthAPIKeyHardening
+// above is the sole external-auth gate test.
 
 // --- rate limiting (anti-abuse) ------------------------------------------
 

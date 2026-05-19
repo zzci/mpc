@@ -13,25 +13,23 @@ import (
 
 // pnet PSK handling implements server.md R4 layer 1 (private network): a peer
 // without the 32-byte swarm key cannot speak the protocol, so the relay is
-// invisible on the public internet. The key is a secret: server.md "secret handling"
-// forbids plaintext in committed config, mandating env:/file: injection. N-001
-// validates the reference resolves but does not expose the resolved bytes
-// (resolveSecret is unexported and internal/server is out of N-002 scope), so
-// the same env:/file: convention is mirrored here, restricted to producing the
-// pnet key.
+// invisible on the public internet. Per config framework v2 (user ruling
+// 2026-05-19) the value may be a literal or an env:/file: reference; the
+// resolved bytes must decode to a 32-byte key. internal/server is out of
+// N-002 scope so the same resolution convention is mirrored here, restricted
+// to producing the pnet key.
 
 const pskLen = 32
 
-// errSecretMissing mirrors N-001's contract: an empty or unset reference.
-var errSecretMissing = errors.New("relay: required secret missing")
+// errSecretMissing is an empty/unset value (literal or resolved reference).
+var errSecretMissing = errors.New("relay: required pnet psk missing")
 
-// resolvePSK resolves the relay.pnet_psk_ref reference (env:VAR / file:/path)
-// and decodes it into a 32-byte libp2p private-network swarm key. The decoded
-// secret must be exactly 32 bytes, accepted as 64 hex chars or std base64;
-// anything else (including a plaintext literal, rejected by N-001's
-// Validate before this is reached) fails fast.
-func resolvePSK(ref string) (pnet.PSK, error) {
-	raw, err := resolveSecretRef(ref)
+// resolvePSK resolves the relay.pnet_psk value (a literal, or an env:VAR /
+// file:/path reference) and decodes it into a 32-byte libp2p private-network
+// swarm key. The resolved value must be exactly 32 bytes, accepted as 64 hex
+// chars or std base64; anything else fails fast.
+func resolvePSK(v string) (pnet.PSK, error) {
+	raw, err := resolveSecretRef(v)
 	if err != nil {
 		return nil, err
 	}
@@ -45,30 +43,31 @@ func resolvePSK(ref string) (pnet.PSK, error) {
 	return nil, fmt.Errorf("relay: pnet psk must decode to %d bytes (hex or base64)", pskLen)
 }
 
-// resolveSecretRef accepts only env:VAR / file:/path references, mirroring
-// N-001 (server.md "secret handling": secrets injected by reference, never plaintext).
-func resolveSecretRef(ref string) (string, error) {
-	ref = strings.TrimSpace(ref)
+// resolveSecretRef resolves env:VAR / file:/path references and returns any
+// other non-empty string as a literal (config framework v2: literals are
+// allowed alongside references). Empty / unset = errSecretMissing.
+func resolveSecretRef(v string) (string, error) {
+	v = strings.TrimSpace(v)
 	switch {
-	case ref == "":
+	case v == "":
 		return "", errSecretMissing
-	case strings.HasPrefix(ref, "env:"):
-		v := os.Getenv(strings.TrimPrefix(ref, "env:"))
-		if v == "" {
+	case strings.HasPrefix(v, "env:"):
+		got := os.Getenv(strings.TrimPrefix(v, "env:"))
+		if got == "" {
 			return "", errSecretMissing
 		}
-		return v, nil
-	case strings.HasPrefix(ref, "file:"):
-		b, err := os.ReadFile(strings.TrimPrefix(ref, "file:"))
+		return got, nil
+	case strings.HasPrefix(v, "file:"):
+		b, err := os.ReadFile(strings.TrimPrefix(v, "file:"))
 		if err != nil {
-			return "", fmt.Errorf("relay: read secret file: %w", err)
+			return "", fmt.Errorf("relay: read pnet psk file: %w", err)
 		}
-		v := strings.TrimSpace(string(b))
-		if v == "" {
+		got := strings.TrimSpace(string(b))
+		if got == "" {
 			return "", errSecretMissing
 		}
-		return v, nil
+		return got, nil
 	default:
-		return "", fmt.Errorf("relay: secret must be an env: or file: reference")
+		return v, nil
 	}
 }

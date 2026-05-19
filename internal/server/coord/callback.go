@@ -15,12 +15,12 @@ import (
 )
 
 // callbackSink delivers terminal status to the external business service
-// (docs/design/contract/api.md A4). webhook POSTs with bounded exponential-backoff
-// retries until acknowledged or the terminal-timeout; longpoll just signals
-// the parked A4 waiter (the request row already holds status/result). The
-// result must always be returned (docs/design/server/server.md C1).
+// (docs/design/contract/api.md A4). Result delivery is fixed webhook (user
+// ruling 2026-05-19): it POSTs with bounded exponential-backoff retries
+// until acknowledged or the terminal-timeout. The parked A4 long-poll
+// waiter is still signaled separately (the request row already holds
+// status/result). The result must always be returned (server.md C1).
 type callbackSink struct {
-	mode   string
 	url    string
 	client *http.Client
 	log    *slog.Logger
@@ -38,9 +38,6 @@ type callbackBody struct {
 // backoff in a bounded loop; the caller invokes this from a goroutine so a
 // slow/unreachable external service never blocks the state machine.
 func (s callbackSink) notifyTerminal(ctx context.Context, body callbackBody) {
-	if s.mode != callbackWebhook {
-		return // longpoll: the A4 waiter reads the persisted row
-	}
 	backoff := 500 * time.Millisecond
 	const maxBackoff = 30 * time.Second
 	deadline := time.Now().Add(2 * time.Minute)

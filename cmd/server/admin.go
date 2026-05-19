@@ -16,15 +16,14 @@ import (
 // interactive admin-api).
 //
 // server.md's config chapter has no admin fields and internal/server is out of
-// this task's scope, so admin settings are read directly from TSSSERVER_ADMIN__*
-// environment variables — the same env-injection channel server.md's "secret handling"
-// approves for secrets, and the same local-env-override precedent already used
-// in coord.go for TSSSERVER_COORD__EXTERNAL__CALLBACK_URL. Tokens are secrets:
-// they are injected via env only, never a committed literal.
+// this task's scope, so admin settings are read directly from MPC_ADMIN_*
+// environment variables — the same env-injection channel the config framework
+// approves for values. Tokens are secrets: prefer env injection over a
+// committed literal.
 const (
-	envAdminListen       = "TSSSERVER_ADMIN__LISTEN"
-	envAdminReadToken    = "TSSSERVER_ADMIN__READ_TOKEN"
-	envAdminControlToken = "TSSSERVER_ADMIN__CONTROL_TOKEN"
+	envAdminListen       = "MPC_ADMIN_LISTEN"
+	envAdminReadToken    = "MPC_ADMIN_READ_TOKEN"
+	envAdminControlToken = "MPC_ADMIN_CONTROL_TOKEN"
 	defaultAdminListen   = "127.0.0.1:9091" // admin.md §5: NOT public
 )
 

@@ -27,13 +27,26 @@ import (
 func runCoord(ctx context.Context, cfg server.Config) error {
 	cc := cfg.Coord
 
-	dbPath, err := resolveRef(cc.DB.DSNRef)
+	// Config framework v2 (user ruling 2026-05-19): every value may be a
+	// literal or an env:/file: reference; server.Config.Validate has
+	// already fail-fasted any missing required value before run() reaches
+	// here. external auth is fixed api_key, result delivery fixed webhook,
+	// notification a single fixed webhook — all three are required.
+	dbPath, err := resolveRef(cc.DB.DSN)
 	if err != nil {
 		return fmt.Errorf("coord db dsn: %w", err)
 	}
-	apiKey, err := resolveRef(cc.External.APIKeyRef)
-	if err != nil && cc.External.Auth == "api_key" {
-		return fmt.Errorf("coord api key: %w", err)
+	apiKey, err := resolveRef(cc.External.APIKey)
+	if err != nil {
+		return fmt.Errorf("coord external.api_key: %w", err)
+	}
+	resultWebhook, err := resolveRef(cc.External.ResultWebhook)
+	if err != nil {
+		return fmt.Errorf("coord external.result_webhook: %w", err)
+	}
+	notifyWebhook, err := resolveRef(cc.Notify.Webhook)
+	if err != nil {
+		return fmt.Errorf("coord notify.webhook: %w", err)
 	}
 
 	skew, err := time.ParseDuration(orDefault(cc.TTL.SkewTolerance, "30s"))
@@ -45,23 +58,12 @@ func runCoord(ctx context.Context, cfg server.Config) error {
 		return fmt.Errorf("coord dispatch.timeout: %w", err)
 	}
 
-	// api.md A4 needs a webhook target, but server.md config has no callback
-	// URL field; cmd/server accepts a local env override and otherwise falls
-	// back to longpoll so the binary always starts (results are still served
-	// via A3/A4 longpoll). Callback-URL plumbing is a deployment concern.
-	callback := orDefault(cc.External.ResultCallback, "webhook")
-	callbackURL := os.Getenv("TSSSERVER_COORD__EXTERNAL__CALLBACK_URL")
-	if callback == "webhook" && callbackURL == "" {
-		callback = "longpoll"
-	}
-
 	ccfg := coord.Config{
 		Listen:          orDefault(cc.HTTP.Listen, ":8080"),
 		DBPath:          dbPath,
-		ExternalAuth:    orDefault(cc.External.Auth, "mtls"),
 		APIKey:          apiKey,
-		ResultCallback:  callback,
-		CallbackURL:     callbackURL,
+		CallbackURL:     resultWebhook,
+		NotifyWebhook:   notifyWebhook,
 		SkewTolerance:   skew,
 		SignerSelect:    orDefault(cc.Quorum.SignerSelect, "liveness"),
 		DispatchTimeout: dispatch,
@@ -88,7 +90,13 @@ func runCoord(ctx context.Context, cfg server.Config) error {
 	defer func() { _ = presence.Close() }()
 
 	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
-	co, err := coord.New(ccfg, store, presence, coord.WithLogger(logger))
+	// Notification is a single fixed webhook (user ruling 2026-05-19):
+	// coord POSTs dispatch-wake events here and an external channel
+	// translates/delivers them (FCM/APNS/etc.). coord holds no push
+	// credentials and never blocks on delivery.
+	co, err := coord.New(ccfg, store, presence,
+		coord.WithLogger(logger),
+		coord.WithNotifier(newWebhookNotifier(notifyWebhook, logger)))
 	if err != nil {
 		return fmt.Errorf("coord init: %w", err)
 	}
@@ -130,9 +138,11 @@ func runCoord(ctx context.Context, cfg server.Config) error {
 // state (server.md C9b).
 func unlockProvider() coord.UnlockProvider { return nil }
 
-// resolveRef resolves an env:/file: secret reference (the same discipline
-// server.Config enforces). An empty ref yields an empty value; a plaintext value
-// is rejected so secrets never come from a committed config literal.
+// resolveRef resolves a config value the same way server.Config does
+// (config framework v2, user ruling 2026-05-19): env:/file: are resolved
+// references, any other non-empty string is a literal returned as-is, and
+// an empty value yields "" (coord.Config.validate then rejects a required
+// empty). Plaintext literals are no longer rejected.
 func resolveRef(ref string) (string, error) {
 	ref = strings.TrimSpace(ref)
 	switch {
@@ -143,11 +153,11 @@ func resolveRef(ref string) (string, error) {
 	case strings.HasPrefix(ref, "file:"):
 		b, err := os.ReadFile(strings.TrimPrefix(ref, "file:"))
 		if err != nil {
-			return "", fmt.Errorf("read secret file: %w", err)
+			return "", fmt.Errorf("read value file: %w", err)
 		}
 		return strings.TrimSpace(string(b)), nil
 	default:
-		return "", fmt.Errorf("secret must be an env: or file: reference")
+		return ref, nil
 	}
 }
 

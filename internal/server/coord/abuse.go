@@ -52,33 +52,18 @@ func (c *Coord) memberAllowed(ip string) bool {
 }
 
 // checkExternalAuth is the hardened external-service auth gate (api.md A1,
-// docs/design/server/server.md C7). It is a pure decision so it is unit-testable
-// without a live TLS listener.
+// docs/design/server/server.md C7). It is a pure decision so it is
+// unit-testable without a live listener.
 //
-//   - api_key: the presented X-API-Key must constant-time match the configured
-//     key. An empty/absent header is an explicit reject (fail-closed).
-//   - mtls: TLS termination/verification is the listener's job (cmd/server owns
-//     the listener; out of this package). coord adds a defence-in-depth check:
-//     when the request actually carries TLS state, it MUST present a verified
-//     client certificate chain — a TLS connection with no/again-unverified
-//     client cert is rejected rather than silently trusted. When r.TLS is nil
-//     (a reverse proxy already terminated mTLS and forwards plaintext) coord
-//     cannot re-derive the peer and defers to that deployment boundary, as
-//     documented in server/server.md (mTLS is a transport concern).
+// External auth is fixed api_key (user ruling 2026-05-19: the mtls option
+// was removed): the presented X-API-Key must constant-time match the
+// configured key. An empty/absent header is an explicit reject
+// (fail-closed). Transport security (TLS, optional reverse-proxy mTLS) is
+// the deployment/listener concern, out of this package.
 func (c *Coord) checkExternalAuth(r *http.Request) error {
-	switch c.cfg.ExternalAuth {
-	case authAPIKey:
-		k := r.Header.Get("X-API-Key")
-		if k == "" {
-			return errUnauthenticated("missing api key")
-		}
-		return c.checkAPIKey(k)
-	case authMTLS:
-		if r.TLS != nil && len(r.TLS.VerifiedChains) == 0 {
-			return errUnauthenticated("mtls: no verified client certificate")
-		}
-		return nil
-	default:
-		return nil
+	k := r.Header.Get("X-API-Key")
+	if k == "" {
+		return errUnauthenticated("missing api key")
 	}
+	return c.checkAPIKey(k)
 }

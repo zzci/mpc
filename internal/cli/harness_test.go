@@ -74,7 +74,7 @@ func startRelay(t *testing.T, ctx context.Context, root, serverBin, workdir, gro
 relay:
   enable: true
   listen: ["/ip4/127.0.0.1/tcp/0"]
-  pnet_psk_ref: "env:RELAY_PSK"
+  pnet_psk: "env:RELAY_PSK"
   token_verify: {source: config, group_pubkeys: ["%s"]}
   rendezvous: {enable: false}
   limits: {reservation_per_token: 8, reservation_per_group: 16, bandwidth_per_conn: "4MiB/s"}

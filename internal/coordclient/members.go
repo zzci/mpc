@@ -7,49 +7,9 @@ import (
 	"net/http"
 )
 
-// Platform is the push transport a member device registers (api.md B2).
-type Platform string
-
-const (
-	// PlatformFCM is Android Firebase Cloud Messaging.
-	PlatformFCM Platform = "fcm"
-	// PlatformAPNs is Apple Push Notification service.
-	PlatformAPNs Platform = "apns"
-)
-
-// pushBody mirrors internal/server/coord pushBody (api.md:39). The body is the
-// signed params for B2; the member signature lives in the X-Member-* headers,
-// so no body `sig` field is sent (the server reads it from headers).
-type pushBody struct {
-	GroupID  string `json:"groupId"`
-	MemberID string `json:"memberId"`
-	Platform string `json:"platform"`
-	Token    string `json:"token"`
-}
-
-// RegisterPush registers (or replaces) this member's push token
-// (api.md B2, PUT /v1/members/self/push → 204). platform must be FCM or APNs.
-func (c *Client) RegisterPush(ctx context.Context, platform Platform, token string) error {
-	if platform != PlatformFCM && platform != PlatformAPNs {
-		return fmt.Errorf("coordclient: platform must be fcm or apns, got %q", platform)
-	}
-	body, err := json.Marshal(pushBody{
-		GroupID:  c.groupID,
-		MemberID: c.memberID,
-		Platform: string(platform),
-		Token:    token,
-	})
-	if err != nil {
-		return fmt.Errorf("coordclient: marshal push: %w", err)
-	}
-	_, err = c.do(ctx, request{
-		method:   http.MethodPut,
-		path:     "/v1/members/self/push",
-		body:     body,
-		authVerb: "B2:push",
-	})
-	return err
-}
+// (B2 register-push-token removed with the single-fixed-webhook ruling
+// 2026-05-19: coord holds no push tokens/credentials and no longer
+// distinguishes fcm/apns; an external notification channel owns delivery.)
 
 // heartbeatBody mirrors internal/server/coord heartbeatBody (api.md:53).
 type heartbeatBody struct {

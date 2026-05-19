@@ -64,15 +64,21 @@ export async function startServer(opts: ServerOptions): Promise<ServerHandle> {
 relay:
   enable: true
   listen: ["/ip4/127.0.0.1/tcp/0"]
-  pnet_psk_ref: "env:RELAY_PNET_PSK"
+  pnet_psk: "env:RELAY_PNET_PSK"
   token_verify: { source: config, group_pubkeys: ["${opts.groupPubB64}"] }
   rendezvous: { enable: false }
   limits: { reservation_per_token: 8, reservation_per_group: 16, bandwidth_per_conn: "4MiB/s" }
 coord:
   enable: true
   http: { listen: "127.0.0.1:${coordPort}" }
-  db: { dsn_ref: "env:COORD_DB_DSN", encryption: { enable: false } }
-  external: { auth: api_key, api_key_ref: "env:COORD_API_KEY", result_callback: longpoll }
+  db: { dsn: "env:COORD_DB_DSN", encryption: { enable: false } }
+  # Config framework v2 (user ruling 2026-05-19): external auth is fixed
+  # api_key, result delivery fixed webhook, notification a single fixed
+  # webhook (all required). This E2E fetches the result via the A4
+  # long-poll endpoint, so the webhook targets are unused localhost
+  # discard URLs and the background POST failing is harmless here.
+  external: { api_key: "env:COORD_API_KEY", result_webhook: "http://127.0.0.1:9/result" }
+  notify: { webhook: "http://127.0.0.1:9/notify" }
   ttl: { skew_tolerance: "2m" }
   quorum: { signer_select: stable }
   dispatch: { timeout: "2m" }
@@ -93,9 +99,9 @@ coord:
       // iron-law guardrail requires this explicit non-production confirmation;
       // node fail-closes without it. E2E is non-production by definition.
       ALLOW_INSECURE_DB: '1',
-      TSSSERVER_ADMIN__LISTEN: `127.0.0.1:${adminPort}`,
-      TSSSERVER_ADMIN__READ_TOKEN: 'e2e-admin-read-token-0001',
-      TSSSERVER_ADMIN__CONTROL_TOKEN: 'e2e-admin-control-token-0002',
+      MPC_ADMIN_LISTEN: `127.0.0.1:${adminPort}`,
+      MPC_ADMIN_READ_TOKEN: 'e2e-admin-read-token-0001',
+      MPC_ADMIN_CONTROL_TOKEN: 'e2e-admin-control-token-0002',
     },
     stdout: 'inherit',
     stderr: 'pipe',

@@ -1,6 +1,6 @@
 // Package coordclient is the member-side coord API client: pull pending
-// signing requests, approve/reject, heartbeat, register push, receive START,
-// and report {R,S,V}, with member-identity signature auth and TTL awareness
+// signing requests, approve/reject, heartbeat, receive START, and report
+// {R,S,V}, with member-identity signature auth and TTL awareness
 // (docs/design/contract/api.md B, docs/design/mcp/sdk.md §1 coord-client module).
 //
 // Authoritative read-only baselines: docs/design/contract/api.md (B1-B7 endpoints,

@@ -95,8 +95,8 @@ func (c *Coord) verifyMemberAuth(a memberAuthSig, method string, params, identit
 	return nil
 }
 
-// checkAPIKey constant-time compares the presented external API key (api.md
-// A1, ExternalAuth=="api_key").
+// checkAPIKey constant-time compares the presented external API key
+// (api.md A1; external auth is fixed api_key).
 func (c *Coord) checkAPIKey(presented string) error {
 	if subtle.ConstantTimeCompare([]byte(presented), []byte(c.cfg.APIKey)) != 1 {
 		return errUnauthenticated("invalid api key")

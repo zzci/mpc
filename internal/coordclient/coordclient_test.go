@@ -26,24 +26,8 @@ func mustKey(t *testing.T) *btcec.PrivateKey {
 	return k
 }
 
-func TestRegisterPush_B2(t *testing.T) {
-	priv := mustKey(t)
-	m := newMockCoord(t, priv.PubKey().SerializeCompressed(), "g1")
-	m.on(http.MethodPut, "push", func(w http.ResponseWriter, _ *http.Request, params []byte) {
-		var b pushBody
-		if json.Unmarshal(params, &b) != nil || b.Platform != "fcm" || b.Token != "tok" {
-			t.Errorf("unexpected push body: %s", params)
-		}
-		w.WriteHeader(http.StatusNoContent)
-	})
-	c := newTestClient(t, m, priv)
-	if err := c.RegisterPush(context.Background(), PlatformFCM, "tok"); err != nil {
-		t.Fatalf("RegisterPush: %v", err)
-	}
-	if err := c.RegisterPush(context.Background(), "telegram", "x"); err == nil {
-		t.Fatal("expected platform validation error")
-	}
-}
+// (TestRegisterPush_B2 removed: B2 register-push-token was deleted with
+// the single-fixed-webhook ruling 2026-05-19.)
 
 func TestHeartbeat_B5(t *testing.T) {
 	priv := mustKey(t)

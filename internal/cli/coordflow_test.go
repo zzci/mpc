@@ -246,11 +246,15 @@ func TestE2ECoordEnvelopeFlowRealCoord(t *testing.T) {
 		_ = ln.Close()
 
 		c, nerr := coord.New(coord.Config{
-			Listen:          addr,
-			DBPath:          dbPath,
-			ExternalAuth:    "api_key",
-			APIKey:          "ext-secret",
-			ResultCallback:  "longpoll",
+			Listen: addr,
+			DBPath: dbPath,
+			APIKey: "ext-secret",
+			// Result delivery is fixed webhook (user ruling 2026-05-19);
+			// this flow consumes the result via the A4 long-poll endpoint
+			// (resultHub + persisted row), so the webhook target is an
+			// unused dummy and the async POST failing is harmless here.
+			CallbackURL:     "http://127.0.0.1:0/unused",
+			NotifyWebhook:   "http://127.0.0.1:0/unused",
 			SkewTolerance:   2 * time.Minute,
 			SignerSelect:    "stable",
 			DispatchTimeout: 2 * time.Minute,
