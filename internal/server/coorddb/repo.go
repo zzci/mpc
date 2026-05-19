@@ -22,10 +22,15 @@ import (
 var ErrConflict = errors.New("coorddb: state guard not satisfied")
 
 // GroupRecord is one groups row (public info + S-002 epoch + derived
-// chain addresses). EVMAddress/TronAddress are filled by ProvisionGroup,
-// deterministically derived from ECDSAPubkey inside the write
-// transaction (callers neither need nor should set them; an address is
-// not the bare pubkey — database.md groups schema + address-record).
+// chain addresses + HD chaincode). EVMAddress/TronAddress are filled by
+// ProvisionGroup, deterministically derived from ECDSAPubkey inside the
+// write transaction (callers neither need nor should set them; an
+// address is not the bare pubkey — database.md groups schema +
+// address-record). Chaincode is the 32-byte commit-reveal output from
+// docs/design/mcp/address-derivation.md §3, persisted in the same
+// transaction; nil means "legacy group, no HD" (§F5: legacy groups
+// keep a single address and cannot be retrofitted with HD because
+// reshare is forbidden).
 type GroupRecord struct {
 	GroupID     string
 	ECDSAPubkey []byte
@@ -36,6 +41,7 @@ type GroupRecord struct {
 	CreatedAt   string // RFC3339
 	EVMAddress  string // EIP-55; derived by ProvisionGroup from ECDSAPubkey
 	TronAddress string // Base58Check; derived by ProvisionGroup from ECDSAPubkey
+	Chaincode   []byte // 32B commit-reveal HD chaincode (address-derivation.md §3/§4); nil = legacy non-HD group (F5)
 }
 
 // deriveChainAddrs deterministically derives the EVM (EIP-55) and TRON
@@ -69,14 +75,18 @@ type MemberRecord struct {
 // Auth/signature checks are X-001; this method only persists — the
 // caller must have validated already.
 func (s *Store) ProvisionGroup(ctx context.Context, g GroupRecord, members []MemberRecord) error {
+	if len(g.Chaincode) != 0 && len(g.Chaincode) != chaincodeLen {
+		return fmt.Errorf("coorddb: chaincode must be 32 bytes or nil, got %d", len(g.Chaincode))
+	}
 	evmAddr, tronAddr := deriveChainAddrs(g.ECDSAPubkey)
 	return s.WithTx(ctx, func(tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx,
 			`INSERT INTO groups
-			 (group_id, ecdsa_pubkey, threshold_t, parties_n, group_pubkey, epoch, created_at, updated_at, evm_address, tron_address)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			 (group_id, ecdsa_pubkey, threshold_t, parties_n, group_pubkey, epoch, created_at, updated_at, evm_address, tron_address, chaincode)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			g.GroupID, g.ECDSAPubkey, g.ThresholdT, g.PartiesN, g.GroupPubkey,
-			g.Epoch, g.CreatedAt, g.CreatedAt, evmAddr, tronAddr); err != nil {
+			g.Epoch, g.CreatedAt, g.CreatedAt, evmAddr, tronAddr,
+			nullableBlob(g.Chaincode)); err != nil {
 			return fmt.Errorf("coorddb: insert group: %w", err)
 		}
 		for _, m := range members {
@@ -220,4 +230,20 @@ func nullStr(s string) any {
 		return nil
 	}
 	return s
+}
+
+// chaincodeLen is the fixed byte length of an HD chaincode produced by
+// the commit-reveal HKDF (address-derivation.md §3: HKDF L=32). The
+// 00004 migration enforces the same constraint at the storage layer
+// (BLOB(32) NULL CHECK).
+const chaincodeLen = 32
+
+// nullableBlob marshals an optional BLOB column: an empty/nil slice is
+// stored as SQL NULL (legacy non-HD group, F5), otherwise the bytes are
+// passed through verbatim.
+func nullableBlob(b []byte) any {
+	if len(b) == 0 {
+		return nil
+	}
+	return b
 }
