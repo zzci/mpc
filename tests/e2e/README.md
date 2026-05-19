@@ -99,7 +99,7 @@ no cryptographic/contract/MPC code is changed.
 `ALLOW_INSECURE_DB=1`, encryption off), N member-device containers (each with
 its OWN private `/work` bind holding the secret `memberKeyHex`/`groupKeyHex`
 and `result.json`), and a `mock-extsvc` container. Members reach the relay
-only via `/dns4/node/tcp/4001`. Peer discovery + barriers use a shared,
+only via `/dns4/server/tcp/4001`. Peer discovery + barriers use a shared,
 **secret-free** `/rz` rendezvous volume (only peerIds + PUBLIC member pubkeys
 + `ready-*` markers); the real MPC traffic crosses containers over libp2p
 Noise + circuit-relay v2. The test asserts the §3.1 ring + EXPIRED, plus the

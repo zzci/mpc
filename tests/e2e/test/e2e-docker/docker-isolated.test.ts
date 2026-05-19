@@ -8,7 +8,7 @@ import { join } from 'node:path'
  * verify -> external RETURNED + 3-chain recover) but every simulated machine
  * is its own container on a real Docker bridge network — no 127.0.0.1
  * shortcut. Plus the EXPIRED path and the §3.3 isolation assertions:
- *   - real-network: members reach the relay only via `/dns4/node/...` (no
+ *   - real-network: members reach the relay only via `/dns4/server/...` (no
  *     loopback) and every device proves all-conns-via-relay across containers;
  *   - physical keystore isolation: each device's secret identity material is
  *     on its OWN private bind; the shared rendezvous volume carried only
@@ -139,7 +139,7 @@ describe('docker isolated ring (testing.md §3.3)', () => {
       // --- §3.3 isolation assertions ---
       // (1) real-network: relay reachable only via Docker DNS, never loopback.
       for (const a of RELAY_ADDRS) {
-        expect(a.startsWith('/dns4/node/')).toBe(true)
+        expect(a.startsWith('/dns4/server/')).toBe(true)
         expect(a.includes('127.0.0.1') || a.includes('localhost')).toBe(false)
       }
       // every device proved all-MPC-conns-via-relay ACROSS containers.
