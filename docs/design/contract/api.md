@@ -29,10 +29,13 @@ Resp 202 { requestId, status:"PENDING" }
 ### A3 查询状态
 `GET /v1/requests/{requestId}` → `{ requestId, status, fail_reason?, result?{R,S,V}(b64) }`
 
-### A4 结果回传(coord → 外部服务)
-`coord.external.result_callback = webhook | longpoll`
-- **webhook**:`POST {外部回调URL}` `{ requestId, status, RSV?(b64), reason? }`;失败按退避重试至确认或终态超时。
-- **longpoll**:外部服务 `GET /v1/requests/{id}/result?wait=…` 阻塞至终态。
+### A4 结果回传(coord → 外部服务,固定 webhook)
+结果回传**固定 webhook**(用户裁定 2026-05-19,删 longpoll)。
+- `POST {coord.external.result_webhook.url}` body `{ requestId, status, RSV?(b64), reason? }`;失败按退避重试至确认或终态超时。
+- **回调鉴权(防伪造,用户裁定 2026-05-19,必备)**:coord 用 `result_webhook.secret` 对 `timestamp + "." + 原始 body` 做 HMAC-SHA256,置头:
+  - `X-MCP-Timestamp: <unix 秒>`
+  - `X-MCP-Signature: t=<unix 秒>,v1=<hex(HMAC-SHA256)>`
+  外部服务**必须**用同一 secret 重算、常时比较、并按时钟 skew 容差拒过期/重放;验签不过即丢弃(防攻击者向回调端点伪造 `{requestId,status,RSV}`)。通知 webhook(server.md `coord.notify.webhook`)用 `notify.webhook.secret` 同法签名。
 - coord **回传前用组公钥验** `ECDSA(pub, digest32, R,S)`,无效 → `FAILED` 不回传伪结果。
 - 终态:`RETURNED`(含 RSV)/`EXPIRED`/`REJECTED`/`FAILED`(含 reason)。
 
