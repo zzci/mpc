@@ -2,19 +2,16 @@ module github.com/zzci/mpc
 
 go 1.25.10
 
-// tss-lib v3 is vendored locally via a replace directive: external/tss-lib is
-// github.com/bnb-chain/tss-lib/v3 at tag v3.0.0 (pure Go, no cgo), pinned to an
-// audited source copy so the MPC kernel never pulls an upstream fork.
+// tss-lib v3 is vendored at external/tss-lib (replace below): an audited
+// copy of github.com/bnb-chain/tss-lib/v3 @v3.0.0, pure Go, no cgo.
 require github.com/bnb-chain/tss-lib/v3 v3.0.0
 
 require (
 	github.com/btcsuite/btcd/btcec/v2 v2.3.2
 	github.com/btcsuite/btcutil v1.0.2
 	github.com/gowebpki/jcs v1.0.1
-	// libp2p baseline: go-libp2p v0.48.0 (security bump from v0.43.0, user
-	// ruling 2026-05-18 / PLAN.md §1) — pulls quic-go v0.59.0 +
-	// webtransport-go v0.10.0, clearing GO-2025-4233 / GO-2026-4488 / -4485
-	// / -4483; govulncheck reports 0 called vulnerabilities. go1.25 line.
+	// go-libp2p v0.48.0 pulls quic-go v0.59.0 + webtransport-go v0.10.0
+	// (no known vulnerabilities in called code).
 	github.com/libp2p/go-libp2p v0.48.0
 	github.com/multiformats/go-multiaddr v0.16.1
 	github.com/mutecomm/go-sqlcipher/v4 v4.4.2
@@ -23,8 +20,8 @@ require (
 	go.yaml.in/yaml/v3 v3.0.4
 	golang.org/x/crypto v0.51.0
 	golang.org/x/text v0.37.0
-	// protobuf v1.36.6: tss-lib v3.0.0 `go test` verified ok at this version
-	// (no regression) and it satisfies the go-libp2p v0.48.0 baseline.
+	// protobuf v1.36.6: compatible with tss-lib v3.0.0 and the go-libp2p
+	// v0.48.0 baseline.
 	google.golang.org/protobuf v1.36.6
 )
 
@@ -134,24 +131,16 @@ require (
 
 replace github.com/bnb-chain/tss-lib/v3 => ./external/tss-lib
 
-// tss-lib needs the binance-chain/edwards25519 fork of agl/ed25519 (the
-// upstream agl package lacks the edwards25519 subpackage, so without this the
-// build fails). Same supply-chain policy as tss-lib: vendored locally at
-// external/ed25519 (source pinned from binance-chain/edwards25519
-// v0.0.0-20200305024217-f36fc4b53d43, go.mod added declaring the
-// github.com/agl/ed25519 path) so the build pulls no upstream fork and is
-// fully offline / reproducible. The replace is restated here because a
-// replaced module's own replace directives do not propagate.
+// agl/ed25519 lacks the edwards25519 subpackage tss-lib needs; the
+// binance-chain/edwards25519 fork supplies it, vendored at
+// external/ed25519 (no upstream fetch). Restated here because a replaced
+// module's own replace directives do not propagate.
 replace github.com/agl/ed25519 => ./external/ed25519
 
-// golang.org/x/mobile recorded-reason pin（L1 裁定 2026-05-18，RA-001/GM-001
-// YELLOW；docs/design/PLAN.md §1，commit d05f0f6）：gomobile 生成的 Android/iOS 桥接
-// 胶水代码 import golang.org/x/mobile/bind，模块须可解析该依赖，否则 gobind 报
-// 「no Go package in golang.org/x/mobile/bind」。pin 锚定 GM-001 已实证成功 .aar
-// 构建所解析的确切伪版本（docs/gomobile-build-report.md:15）；tool 指令使其不被
-// go mod tidy 裁剪并令 gomobile 工具可由本 go.mod 复现，否决 CI 内浮动
-// go install x/mobile@latest（非可复现/供应链风险/违 §1 pin 纪律）。连带 x/* 抬升
-// 由该确切伪版本 x/mobile 自身 go.mod 经 MVS 决定（x/crypto v0.39.0→v0.51.0 满足
-// §1「x/crypto ≥v0.39.0」下限；x/sys go1.25 下不再 pin；余为 indirect），校准门
-// GREEN 零回归实证（x/mobile 不被 wallet 运行码 import，仅 bind 工具用）。
+// gomobile-generated Android/iOS bind glue imports
+// golang.org/x/mobile/bind, so the module must resolve it. Pinned to the
+// exact version used for the reproducible .aar build; the tool directive
+// keeps it from being pruned by go mod tidy and makes the gomobile tool
+// reproducible from this go.mod (no floating @latest). Used only by the
+// bind tool, never by wallet runtime code.
 tool golang.org/x/mobile/cmd/gomobile
