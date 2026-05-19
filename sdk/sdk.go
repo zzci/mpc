@@ -110,3 +110,13 @@ func (s *SDK) ImportShare(blob []byte, passphrase string) (string, error) {
 func (s *SDK) OnWireMessage(b []byte) error {
 	return s.inner.OnWireMessage(b)
 }
+
+// --- FetchTransactions ----------------------------------------------------
+
+// FetchTransactions queries transaction information through the coord member
+// API for App listing/detail (does not enter MPC); 1:1 delegate of
+// internal/mobileapi.FetchTransactions. See docs/design/mcp/sdk.md §2.1 for
+// the reqJSON / result shape and the device-side A-zone recompute invariant.
+func (s *SDK) FetchTransactions(reqJSON string) (string, error) {
+	return s.inner.FetchTransactions(reqJSON)
+}
