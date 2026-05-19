@@ -155,6 +155,17 @@ coord:
    零 coord 依赖;单值开关违反「不留无意义可配项」。`source` 同步从 config
    schema/校验/默认值/example/.env 移除(RT-001 实施,串行于 WHA-001 合并后,
    同改 config.go)。
+6. **file/env/CLI 完整对应可文档化(用户裁定 2026-05-19)**:框架机制本已
+   schema 驱动、对**每个**叶子键三源(文件 / `MPC_`+大写点分 env / `--点.分`
+   CLI)1:1 等价(含 `[]string` 逗号分隔),无逐键注册、不会漂移。问题在
+   **文档枚举不全**:`.env.example` 仅列运维子集,本参数表缺
+   `coord.db.encryption.enable`、把 `relay.limits.*` 合并成一行、且无
+   env/CLI 列。**对策(CFGDOC-001,串行于 RT-001 之后——最后一个改 schema 的
+   任务,确保只文档化一次稳定 schema)**:本参数表升级为**完整 schema 派生
+   键矩阵**(每叶子键:yaml 路径 · `MPC_…` env 名 · `--…` CLI · 默认值 ·
+   是否 secret);`.env.example` 枚举**全部**键(每键一行 `MPC_…=` 占位 +
+   CLI 等价注释);新增**覆盖测试**断言「文档键集 == config.go schema 叶子
+   集」(防再漂移)。纯文档 + 1 测试,零 schema/行为变更;English-only。
 
 ## 密钥处理(随上款修订)
 
