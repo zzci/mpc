@@ -358,7 +358,11 @@ func runDevice(ctx context.Context, cfg DeviceConfig, res *DeviceResult) error {
 			}
 		}
 		dbg(cfg.Index, "sign barrier passed; running sign")
-		sig, serr := runSign(ctx, sgSess, signerPeers, cfg.Index, cfg.Threshold, cfg.Signers, share, digest)
+		// AD-1: master-key signing path (keyDerivationDelta=nil, childPub=nil).
+		// HD-child signing is wired through the same runSign and reached via
+		// AD-4 (walletcli + coord exposure); the E2E carrier here exercises the
+		// master-key path that has always been in place.
+		sig, serr := runSign(ctx, sgSess, signerPeers, cfg.Index, cfg.Threshold, cfg.Signers, share, digest, nil, nil)
 		_ = sgSess.Close()
 		dbg(cfg.Index, "sign done (err=%v)", serr)
 		if serr != nil {

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"fmt"
 	"math/big"
 	"sync"
@@ -188,10 +189,23 @@ func runKeygen(
 
 // runSign runs one threshold-signing session: the participating devices sign
 // the 32-byte digest and every signer returns the same low-S {R,S,V}.
+//
+// When keyDerivationDelta and childPub are both non-nil this session signs the
+// non-hardened HD child key (address-derivation.md §6, KDD path): the caller
+// has computed (IL, Q_child) offline via internal/hd.Derive — IL is public,
+// every signer adjusts its own in-memory Xj by IL·G, and the produced
+// signature recovers to Q_child instead of the group master key. When both
+// are nil the carrier signs against the group master key (the default
+// pre-AD-1 behaviour); mixing one nil with one set is rejected as a caller
+// bug.
 func runSign(
 	ctx context.Context, sess *transport.Session, peers peerTable,
 	index, threshold int, participants []int, share mpc.Share, digest []byte,
+	keyDerivationDelta *big.Int, childPub *ecdsa.PublicKey,
 ) (sigResult, error) {
+	if (childPub == nil) != (keyDerivationDelta == nil) {
+		return sigResult{}, fmt.Errorf("cli: runSign: childPub and keyDerivationDelta must both be set or both nil")
+	}
 	sd, err := mpc.UnmarshalSaveData(share.SaveData)
 	if err != nil {
 		return sigResult{}, fmt.Errorf("cli: load share: %w", err)
@@ -204,10 +218,24 @@ func runSign(
 	if err != nil {
 		return sigResult{}, err
 	}
+	// HD-child wiring (address-derivation.md §6): apply IL to this peer's
+	// in-memory share so the local party signs against Q_child. The mutation
+	// is on the freshly unmarshalled `sd` (a copy of share.SaveData); the
+	// persisted Share blob is never touched, so the same share can sign
+	// indefinitely many child indices without ever reshare-rotating.
+	if keyDerivationDelta != nil {
+		keys := []keygen.LocalPartySaveData{*sd}
+		if uerr := signing.UpdatePublicKeyAndAdjustBigXj(keyDerivationDelta, keys, childPub, tss.S256()); uerr != nil {
+			return sigResult{}, fmt.Errorf("cli: apply key derivation delta: %w", uerr)
+		}
+		sd = &keys[0]
+	}
 	params := tss.NewParameters(tss.S256(), tss.NewPeerContext(pids), self, len(pids), threshold)
 	outCh := make(chan tss.Message, len(pids))
 	endCh := make(chan *common.SignatureData, 1)
-	party := signing.NewLocalParty(new(big.Int).SetBytes(digest), params, *sd, outCh, endCh, len(digest))
+	// NewLocalPartyWithKDD with a nil delta is exactly NewLocalParty (see
+	// tss-lib local_party.go), so the master-signing path is unchanged.
+	party := signing.NewLocalPartyWithKDD(new(big.Int).SetBytes(digest), params, *sd, keyDerivationDelta, outCh, endCh, len(digest))
 
 	res, err := pumpOne(ctx, party, self.Id, pids, sess, peers, outCh, endCh)
 	if err != nil {

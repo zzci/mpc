@@ -2,6 +2,7 @@ package mpc
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"fmt"
 	"math/big"
 
@@ -52,6 +53,20 @@ type SignConfig struct {
 	Shares []Share
 	// Digest is the 32-byte message digest to sign.
 	Digest []byte
+
+	// ChildPub and KeyDerivationDelta together opt this session into HD-child
+	// signing per address-derivation.md §6 (tss-lib KDD path, no reshare, no
+	// child-private-key reconstruction). Compute them once via
+	// internal/hd.Derive(masterPub, chaincode, index).
+	//
+	// When both are nil the session signs against the group master key (the
+	// default, pre-AD-1 behaviour). When both are set the produced signature
+	// recovers to ChildPub; the in-memory keygen shares are adjusted for this
+	// session only (UpdatePublicKeyAndAdjustBigXj mutates copies, never the
+	// persisted Shares slice). Mixing (one nil, one not) is rejected — a
+	// half-set delta is always a caller bug.
+	ChildPub           *ecdsa.PublicKey
+	KeyDerivationDelta *big.Int
 }
 
 // Sign runs an in-process threshold ECDSA signing session over secp256k1: the
@@ -67,6 +82,9 @@ func Sign(ctx context.Context, cfg SignConfig) (Signature, error) {
 	}
 	if cfg.Threshold < 1 {
 		return Signature{}, fmt.Errorf("threshold must be >= 1, got %d", cfg.Threshold)
+	}
+	if (cfg.ChildPub == nil) != (cfg.KeyDerivationDelta == nil) {
+		return Signature{}, fmt.Errorf("signing: ChildPub and KeyDerivationDelta must both be set or both nil")
 	}
 	signers := len(cfg.Shares)
 	if signers < cfg.Threshold+1 {
@@ -96,6 +114,17 @@ func Sign(ctx context.Context, cfg SignConfig) (Signature, error) {
 		keys[i] = sd
 	}
 
+	// HD-child wiring (address-derivation.md §6): apply the keyDerivationDelta
+	// to every signer's in-memory share so each party signs against Q_child.
+	// The mutation is on `keys` (a fresh slice produced above from Unmarshal);
+	// the caller's persisted Share blobs are never touched, so the same shares
+	// can sign indefinitely many child indices without ever reshare-rotating.
+	if cfg.KeyDerivationDelta != nil {
+		if err := signing.UpdatePublicKeyAndAdjustBigXj(cfg.KeyDerivationDelta, keys, cfg.ChildPub, tss.S256()); err != nil {
+			return Signature{}, fmt.Errorf("apply key derivation delta: %w", err)
+		}
+	}
+
 	p2pCtx := tss.NewPeerContext(pids)
 	msg := new(big.Int).SetBytes(cfg.Digest)
 
@@ -105,7 +134,9 @@ func Sign(ctx context.Context, cfg SignConfig) (Signature, error) {
 	parties := make([]tss.Party, signers)
 	for i := 0; i < signers; i++ {
 		params := tss.NewParameters(tss.S256(), p2pCtx, pids[i], signers, cfg.Threshold)
-		parties[i] = signing.NewLocalParty(msg, params, keys[i], outCh, endCh, digestLen)
+		// NewLocalPartyWithKDD with a nil delta is exactly NewLocalParty (see
+		// tss-lib local_party.go), so the master-signing path is unchanged.
+		parties[i] = signing.NewLocalPartyWithKDD(msg, params, keys[i], cfg.KeyDerivationDelta, outCh, endCh, digestLen)
 	}
 
 	results, err := runProtocol(ctx, parties, outCh, endCh)
