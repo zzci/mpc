@@ -31,6 +31,7 @@ const (
 	CodeForbidden       = "FORBIDDEN"
 	CodeNotFound        = "NOT_FOUND"
 	CodeStateConflict   = "STATE_CONFLICT"
+	CodeLegacyNoHD      = "LEGACY_NO_HD"
 	CodeExpired         = "EXPIRED"
 	CodeRateLimited     = "RATE_LIMITED"
 	CodeLocked          = "LOCKED"
@@ -58,6 +59,11 @@ var (
 	ErrForbidden = errors.New("coordclient: forbidden (403)")
 	// ErrNotFound is 404: requestId/group unknown (api.md:72).
 	ErrNotFound = errors.New("coordclient: not found (404)")
+	// ErrLegacyNoHD is 409 LEGACY_NO_HD (api.md C-table): the group predates
+	// the address-derivation rollout and remains single-address /
+	// non-HD; the caller MUST fall back to the multi-group path (F5,
+	// address-derivation.md §8). Not retryable.
+	ErrLegacyNoHD = errors.New("coordclient: legacy non-HD group (409 LEGACY_NO_HD)")
 )
 
 // Is bridges *APIError to the sentinels so callers can write
@@ -76,6 +82,8 @@ func (e *APIError) Is(target error) bool {
 		return e.Code == CodeForbidden
 	case ErrNotFound:
 		return e.Code == CodeNotFound
+	case ErrLegacyNoHD:
+		return e.Code == CodeLegacyNoHD
 	default:
 		return false
 	}

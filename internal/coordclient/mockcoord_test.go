@@ -78,6 +78,7 @@ func newMockCoord(t *testing.T, memberPub []byte, groupID string) *mockCoord {
 	register("POST /v1/requests/{requestId}/decision", "B4:decision:", false)
 	register("GET /v1/groups/{groupId}/dispatch", "B6:dispatch", true)
 	register("POST /v1/requests/{requestId}/result", "B7:result", false)
+	register("GET /v1/groups/{groupId}/xpub", "B8:xpub", true)
 
 	m.srv = httptest.NewServer(mux)
 	t.Cleanup(m.srv.Close)
@@ -97,6 +98,8 @@ func routeKey(r *http.Request) string {
 		return "dispatch"
 	case hasSuffix(r.URL.Path, "/result"):
 		return "result"
+	case hasSuffix(r.URL.Path, "/xpub"):
+		return "xpub"
 	}
 	return r.URL.Path
 }

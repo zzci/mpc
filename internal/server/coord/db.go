@@ -101,6 +101,31 @@ func (d *db) group(ctx context.Context, groupID string) (groupRow, error) {
 	return g, err
 }
 
+// xpub reads a group's (ecdsa_pubkey, chaincode) for the B8 owning-member-only
+// xpub release path. A missing group surfaces errGroupNotFound; an existing
+// group whose chaincode IS NULL means a legacy non-HD group (F5), reported via
+// hasChaincode=false so the handler maps it to 409 LEGACY_NO_HD. The pubkey
+// bytes are returned verbatim from `groups.ecdsa_pubkey` (uncompressed 65B as
+// provisioned by S-002).
+func (d *db) xpub(ctx context.Context, groupID string) (pubkey, chaincode []byte, hasChaincode bool, err error) {
+	err = d.store.WithTx(ctx, func(tx *sql.Tx) error {
+		var cc []byte
+		row := tx.QueryRowContext(ctx,
+			`SELECT ecdsa_pubkey, chaincode FROM groups WHERE group_id = ?`, groupID)
+		if scanErr := row.Scan(&pubkey, &cc); scanErr != nil {
+			if errors.Is(scanErr, sql.ErrNoRows) {
+				return errGroupNotFound
+			}
+			return fmt.Errorf("coord: read xpub: %w", scanErr)
+		}
+		if cc != nil {
+			chaincode, hasChaincode = cc, true
+		}
+		return nil
+	})
+	return pubkey, chaincode, hasChaincode, err
+}
+
 // members returns every group_members row (active and removed) for the group.
 func (d *db) members(ctx context.Context, groupID string) ([]memberRow, error) {
 	var out []memberRow

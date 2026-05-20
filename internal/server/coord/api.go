@@ -49,6 +49,17 @@ func (c *Coord) router() http.Handler {
 	mux.Handle("POST /v1/requests/{requestId}/decision", c.lockGate(http.HandlerFunc(c.hDecision)))
 	mux.Handle("GET /v1/groups/{groupId}/dispatch", c.lockGate(http.HandlerFunc(c.hDispatch)))
 	mux.Handle("POST /v1/requests/{requestId}/result", c.lockGate(http.HandlerFunc(c.hResult)))
+	// B8 (address-derivation.md §7 / api.md B8) — owning-member-only HD xpub
+	// release. memberGate enforces B1 + groupId isolation; legacy groups
+	// (chaincode NULL) surface 409 LEGACY_NO_HD; the chaincode is **never**
+	// exposed on A surface (F1 hard constraint).
+	mux.Handle("GET /v1/groups/{groupId}/xpub", c.lockGate(http.HandlerFunc(c.hXpub)))
+
+	// B12 — group_derived_addresses (api.md B12, address-derivation.md §7.bis,
+	// Q-A/B/C/D user ruling 2026-05-20). Owning-member-only (§F1 strict / §7.bis.3);
+	// never an A-side route.
+	mux.Handle("POST /v1/groups/{groupId}/derived/register", c.lockGate(http.HandlerFunc(c.hDerivedRegister)))
+	mux.Handle("GET /v1/groups/{groupId}/derived", c.lockGate(http.HandlerFunc(c.hDerivedList)))
 
 	// S-002 — group/membership provisioning (self-attesting payloads).
 	mux.Handle("POST /v1/groups", c.lockGate(c.rateGate(http.HandlerFunc(c.hProvisionGroup))))

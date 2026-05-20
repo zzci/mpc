@@ -27,6 +27,7 @@ const (
 	codeForbidden       = "FORBIDDEN"
 	codeNotFound        = "NOT_FOUND"
 	codeStateConflict   = "STATE_CONFLICT"
+	codeLegacyNoHD      = "LEGACY_NO_HD"
 	codeExpired         = "EXPIRED"
 	codeRateLimited     = "RATE_LIMITED"
 	codeLocked          = "LOCKED"
@@ -51,6 +52,18 @@ func errNotFound(msg string) *apiError {
 
 func errStateConflict(msg string) *apiError {
 	return &apiError{status: http.StatusConflict, code: codeStateConflict, message: msg}
+}
+
+// errLegacyNoHD is the api.md C-table 409 LEGACY_NO_HD returned by B8
+// when the group's chaincode is NULL: HD applies only to groups created
+// post-address-derivation rollout; legacy groups remain single-address
+// and non-HD (docs/design/mcp/address-derivation.md §F5/§8).
+func errLegacyNoHD() *apiError {
+	return &apiError{
+		status:  http.StatusConflict,
+		code:    codeLegacyNoHD,
+		message: "group predates HD; multi-group remains the multi-address path",
+	}
 }
 
 func errExpired(msg string) *apiError {

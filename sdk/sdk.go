@@ -120,3 +120,14 @@ func (s *SDK) OnWireMessage(b []byte) error {
 func (s *SDK) FetchTransactions(reqJSON string) (string, error) {
 	return s.inner.FetchTransactions(reqJSON)
 }
+
+// --- FetchXpub ------------------------------------------------------------
+
+// FetchXpub pulls the HD extended public key for the caller's group through
+// the coord member API (api.md B8); 1:1 delegate of
+// internal/mobileapi.FetchXpub. See docs/design/mcp/address-derivation.md §7
+// for the owning-member-only release contract and `wallet address <i>` for
+// the offline derive flow that consumes the returned xpub.
+func (s *SDK) FetchXpub(reqJSON string) (string, error) {
+	return s.inner.FetchXpub(reqJSON)
+}

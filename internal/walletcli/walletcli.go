@@ -98,6 +98,8 @@ const helpText = `commands:
   sign <start-file>              decode + approve/reject + sign a coord START
   reshare <oldT> <newT> <newN>   reshare the in-session committee
   fetch <req-file>               query coord transaction info (no MPC)
+  xpub <req-file>                fetch this group's HD xpub from coord (B8)
+  address <i> <xpub-file>        offline-derive m/<i> ETH/BSC/TRON address
   wire <msg-file>                feed one received MPC wire message
   help                           show this help
   quit | exit                    leave the session
@@ -132,6 +134,10 @@ func (se *session) loop() int {
 			se.cmdReshare(rest)
 		case "fetch":
 			se.cmdFetch(rest)
+		case "xpub":
+			se.cmdXpub(rest)
+		case "address":
+			se.cmdAddress(rest)
 		case "wire":
 			se.cmdWire(rest)
 		default:
@@ -308,6 +314,47 @@ func (se *session) cmdFetch(args []string) {
 	res, err := fetchOp(se.sdk, string(reqJSON))
 	if err != nil {
 		se.fail("fetch: %v", err)
+		return
+	}
+	wl(se.out, res)
+}
+
+func (se *session) cmdXpub(args []string) {
+	if len(args) != 1 {
+		se.fail("usage: xpub <req-file>")
+		return
+	}
+	reqJSON, err := os.ReadFile(args[0])
+	if err != nil {
+		se.fail("read req: %v", err)
+		return
+	}
+	res, err := xpubOp(se.sdk, string(reqJSON))
+	if err != nil {
+		se.fail("xpub: %v", err)
+		return
+	}
+	wl(se.out, res)
+}
+
+func (se *session) cmdAddress(args []string) {
+	if len(args) != 2 {
+		se.fail("usage: address <i> <xpub-file>")
+		return
+	}
+	idx, err := strconv.ParseUint(args[0], 10, 32)
+	if err != nil {
+		se.fail("index must be a non-negative integer < 2^31")
+		return
+	}
+	xpubJSON, err := os.ReadFile(args[1])
+	if err != nil {
+		se.fail("read xpub: %v", err)
+		return
+	}
+	res, err := addressOp(string(xpubJSON), uint32(idx))
+	if err != nil {
+		se.fail("address: %v", err)
 		return
 	}
 	wl(se.out, res)
