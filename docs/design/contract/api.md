@@ -27,7 +27,9 @@ Resp 202 { requestId, status:"PENDING" }
 - 校验失败 → `400`(`proposerSig` 无效 / `metaHash≠H(businessInfo)` / `expiry` 已过 / groupId 未知)。
 
 ### A3 查询状态
-`GET /v1/requests/{requestId}` → `{ requestId, status, fail_reason?, result?{R,S,V}(b64) }`
+`GET /v1/requests/{requestId}`(`extAuth` 外部业务侧)→ `{ requestId, status, fail_reason?, result?{R,S,V}(b64) }`
+
+> **注**:coord 路由实际仅 `extAuth`(`coord/api.go:41`)。`internal/coordclient.Status`(SDKCF-001 引入)虽调同路径,但目前**未挂 memberGate**;成员侧自查请求状态在产品需要时应专设 B-side 端点(memberGate,只读自有请求集),非简单复用 A3 路径。本注释先存以提请将来 wiring 时不漏。
 
 ### A4 结果回传(coord → 外部服务,固定地址)
 结果回传**固定地址**(用户裁定 2026-05-19,删 longpoll)。
@@ -47,8 +49,8 @@ Resp 202 { requestId, status:"PENDING" }
 ### B1 鉴权
 - 每请求由成员身份私钥签名(`memberId + 方法 + 关键参数 + ts + nonce`);coord 用 `group_members.identity_pubkey` 验签;按 `groupId` 隔离与授权。
 
-### B2 注册推送 token
-`PUT /v1/members/self/push` `{ groupId, memberId, platform:"fcm|apns", token, sig }` → `204`
+### B2 注册推送 token(**已删除 2026-05-19**)
+`PUT /v1/members/self/push` —— CFG-001 单一固定通知 webhook 裁定下,coord 不再持推送凭证、不再区分 fcm/apns;路由已从 coord 移除,backing 表经 `00003_drop_push_tokens.sql` 删除。该端点**不可用**,客户端不应调用。本节保留作历史变更轨,新成员通知走单一 `coord.notify` webhook(见 `server.md`)。
 
 ### B3 拉取待签(上线拉取,A4)
 `GET /v1/groups/{groupId}/pending?since=…`(签名于 header)
