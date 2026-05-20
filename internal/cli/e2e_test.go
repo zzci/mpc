@@ -83,7 +83,7 @@ func TestE2EMultiProcessKeygenSignReshareViaRelay(t *testing.T) {
 	results := runDevicesInProc(t, ctx, cfgs)
 
 	digest, _ := hex.DecodeString(eip155Digest)
-	var groupPub string
+	var groupPub, chaincode string
 	for i, r := range results {
 		if r.Err != "" {
 			t.Fatalf("device %d failed: %s", i, r.Err)
@@ -98,6 +98,18 @@ func TestE2EMultiProcessKeygenSignReshareViaRelay(t *testing.T) {
 			groupPub = r.GroupPubHex
 		} else if r.GroupPubHex != groupPub {
 			t.Fatalf("device %d keygen public key mismatch:\n %s\n %s", i, r.GroupPubHex, groupPub)
+		}
+		// AD-2 acceptance: every device must emerge from post-DKG commit-reveal
+		// with the SAME 32-byte chaincode (address-derivation.md §3 binding-
+		// uniqueness + HKDF determinism). 64 hex chars == 32 bytes.
+		if len(r.ChaincodeHex) != 64 {
+			t.Fatalf("device %d chaincode hex length = %d, want 64 (32B): %q",
+				i, len(r.ChaincodeHex), r.ChaincodeHex)
+		}
+		if chaincode == "" {
+			chaincode = r.ChaincodeHex
+		} else if r.ChaincodeHex != chaincode {
+			t.Fatalf("device %d chaincode mismatch:\n %s\n %s", i, r.ChaincodeHex, chaincode)
 		}
 		// Reshare must preserve the wallet master public key (custody
 		// invariant, docs/design/mcp/sdk.md §7).

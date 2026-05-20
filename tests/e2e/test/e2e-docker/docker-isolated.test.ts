@@ -40,7 +40,7 @@ import { dockerLiveGate } from './docker-gate.ts'
 
 const gate = await dockerLiveGate()
 
-const RZ_FILE = /^(?:dev-\d+\.json|ready-(?:keygen|sign|reshare)-\d+|result-\d+\.json)$/
+const RZ_FILE = /^(?:dev-\d+\.json|ready-(?:keygen|chaincode|sign|reshare)-\d+|result-\d+\.json)$/
 const DEV_KEYS = new Set(['index', 'peerId', 'memberPub'])
 
 describe('docker isolated ring (testing.md §3.3)', () => {

@@ -49,6 +49,7 @@ type DeviceConfig struct {
 type DeviceResult struct {
 	Index          int    `json:"index"`
 	GroupPubHex    string `json:"groupPubHex"`    // uncompressed, post-keygen
+	ChaincodeHex   string `json:"chaincodeHex"`   // 32B HD chaincode from post-DKG commit-reveal (address-derivation.md §3)
 	ResharedPubHex string `json:"resharedPubHex"` // uncompressed, post-reshare
 	SigRHex        string `json:"sigRHex"`
 	SigSHex        string `json:"sigSHex"`
@@ -307,6 +308,31 @@ func runDevice(ctx context.Context, cfg DeviceConfig, res *DeviceResult) error {
 		return err
 	}
 	res.GroupPubHex = hex.EncodeToString(pub)
+
+	// --- chaincode commit-reveal (AD-2; address-derivation.md §3) ---
+	// Runs immediately after DKG over a fresh transport session bound to
+	// (groupId, "chaincode"); §3 binds the commitments and HKDF salt with
+	// group_id, so a fresh session id is cryptographically equivalent to
+	// "same DKG session" while honouring this codebase's one-phase-per-session
+	// pattern (kgSess closed above; ccSess opens, runs, closes; then sign).
+	ccSess, err := t.JoinSession(ctx, transport.SessionConfig{
+		SessionID: cfg.GroupID + ":chaincode", MemberKey: memberKey, Resolve: resolve,
+	})
+	if err != nil {
+		return fmt.Errorf("cli: join chaincode session: %w", err)
+	}
+	if err := barrier(ctx, cfg.RendezvousDir, "chaincode", cfg.Index, allIndices(cfg.N)); err != nil {
+		_ = ccSess.Close()
+		return err
+	}
+	dbg(cfg.Index, "chaincode barrier passed; running commit-reveal")
+	chaincode, err := runChaincodeCommitReveal(ctx, ccSess, peers, cfg.GroupID, cfg.Index, cfg.N)
+	_ = ccSess.Close()
+	dbg(cfg.Index, "chaincode done (err=%v)", err)
+	if err != nil {
+		return fmt.Errorf("cli: chaincode: %w", err)
+	}
+	res.ChaincodeHex = hex.EncodeToString(chaincode)
 
 	// --- sign (only participating signers) ---
 	if isSigner(cfg.Signers, cfg.Index) {
