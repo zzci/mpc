@@ -20,6 +20,7 @@
   <nav class="flex gap-3 text-sm">
     <a href="/ui" class="{{if eq .Active "home"}}text-sky-400 font-semibold{{else}}text-slate-300{{end}}">Overview</a>
     <a href="/ui/sign" class="{{if eq .Active "sign"}}text-sky-400 font-semibold{{else}}text-slate-300{{end}}">Pending signs</a>
+    <a href="/ui/import" class="{{if eq .Active "import"}}text-sky-400 font-semibold{{else}}text-slate-300{{end}}">Import</a>
     {{if .AuthEnabled}}<form method="post" action="/ui/logout" class="inline-flex"><button class="text-slate-400" type="submit">Sign out</button></form>{{end}}
   </nav>
 </header>{{end}}

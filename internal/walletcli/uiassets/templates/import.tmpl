@@ -1,0 +1,21 @@
+{{define "import.tmpl"}}{{template "head" .}}
+{{template "nav" .}}
+<h1 class="text-xl font-bold text-slate-100 mb-4">Import share backup</h1>
+{{if not .PassphraseConfig}}
+<div class="card mb-4">
+  <div class="badge badge-err mb-2">$MPC_WALLET_PASSPHRASE not set</div>
+  <p class="text-sm text-slate-400">The keystore passphrase is supplied only via the process environment (never over HTTP, never in the form). Set <code class="font-mono">$MPC_WALLET_PASSPHRASE</code> before starting <code class="font-mono">cli serve</code>, then reload this page.</p>
+</div>
+{{end}}
+<div class="card" style="max-width:38rem">
+  <p class="text-sm text-slate-400 mb-4">Select an <code class="font-mono">ExportShare</code> backup blob produced earlier (e.g. via <code class="font-mono">wallet&gt; export</code> in the interactive session). The seal opens with the server's <code class="font-mono">$MPC_WALLET_PASSPHRASE</code>; the share is added to the in-memory committee for this <code class="font-mono">cli serve</code> process.</p>
+  <form id="import-form" method="post" enctype="multipart/form-data" action="/ui/import"
+        hx-post="/ui/import" hx-encoding="multipart/form-data"
+        hx-target="#import-result" hx-swap="innerHTML"
+        class="flex flex-col gap-3">
+    <input class="input w-full" type="file" name="backup" required {{if not .PassphraseConfig}}disabled{{end}}>
+    <button class="btn" type="submit" {{if not .PassphraseConfig}}disabled{{end}}>Import</button>
+  </form>
+  <div id="import-result" class="mt-4">{{if .Result}}{{template "import_result.tmpl" .}}{{end}}</div>
+</div>
+{{template "foot" .}}{{end}}

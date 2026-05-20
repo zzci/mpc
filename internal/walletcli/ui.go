@@ -8,7 +8,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"io"
 	"net/http"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -151,6 +153,8 @@ func (h *uiHandler) register(mux *http.ServeMux) {
 	mux.Handle("GET /ui/sign/{id}", h.auth(http.HandlerFunc(h.hSignDetail)))
 	mux.Handle("POST /ui/sign/{id}/approve", h.auth(http.HandlerFunc(h.hSignApprove)))
 	mux.Handle("POST /ui/sign/{id}/reject", h.auth(http.HandlerFunc(h.hSignReject)))
+	mux.Handle("GET /ui/import", h.auth(http.HandlerFunc(h.hImportForm)))
+	mux.Handle("POST /ui/import", h.auth(http.HandlerFunc(h.hImport)))
 }
 
 // authNeeded reports whether the panel currently requires a session/bearer.
@@ -368,6 +372,70 @@ func (h *uiHandler) resolve(w http.ResponseWriter, r *http.Request, approve bool
 		return
 	}
 	h.render(w, r, "sign_result.tmpl", data)
+}
+
+// --- import -------------------------------------------------------------
+
+// importMaxBytes caps the backup blob size. ExportShare blobs are a few KiB
+// of sealed material per share; 1 MiB is well above realistic upper bound
+// and keeps the form from being a DoS sink.
+const importMaxBytes = 1 << 20
+
+func (h *uiHandler) hImportForm(w http.ResponseWriter, r *http.Request) {
+	h.render(w, r, "import.tmpl", map[string]any{
+		"Active":           "import",
+		"AuthEnabled":      h.authNeeded(),
+		"PassphraseConfig": os.Getenv(passphraseEnv) != "",
+	})
+}
+
+// hImport accepts an ExportShare backup file (multipart/form-data, field
+// "backup") and restores it into the in-session committee. The keystore
+// passphrase comes ONLY from $MPC_WALLET_PASSPHRASE on the server (env-only
+// secret discipline; never accepted over HTTP). Output is the imported
+// moniker; htmx swaps in the result fragment, a full POST gets a result page.
+func (h *uiHandler) hImport(w http.ResponseWriter, r *http.Request) {
+	pass := os.Getenv(passphraseEnv)
+	if pass == "" {
+		h.importResult(w, r, "", fmt.Errorf("$%s is not set on the server", passphraseEnv))
+		return
+	}
+	if err := r.ParseMultipartForm(importMaxBytes); err != nil {
+		h.importResult(w, r, "", fmt.Errorf("read form: %w", err))
+		return
+	}
+	f, _, err := r.FormFile("backup")
+	if err != nil {
+		h.importResult(w, r, "", fmt.Errorf("backup file missing"))
+		return
+	}
+	defer func() { _ = f.Close() }()
+	blob, err := io.ReadAll(io.LimitReader(f, importMaxBytes))
+	if err != nil {
+		h.importResult(w, r, "", fmt.Errorf("read backup: %w", err))
+		return
+	}
+	moniker, err := importOp(h.s.sdk, blob, pass)
+	h.importResult(w, r, moniker, err)
+}
+
+func (h *uiHandler) importResult(w http.ResponseWriter, r *http.Request, moniker string, err error) {
+	data := map[string]any{
+		"Active":      "import",
+		"AuthEnabled": h.authNeeded(),
+		"OK":          err == nil,
+		"Moniker":     moniker,
+	}
+	if err != nil {
+		data["Msg"] = err.Error()
+	}
+	if r.Header.Get("HX-Request") == "true" {
+		h.renderPart(w, "import_result.tmpl", data)
+		return
+	}
+	data["PassphraseConfig"] = os.Getenv(passphraseEnv) != ""
+	data["Result"] = true
+	h.render(w, r, "import.tmpl", data)
 }
 
 // --- render helpers -----------------------------------------------------

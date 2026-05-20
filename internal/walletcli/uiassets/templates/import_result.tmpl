@@ -1,0 +1,14 @@
+{{define "import_result.tmpl"}}
+{{if .OK}}
+<div class="card">
+  <div class="badge badge-ok mb-2">imported</div>
+  <div class="text-sm text-slate-400 uppercase tracking-wide mb-1">moniker</div>
+  <div class="font-mono text-slate-100 break-all">{{.Moniker}}</div>
+</div>
+{{else}}
+<div class="card">
+  <div class="badge badge-err mb-2">import failed</div>
+  <p class="text-sm text-slate-300">{{.Msg}}</p>
+</div>
+{{end}}
+{{end}}
