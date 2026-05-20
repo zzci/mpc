@@ -190,3 +190,93 @@
 依据:六条红线 + 威胁模型 A + DB 整库加密锁定 + 单二进制角色隔离 + businessInfo 定位逐条核对均合规,且由代码层强制(常量时间摘要绑定、fail-closed LOCKED、relay 不 import coord、PreParams 无服务端下发路径);G-001 设计裁定不破红线、不增信任增量。残留项均为部署收口 / 实现合并待复核 / 设计性接受,**无一触及资金安全不变量或构成 go/no-go 阻塞**。建议残留项 1、2 在 P6 / G-001 合并门按上述跟踪。
 
 > **FIX-003(2026-05-18,dev/test 整库加密禁用开关 + 生产铁律护栏)**:为解 E2E 完整流程中 coord 默认 LOCKED 503 阻断,新增 `coord.db.encryption.enable`(默认 **true** = 加密+LOCKED,安全默认不变)。仅 dev/test 可置 false;**生产铁律护栏**:`internal/node` 启动校验 `Config.Validate` —— coord 启用且加密禁用且 env `ALLOW_INSECURE_DB!=1` → `errInsecureDBNotConfirmed` **fail-closed 致命退出拒启动**。加固生产/release/CI 永不设该 env(H-004 加固面、本审查硬核对项),故「误在生产禁用加密致资金编排数据明文落盘」由护栏使其**不可能**而非仅不推荐。禁用仅影响离线文件加密这一防护,不改其它信任边界/红线;§7.2 独立专测覆盖密文落盘/Argon2id/错口令拒/relock zeroize/生产护栏 fail-closed。结论:dev 便利与生产安全经默认值+启动期 fail-closed 护栏双重保证,符六红线不削弱。
+
+---
+
+## 7. AD-5 H-005 收尾门复核(地址派生 / 非加固 HD,2026-05-20)
+
+> 范围:对 AD 批 5 项(`AD-1` KDD 签名 + `AD-2` 后置 commit-reveal + `AD-3` chaincode 持久化 + `AD-4` walletcli 离线派生 + `AD-6` `group_derived_addresses`)合并入 `origin/main` 后,**逐条**核对 `docs/design/mcp/address-derivation.md §9 H-005 覆盖项 + §7.bis 链接性二度披露**。
+> 权威依据:`docs/design/mcp/address-derivation.md`、`docs/design/contract/api.md` B8/B12/C 表、`internal/{mpc,hd,cli,server/coord,server/coorddb,coordclient}`。
+> 引证为本审查分支 HEAD `c08555c` 实测。
+
+### 7.1 §9.1 — commit-reveal 不可单方偏置(AD-2)
+
+**合规。**
+
+- **H/HKDF 选择 + DST 唯一性**:承诺 = `SHA-256`,派生 = `HKDF-SHA256`;DST 常量两个独立字节串 `mcp/v1/chaincode-commit` / `mcp/v1/chaincode-derive`(`internal/mpc/chaincode.go:37,41`),非格式化字符串、不可变,二者前像空间天然不相交(commit DST 不为 derive 接受,反之亦然)。
+- **group_id 双绑定(防跨组重放)**:`group_id` 同时进入承诺前像(`internal/mpc/chaincode.go:71-72`)与 HKDF salt(`:115-117`),任一已成功 commit-reveal 转出的 transcript 在 `group_id′ ≠ group_id` 下既算不出相同 `C_j` 也算不出相同 `c`(§3 binding-uniqueness)。
+- **承诺先于揭示(顺序锁死)**:`internal/cli/chaincode.go:82-114` 严格顺序 —— 先 broadcast 本方 `C_j`(`:82`)→ 收齐全员 `C_*`(`:100`)→ 才 broadcast 本方 `r_j`(`:105`)→ 收齐全员 `r_*`(`:112`)。任一恶意方见到他人 `r` 时其 `C_j` 已被全员持有并定型,**无后揭示偏置窗口**(最后揭示者亦如此)。
+- **β2 phase-skew 修复不破不变量**:`chaincodeCollect` 缓冲 future-phase 消息至 `pending` 而非丢弃(`internal/cli/chaincode.go:99,242-258`,L1 ruling 2026-05-20 修 E2E-002),不影响承诺/揭示顺序锁定 —— 缓冲消息仍须本端 commit-broadcast 完成后才会被消费(`:104-114`),恶意方无法借此抢跑揭示。等价 buffer 行为复核:同 from 重复 reveal 必字节相等(`:250-256` `equivocation` 抛错),不同字节即 abort,Byzantine fork 不可。
+- **r_j 32B 熵充足**:`internal/mpc/chaincode.go:55,130-136` 固定 32 字节、`crypto/rand.Reader` 读;`GenerateChaincodeRandomness` 是生产路径唯一来源(`internal/cli/chaincode.go:72`)。256-bit 熵贡献,与 #10(联网 keygen Paillier 证明)同纪律。
+- **校验常量时间**:`VerifyChaincodeCommit` 使用 `hmac.Equal` 常量时间比较(`internal/mpc/chaincode.go:93`),不泄时序侧信道。
+- **abort 严格(no partial success)**:任一 commitment 校验失败、长度不符、equivocation、reveal 缺失/超时 → 整个 `runChaincodeCommitReveal` 返回 error(`internal/cli/chaincode.go:124-131,225,253,261`);`internal/cli/device.go:329-334` 直接传播,**不进 ProvisionGroup、不写 coorddb、不释放 group_id**(§3 step 5)。重试须新 `group_id`,代码层无 in-session retry 路径。
+- **senderAuth 锁定 round**:`contract.SignSenderAuth` 在前像中包含 `msg.Round`(`internal/contract/proposer.go:96-103`),`runChaincodeCommitReveal` 以 `Round=1` 发 commit、`Round=2` 发 reveal(`internal/cli/chaincode.go:32-33,82,105`),**commit 签名不可被回放为 reveal**(对应前像不同,签名失败)。结合 sessionId 隔离(`<groupId>:chaincode`)与 transport `AcceptInbound`(`internal/transport/session.go:220-228`),跨 session/跨 round/跨 from 重放均闸断。
+- **transport 复用既有 libp2p 路径(无新协议层)**:`runChaincodeCommitReveal` 经 `transport.Session` + `contract.MpcMessage` 流出/入(`internal/cli/chaincode.go:158-167`),与 keygen 同一 senderAuth/sessionId 闸 — 满足 §3「禁新增传输」。
+
+> **微观偏离记录(非偏置)**:`internal/cli/device.go:317-329` 用「DKG 完成后另开一个 sessionId = `<groupId>:chaincode` 的 transport.Session 立即跑 commit-reveal」实现 §3「DKG 完成同会话内追加一轮」。**密码学等价**:`§3` 的安全论证仅依赖 `group_id`(进入承诺前像 + HKDF salt),sessionId 不进任一,session 切换仅是 transport 复用层细节;且新 session 仍走同一 senderAuth/AcceptInbound 闸,不放大攻击面。本审查接受。
+
+### 7.2 §9.2 — xpub 暴露面对手能力分析(AD-4)
+
+**合规。**
+
+- **owning-member-only by route + body**:B8 路由 `GET /v1/groups/{groupId}/xpub` 仅经 `lockGate` + `memberGate`(`internal/server/coord/api.go:56`),`hXpub` 第一步即 `memberGate(... "B8:xpub", []byte(r.URL.RawQuery))`(`internal/server/coord/xpub.go:36`);非成员、跨组、缺/坏 `X-Member-*` 头、过期 ts、复用 nonce、错误 EC 签名一律 fail-close,**未触 DB chaincode 列**(`memberGate` 在 `db.xpub` 之前,`api.go:467-481`)。
+- **A 侧零暴露(F1 硬约束)**:外部业务路由 A1 `GET /v1/groups/{groupId}/public` 走完全独立的 `extGate→extAuth` 链与独立 DTO `groupPublicExtView`(`internal/server/coord/api.go:73,407-414`),响应字段仅 `{groupId, ecdsa_pubkey, evm_address, tron_address, threshold_t, parties_n}` —— **无 chaincode、无 xpub、无 derived 列表**;`hGroupPublicExt` 物理隔离的 DTO 使「auth-branch bug 串到 memberView 致 chaincode 泄外」**结构上不可能**。
+- **对手能力分析(三模型)**:
+  1. **恶意外部 A**:即便持合法 `external.api_key`(`extAuth`),也只能命中 A1 DTO(无 chaincode),且 `coord.external.*` 配置面无 chaincode 字段。**结论**:外部 A 取不到 xpub。
+  2. **恶意 relay**:relay 不 import coord、仅转 Noise 密文(红线 3,§3 已复核);B8 由 coord HTTP 服务直发申请方,**不经 relay**(coord 明文路径独立于 MPC 信道,§4 已复核)。**结论**:relay 不在 xpub 流路径上,取不到 chaincode。
+  3. **持 xpub 的设备失窃**:F1 释放给 owning-member 设备 keystore;失窃后攻击者持 `(Q_master, chaincode)` 可枚举全部子地址(§9.5 链接性,见 7.5)但**仅能算公钥**,**不能动资金**(分片仍在其它 t-1 设备 + 设备口令 keystore + 资金签名需 ≥ t 方);丢失即按既有 resharing 流程重置(security.md 攻击对策表)。**结论**:失窃后果限于隐私链接性,资金安全由门限兜底,与设计 §F1 一致。
+- **memberGate ts+nonce 一致性**:复用 `verifyMemberAuth` 经 `nonceCache.use(now=tnow, expiry=tnow.Add(memberAuthWindow))` 注入时钟一致路径(`internal/server/coord/api.go:477` + FIX-001 已复核),防重放;空查询串 (GET 无 body) 仍签 `(method, groupId, params=URL.RawQuery)`(`xpub.go:36`),与 B-GET 既有契约一致。
+- **LOCKED 闸**:`lockGate` 外层(`api.go:56,81-90`)在 LOCKED 时直接 503 不进 handler;且 `db.xpub` 经 `Store.WithTx`(`internal/server/coord/db.go:110-126`),双重 fail-closed。
+
+### 7.3 §9.3 — 非加固"xpub + 任一重组子私钥 → 父+全兄弟"残留依赖(AD-1)
+
+**合规(三残留依赖逐条核实)。**
+
+非加固 HD 的已知特性:若攻击者同时持 xpub `(Q_master, c)` 与 **任一**子标量 `x_child = x_master + IL_i`,则可解出 `x_master`,进而推任意 `IL_j` 与全部兄弟 `x_j = x_master + IL_j`。在本设计「TSS 永不重组子私钥」前提下,该攻击不触发。三残留依赖:
+
+- **(i) 签名实现严谨 —— 永不导出 `x_j` 或 `IL·x_j` 之外的标量**:`internal/mpc/signing.go:76-156` 经 `tss-lib v3` `signing.NewLocalPartyWithKDD` 跑门限 ECDSA;返回 `Signature{R,S,V}`(`:151-156`),无标量字段。`UpdatePublicKeyAndAdjustBigXj` 调用(`:122-126`)仅在 **本会话内的 `keys` 副本**上加 `IL` 偏置(`UnmarshalSaveData` 返出的新 slice,`:108-115`),**不写回持久化 share**(`Sign` 入参 `cfg.Shares` 自身的 `SaveData` 字节不被修改 —— 文档显式记录 `:117-121`)。子私钥的份额标量 `x_j + IL` **仅在 tss-lib 内部协议轮内存在并参与门限运算**,经 R/S 输出 + tss-lib 自带的零中间状态终结后不持久;签名 API 不返回单方份额。
+- **(ii) 子私钥 API 永不暴露**:全模块树 grep `x_j|childPriv|ChildPriv|child priv|IL\.x|export.*share`(本审查实测,`internal/mpc/signing.go,internal/hd/derive.go`)无任何子私钥 export entry point。`sdk/sdk.go:100-107` `ExportShare/ImportShare` 仅经设备 keystore + passphrase 处理 **份额**(master 份额),且 backup 走 keystore 加密通道,**绝不**接收 `child index` 参数 / **绝不**导出子标量。
+- **(iii) xpub 释放路径受 §7 限定**:见 7.2 — B8 owning-member-only + A 侧零暴露 + LOCKED fail-closed,**xpub 离开 coord 仅经 memberGate**,无其它 export sink。`coordclient.Xpub`(`internal/coordclient/xpub.go:39-64`)在客户端解析 hex → 直接缓存到本机 keystore(`wallet address <i>` 单机离线消费,`internal/walletcli/walletcli.go:322-358`),不再外传。
+- **离线派生路径全 public**:`internal/hd/derive.go:46-77` `Derive` 经 `tss-lib v3 ckd.DeriveChildKey` 返 `(IL, Q_child)`,`IL` 为公开(任何持 xpub 者可算),`Q_child` 为 EC 点;参数 `chaincode` 在内部经 `make+copy` 隔离不外泄(`:60-64`);**无任何标量私钥触及**。
+- **联网 keygen Paillier 证明(security.md 不变量 #10)同纪律护栏复核**:`internal/mpc/{keygen.go:137,recover.go:143}` + `internal/cli/insecure.go:40-50` —— 生产路径默认 ON,关闭须 `ALLOW_INSECURE_MPC=1` 显式标记并 stderr 响亮告警;`cmd/cli` 从不设该 env,故生产/release/CI 联网 keygen 始终 ON。子私钥不重组不触发此攻击,但 #10 是「恶意成员投递构造性 Paillier」防御,与本批 commit-reveal 安全(§9.1)正交,**未被本批削弱**。
+
+### 7.4 §9.4 — legacy 边界 `409 LEGACY_NO_HD`
+
+**合规。**
+
+- 错误体:`internal/server/coord/errors.go:30,57-67` `codeLegacyNoHD = "LEGACY_NO_HD"` + `errLegacyNoHD()` 固定 `status=409 Conflict, message="group predates HD; multi-group remains the multi-address path"`(与 `docs/design/mcp/address-derivation.md §8 / api.md C 表 :136` 字面一致)。
+- 触发路径:`hXpub` 读 `db.xpub` 返 `hasChaincode=false`(`internal/server/coord/db.go:121-122` chaincode IS NULL)即 `errLegacyNoHD()`(`xpub.go:51-55`)。memberGate 先于 DB 校验,故 legacy 群 + 非成员仍是 401/403(不泄露 legacy 事实给非成员)。
+- 客户端契约:`coordclient.Xpub`(`internal/coordclient/xpub.go:36-38`)允许调用方按 `apiErr.Code == "LEGACY_NO_HD"` 分支到多 group 多地址路径(F5);`coordclient/errors.go` 暴露 `CodeLegacyNoHD` 类型常量(`grep "CodeLegacyNoHD"` 实测命中)。
+- legacy → HD 不存在迁移路径:`migrations/00004_chaincode.sql:21-23` `chaincode BLOB` 列 `CHECK (chaincode IS NULL OR length(chaincode) = 32)` —— legacy 群以 NULL 保留;`coorddb/repo.go` `ProvisionGroup` 仅在新建群时写入 chaincode,**无 update path 注入到既有群**(Q3 init-once / 无 reshare 红线,代码层强制)。
+- 测试覆盖:`internal/server/coord/xpub_test.go:99-111` 显式核实 legacy 群 → 409 + `code == "LEGACY_NO_HD"` + message 匹配。
+
+### 7.5 §9.5 + §7.bis 链接性披露(AD-6 + 设计性接受)
+
+**合规(设计性接受 + 实现边界与设计一致)。**
+
+- **链接性事实**:持 xpub 者可纯公钥枚举全部子地址(`Q_child = Q_master + IL·G`,§2);故较「无 HD 多 group 各产单地址」放宽 —— 一个 group 内全部子地址在持 xpub 者视角下**链接到同一 group 主公钥**。已在 `address-derivation.md §1 Q3` + `§7.bis.3` + `§9.5` 显式记并由用户**确认接受**(2026-05-20 Q-A/B/C/D 裁定 bundle)。
+- **泄露面收敛(实现核对)**:
+  - **xpub 释放 = owning-member-only**(7.2 已复核):非成员不得 xpub → 不得算子地址。
+  - **`group_derived_addresses` 表读 = owning-member-only**:B12 GET `/v1/groups/{groupId}/derived` 经 `memberGate("B12:derived:list")`(`internal/server/coord/derived.go:117-122`),A 侧无对应路由(`api.go` 仅 A1 minimal DTO);**避免「免鉴权列表便利化外暴露」(§7.bis.3)**。
+  - **写 = 本组任一成员(Q-D)**:`hDerivedRegister` 仅经 `memberGate("B12:derived:register")`(`derived.go:64-72`);未要求门限(派生本身离线 + 公钥纯算,Q-D 显式接受)。
+- **schema 与 §7.bis.1 一致**:`internal/server/coorddb/migrations/00005_group_derived_addresses.sql:24-34` —— `(group_id, child_index)` 主键、`child_index` CHECK `[0, 2^31)`(非加固边界、与 `internal/hd/derive.go:17 MaxIndex` 一致)、`child_pubkey` 可选 33B SEC1 compressed(handler 端 33B 严格校验 `derived.go:88-91`)、`created_at` unix sec。**FK 经应用层强制**(`PRAGMA foreign_keys` off,`derived.go:64-71` `ErrDerivedGroupMissing` 父行不存在即 404);设计 §R7 `groups` append-only 保证 ON DELETE 事件不可能发生(`migrations/00005:11-15` 注记)。
+- **幂等 + 冲突(§7.bis.4 重放防护)**:`(group_id, child_index)` 命中且 EVM+TRON 一致 → 200 幂等(`coorddb/derived.go:82-90`);矛盾 → `ErrDerivedAddressConflict` → 409 `STATE_CONFLICT`(`coord/derived.go:104-105,159-170`)。重放沿 B-side `ts+nonce`(`memberGate` 经 `nonceCache.use` 已闸,见 FIX-001)。
+- **LOCKED**:B12 两路由均经 `lockGate`(`api.go:61-62`),`coorddb/derived.go:111-115,59-63` 通过 `Store.conn`/`Store.WithTx` 双重 fail-closed。
+- **不出现"反向"A 侧导出**:`group_derived_addresses` 在 A 侧无路由暴露 —— 即便外部业务服务持合法 `extAuth`,**地址→group 反查**也无可调端点(§7.bis.3 显式「另案」)。本批不预实现,**符 F1 严格** owning-member-only。
+- **`child_pubkey` audit aid 边界**:可选 33B SEC1 compressed;33B 严格闸断(`coord/derived.go:88-91`)、coord 不重算/不强校验与 `(group_id, index)` 派生一致性(故 audit aid 性质,§7.bis.1)。**安全分析**:即便恶意成员上报与本组 xpub 不一致的 `child_pubkey`,因 coord 不基于该值做任何资金/签名决策(B12 lazy 注册仅是地址簿登记),最坏后果为本组成员看到一条不匹配自家本地派生的"audit aid"记录(可线下核对剔除)—— **不破红线 / 不增信任增量**;若未来引入「coord 基于 child_pubkey 重派生验证」属新设计变更,走 PMA。
+- **写并发**:`RegisterDerivedAddress` 经 `Store.WithTx`(BEGIN IMMEDIATE 单写者,`coorddb/derived.go:63-103`)序列化;`(group_id, child_index)` 主键 + 应用层 conflict check 双重保证不产生重复或脏写。
+
+### 7.6 AD-5 收尾门 GO
+
+| §9 项 | 结论 | 关键引证 |
+|---|---|---|
+| §9.1 commit-reveal 不可偏置 | 合规 | `internal/mpc/chaincode.go:37-136`、`internal/cli/chaincode.go:54-269`、`internal/contract/proposer.go:96-114` |
+| §9.2 xpub 暴露面 owning-member-only | 合规 | `internal/server/coord/{api.go:56,73,407-414;xpub.go:27-67;db.go:104-127}` |
+| §9.3 KDD 永不重组子私钥 | 合规 | `internal/mpc/signing.go:76-156`、`internal/hd/derive.go:46-93`、`sdk/sdk.go:100-107` |
+| §9.4 legacy 409 LEGACY_NO_HD | 合规 | `internal/server/coord/errors.go:30,57-67`、`xpub.go:51-55`、`migrations/00004_chaincode.sql:21-23` |
+| §9.5 + §7.bis 链接性披露 | 合规(设计性接受) | `internal/server/coord/derived.go:64-170`、`coorddb/derived.go:59-140`、`migrations/00005_group_derived_addresses.sql:24-38` |
+
+**AD-5 H-005 收尾门:GO(放行)。**
+
+依据:`address-derivation.md §9` 5 项 + `§7.bis` 链接性二度披露逐条对照 `c08555c` 已合并代码均合规,**不破六红线、不增信任增量、不引新攻击面**:(a) chaincode 经 commit-reveal 集体产出且不可单方偏置,(b) xpub 严格 owning-member-only 且 A 侧零暴露,(c) TSS 永不重组子私钥(签名仅产 R/S/V,无标量出口),(d) legacy 群以 409 LEGACY_NO_HD 显式拒绝 HD 释放(无 silent fallback),(e) `group_derived_addresses` 读写两面均 owning-member-only,A 侧无端点(链接性放宽既受用户接受,但实现层不便利化外暴露)。**残留风险**与 §6.2 列表叠加但**均为既有性质**(设备失窃由门限/keystore 兜底、链接性设计性接受、coord 隐私可信对运营方开放),无 AD 批新增的 go/no-go 阻塞项。
+
