@@ -1,0 +1,19 @@
+{{define "address.tmpl"}}{{template "head" .}}
+{{template "nav" .}}
+<h1 class="text-xl font-bold text-slate-100 mb-4">Derive ETH / BSC / TRON address (offline)</h1>
+<div class="card mb-4" style="max-width:46rem">
+  <p class="text-sm text-slate-400 mb-4">BIP32 non-hardened derivation <code class="font-mono">m/&lt;i&gt;</code> from a previously-fetched group xpub. Entirely offline — the input xpub stays in this process, no network call, no passphrase needed (chaincode is part of the xpub JSON).</p>
+  <form method="post" action="/ui/address"
+        hx-post="/ui/address" hx-target="#address-result" hx-swap="innerHTML"
+        class="flex flex-col gap-3">
+    <div class="flex gap-3 items-center">
+      <label class="text-sm text-slate-400">Index (i)</label>
+      <input class="input" type="number" min="0" max="2147483647" name="index" placeholder="0" required style="width:8rem">
+    </div>
+    <label class="text-sm text-slate-400">Xpub JSON</label>
+    <textarea class="input w-full font-mono" name="xpub" rows="6" placeholder='{"ecdsaPubkeyHex":"04...","chaincodeHex":"..."}' required></textarea>
+    <button class="btn" type="submit">Derive</button>
+  </form>
+  <div id="address-result" class="mt-4">{{if .Result}}{{template "query_result.tmpl" .}}{{end}}</div>
+</div>
+{{template "foot" .}}{{end}}

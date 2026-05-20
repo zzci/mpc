@@ -155,6 +155,12 @@ func (h *uiHandler) register(mux *http.ServeMux) {
 	mux.Handle("POST /ui/sign/{id}/reject", h.auth(http.HandlerFunc(h.hSignReject)))
 	mux.Handle("GET /ui/import", h.auth(http.HandlerFunc(h.hImportForm)))
 	mux.Handle("POST /ui/import", h.auth(http.HandlerFunc(h.hImport)))
+	mux.Handle("GET /ui/fetch", h.auth(http.HandlerFunc(h.hFetchForm)))
+	mux.Handle("POST /ui/fetch", h.auth(http.HandlerFunc(h.hFetch)))
+	mux.Handle("GET /ui/xpub", h.auth(http.HandlerFunc(h.hXpubForm)))
+	mux.Handle("POST /ui/xpub", h.auth(http.HandlerFunc(h.hXpub)))
+	mux.Handle("GET /ui/address", h.auth(http.HandlerFunc(h.hAddressForm)))
+	mux.Handle("POST /ui/address", h.auth(http.HandlerFunc(h.hAddress)))
 }
 
 // authNeeded reports whether the panel currently requires a session/bearer.
@@ -436,6 +442,138 @@ func (h *uiHandler) importResult(w http.ResponseWriter, r *http.Request, moniker
 	data["PassphraseConfig"] = os.Getenv(passphraseEnv) != ""
 	data["Result"] = true
 	h.render(w, r, "import.tmpl", data)
+}
+
+// --- read-only queries (fetch / xpub / address) -------------------------
+
+// queryMaxBytes caps the inline request JSON. The biggest realistic payload
+// is a coord fetch query, well under 64 KiB; 256 KiB is a generous cap.
+const queryMaxBytes = 256 << 10
+
+func (h *uiHandler) hFetchForm(w http.ResponseWriter, r *http.Request) {
+	h.render(w, r, "fetch.tmpl", map[string]any{"Active": "fetch", "AuthEnabled": h.authNeeded()})
+}
+
+func (h *uiHandler) hFetch(w http.ResponseWriter, r *http.Request) {
+	body, err := io.ReadAll(io.LimitReader(r.Body, queryMaxBytes))
+	if err != nil {
+		h.queryResult(w, r, "fetch.tmpl", "", err)
+		return
+	}
+	req := extractFormJSON(string(body), r)
+	if req == "" {
+		h.queryResult(w, r, "fetch.tmpl", "", fmt.Errorf("missing 'req' JSON"))
+		return
+	}
+	res, err := fetchOp(h.s.sdk, req)
+	h.queryResult(w, r, "fetch.tmpl", res, err)
+}
+
+func (h *uiHandler) hXpubForm(w http.ResponseWriter, r *http.Request) {
+	h.render(w, r, "xpub.tmpl", map[string]any{"Active": "xpub", "AuthEnabled": h.authNeeded()})
+}
+
+func (h *uiHandler) hXpub(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		h.queryResult(w, r, "xpub.tmpl", "", err)
+		return
+	}
+	req := r.PostFormValue("req")
+	if req == "" {
+		h.queryResult(w, r, "xpub.tmpl", "", fmt.Errorf("missing 'req' JSON"))
+		return
+	}
+	res, err := xpubOp(h.s.sdk, req)
+	h.queryResult(w, r, "xpub.tmpl", res, err)
+}
+
+func (h *uiHandler) hAddressForm(w http.ResponseWriter, r *http.Request) {
+	h.render(w, r, "address.tmpl", map[string]any{"Active": "address", "AuthEnabled": h.authNeeded()})
+}
+
+func (h *uiHandler) hAddress(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		h.queryResult(w, r, "address.tmpl", "", err)
+		return
+	}
+	idxRaw := strings.TrimSpace(r.PostFormValue("index"))
+	xpub := r.PostFormValue("xpub")
+	if xpub == "" || idxRaw == "" {
+		h.queryResult(w, r, "address.tmpl", "", fmt.Errorf("'index' and 'xpub' are both required"))
+		return
+	}
+	idx64, err := strconvParseUint32(idxRaw)
+	if err != nil {
+		h.queryResult(w, r, "address.tmpl", "", err)
+		return
+	}
+	res, err := addressOp(xpub, idx64)
+	h.queryResult(w, r, "address.tmpl", res, err)
+}
+
+// extractFormJSON pulls a JSON document out of either a form-encoded body
+// (PostFormValue("req")) or a raw body POST when the form parse yielded no
+// "req" field. fetchOp/xpubOp accept either shape transparently.
+func extractFormJSON(body string, r *http.Request) string {
+	if err := r.ParseForm(); err == nil {
+		if v := r.PostFormValue("req"); v != "" {
+			return v
+		}
+	}
+	return strings.TrimSpace(body)
+}
+
+// strconvParseUint32 parses a string as a non-negative 32-bit-bounded integer
+// (the BIP32 non-hardened child range; addressOp itself takes uint32). It is
+// only used by hAddress so it lives here rather than in a shared helpers file.
+func strconvParseUint32(s string) (uint32, error) {
+	n, err := jsonNumber(s).asUint32()
+	if err != nil {
+		return 0, fmt.Errorf("index must be a non-negative integer < 2^31: %w", err)
+	}
+	return n, nil
+}
+
+// jsonNumber is a small adapter that turns a decimal string into a uint32
+// bounded by the BIP32 non-hardened child index space (< 2^31). Using a
+// minimal wrapper keeps the parser local and the error wording consistent.
+type jsonNumber string
+
+func (j jsonNumber) asUint32() (uint32, error) {
+	if j == "" {
+		return 0, fmt.Errorf("empty")
+	}
+	var n uint64
+	for _, r := range string(j) {
+		if r < '0' || r > '9' {
+			return 0, fmt.Errorf("not a decimal integer")
+		}
+		n = n*10 + uint64(r-'0')
+		if n >= 1<<31 {
+			return 0, fmt.Errorf("out of range (>= 2^31)")
+		}
+	}
+	return uint32(n), nil
+}
+
+// queryResult dual-renders a fetch/xpub/address outcome: htmx → just the
+// result fragment, normal POST → re-render the page with the result block.
+func (h *uiHandler) queryResult(w http.ResponseWriter, r *http.Request, page, payload string, err error) {
+	data := map[string]any{
+		"Active":      strings.TrimSuffix(page, ".tmpl"),
+		"AuthEnabled": h.authNeeded(),
+		"OK":          err == nil,
+		"Payload":     payload,
+	}
+	if err != nil {
+		data["Msg"] = err.Error()
+	}
+	if r.Header.Get("HX-Request") == "true" {
+		h.renderPart(w, "query_result.tmpl", data)
+		return
+	}
+	data["Result"] = true
+	h.render(w, r, page, data)
 }
 
 // --- render helpers -----------------------------------------------------

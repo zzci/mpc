@@ -1,0 +1,14 @@
+{{define "xpub.tmpl"}}{{template "head" .}}
+{{template "nav" .}}
+<h1 class="text-xl font-bold text-slate-100 mb-4">Fetch group xpub (B8)</h1>
+<div class="card mb-4" style="max-width:46rem">
+  <p class="text-sm text-slate-400 mb-4">Paste the JSON request body for the owning-member xpub fetch (the same shape <code class="font-mono">sdk.FetchXpub</code> consumes). Per H-005 the xpub leaves the coordinator only through the memberGate; nothing here is exposed to the external surface.</p>
+  <form method="post" action="/ui/xpub"
+        hx-post="/ui/xpub" hx-target="#xpub-result" hx-swap="innerHTML"
+        class="flex flex-col gap-3">
+    <textarea class="input w-full font-mono" name="req" rows="6" placeholder='{"groupId":"...","memberId":"..."}' required></textarea>
+    <button class="btn" type="submit">Fetch xpub</button>
+  </form>
+  <div id="xpub-result" class="mt-4">{{if .Result}}{{template "query_result.tmpl" .}}{{end}}</div>
+</div>
+{{template "foot" .}}{{end}}

@@ -1,0 +1,14 @@
+{{define "fetch.tmpl"}}{{template "head" .}}
+{{template "nav" .}}
+<h1 class="text-xl font-bold text-slate-100 mb-4">Fetch transaction info from coord</h1>
+<div class="card mb-4" style="max-width:46rem">
+  <p class="text-sm text-slate-400 mb-4">Paste the JSON request body the operator would send to the coordinator's transaction-info endpoint (the same shape <code class="font-mono">sdk.FetchTransactions</code> consumes). Read-only — no state is mutated here, and the keystore passphrase is not required.</p>
+  <form method="post" action="/ui/fetch"
+        hx-post="/ui/fetch" hx-target="#fetch-result" hx-swap="innerHTML"
+        class="flex flex-col gap-3">
+    <textarea class="input w-full font-mono" name="req" rows="6" placeholder='{"groupId":"...","requestIds":["..."]}' required></textarea>
+    <button class="btn" type="submit">Fetch</button>
+  </form>
+  <div id="fetch-result" class="mt-4">{{if .Result}}{{template "query_result.tmpl" .}}{{end}}</div>
+</div>
+{{template "foot" .}}{{end}}

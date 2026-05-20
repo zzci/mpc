@@ -357,6 +357,113 @@ func multipartBackup(t *testing.T, field, filename string, body []byte) (io.Read
 	return strings.NewReader(b.String()), w.FormDataContentType()
 }
 
+// TestUIQueryForms: GET /ui/{fetch,xpub,address} render their forms with the
+// expected fields and POST endpoint wiring. These are pure form pages so the
+// test only asserts shape, not network behavior.
+func TestUIQueryForms(t *testing.T) {
+	h := testServer(t, "")
+	for _, c := range []struct {
+		path, action, fieldNames string
+	}{
+		{"/ui/fetch", `action="/ui/fetch"`, `name="req"`},
+		{"/ui/xpub", `action="/ui/xpub"`, `name="req"`},
+		{"/ui/address", `action="/ui/address"`, `name="index"`},
+	} {
+		w, body := uiReq(t, h, "GET", c.path, "", "", "")
+		if w.Code != http.StatusOK {
+			t.Fatalf("%s code=%d", c.path, w.Code)
+		}
+		for _, want := range []string{c.action, c.fieldNames} {
+			if !strings.Contains(body, want) {
+				t.Fatalf("%s missing %q", c.path, want)
+			}
+		}
+	}
+}
+
+// TestUIAddressForm: nav highlights the active tab.
+func TestUIAddressNav(t *testing.T) {
+	h := testServer(t, "")
+	_, body := uiReq(t, h, "GET", "/ui/address", "", "", "")
+	if !strings.Contains(body, `href="/ui/address" class="text-sky-400`) {
+		t.Fatalf("address nav not highlighted: %s", body[:min(len(body), 200)])
+	}
+}
+
+// TestUIAddressMissingFields: POST /ui/address without an index OR an xpub
+// returns the failure fragment inline (no panic, no internal error).
+func TestUIAddressMissingFields(t *testing.T) {
+	h := testServer(t, "")
+	form := url.Values{}
+	form.Set("index", "0") // xpub missing
+	r := httptest.NewRequestWithContext(context.Background(), "POST", "/ui/address",
+		strings.NewReader(form.Encode()))
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	r.Header.Set("HX-Request", "true")
+	rec := httptest.NewRecorder()
+	mux := http.NewServeMux()
+	h.ui.register(mux)
+	mux.ServeHTTP(rec, r)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("code=%d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "query failed") {
+		t.Fatalf("missing failure fragment: %s", rec.Body.String())
+	}
+}
+
+// TestUIAddressBadIndex: a non-numeric or out-of-range index is rejected
+// before addressOp is called.
+func TestUIAddressBadIndex(t *testing.T) {
+	h := testServer(t, "")
+	for _, bad := range []string{"-1", "abc", "2147483648"} {
+		form := url.Values{}
+		form.Set("index", bad)
+		form.Set("xpub", `{}`)
+		r := httptest.NewRequestWithContext(context.Background(), "POST", "/ui/address",
+			strings.NewReader(form.Encode()))
+		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		r.Header.Set("HX-Request", "true")
+		rec := httptest.NewRecorder()
+		mux := http.NewServeMux()
+		h.ui.register(mux)
+		mux.ServeHTTP(rec, r)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%q code=%d", bad, rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), "query failed") {
+			t.Fatalf("%q: missing failure: %s", bad, rec.Body.String())
+		}
+	}
+}
+
+// TestStrconvParseUint32: direct unit coverage for the small helper. -1 is
+// already filtered by HTML5 min=0 on the input but we still defend in depth.
+func TestStrconvParseUint32(t *testing.T) {
+	cases := map[string]struct {
+		want uint32
+		ok   bool
+	}{
+		"0":          {0, true},
+		"1":          {1, true},
+		"2147483647": {(1 << 31) - 1, true},
+		"2147483648": {0, false},
+		"-1":         {0, false},
+		"":           {0, false},
+		"abc":        {0, false},
+		"0x10":       {0, false},
+	}
+	for in, want := range cases {
+		got, err := strconvParseUint32(in)
+		if (err == nil) != want.ok {
+			t.Fatalf("%q ok = %v, want %v (err=%v)", in, err == nil, want.ok, err)
+		}
+		if want.ok && got != want.want {
+			t.Fatalf("%q got %d want %d", in, got, want.want)
+		}
+	}
+}
+
 // stubSession is an inert signSession: the test pre-loads cb.done so the
 // handler's terminal-wait returns immediately and the Approve/Reject methods
 // have no real MPC state machine to drive.

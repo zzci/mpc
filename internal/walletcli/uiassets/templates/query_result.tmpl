@@ -1,0 +1,13 @@
+{{define "query_result.tmpl"}}
+{{if .OK}}
+<div class="card">
+  <div class="badge badge-ok mb-2">ok</div>
+  <pre class="font-mono text-xs break-all">{{prettyJSON .Payload}}</pre>
+</div>
+{{else}}
+<div class="card">
+  <div class="badge badge-err mb-2">query failed</div>
+  <p class="text-sm text-slate-300">{{.Msg}}</p>
+</div>
+{{end}}
+{{end}}
