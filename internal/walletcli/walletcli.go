@@ -2,6 +2,7 @@ package walletcli
 
 import (
 	"bufio"
+	"context"
 	"flag"
 	"fmt"
 	"io"
@@ -265,12 +266,19 @@ func (se *session) cmdSign(args []string) {
 		return
 	}
 	cb := newSignCB(se.errw)
-	cfg, err := wrapSignConfig(startJSON)
+	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	defer cancel()
+	cfg, host, err := prepareSign(ctx, startJSON)
 	if err != nil {
-		se.fail("wrap start: %v", err)
+		se.fail("prepare sign: %v", err)
 		return
 	}
-	ss := se.sdk.Sign(cfg, cliWire{}, cb)
+	defer func() { _ = host.Close() }()
+	ss := se.sdk.Sign(cfg, host, cb)
+	if err := host.Pump(ctx, se.sdk); err != nil {
+		se.fail("pump sign: %v", err)
+		return
+	}
 
 	// The WYSIWYS gate: show the device-recomputed decode, then require an
 	// explicit operator decision before any MPC runs. OnError may also fire

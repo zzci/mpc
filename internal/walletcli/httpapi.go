@@ -1,6 +1,7 @@
 package walletcli
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/base64"
@@ -16,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/zzci/mpc/internal/cli"
 	"github.com/zzci/mpc/sdk"
 )
 
@@ -103,10 +105,15 @@ type httpServer struct {
 }
 
 // pendingSign is an in-flight two-step signing request awaiting an explicit
-// approve/reject decision (WYSIWYS preserved over HTTP).
+// approve/reject decision (WYSIWYS preserved over HTTP). The libp2p host is
+// held alongside ss/cb so signDecisionH can Close it after the terminal
+// callback fires (success or failure), and ctxCancel releases the per-session
+// context that bounds the MPC operation.
 type pendingSign struct {
-	ss *sdk.SignSession
-	cb *signCB
+	ss        *sdk.SignSession
+	cb        *signCB
+	host      *cli.HostTransport
+	ctxCancel context.CancelFunc
 }
 
 // guard enforces the optional bearer token (constant-time) before any handler.
@@ -295,12 +302,20 @@ func (h *httpServer) signH(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cb := newSignCB(discard{})
-	cfg, err := wrapSignConfig(req.Start)
+	signCtx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	cfg, host, err := prepareSign(signCtx, req.Start)
 	if err != nil {
-		httpErr(w, http.StatusBadRequest, "wrap start: %v", err)
+		cancel()
+		httpErr(w, http.StatusBadRequest, "prepare sign: %v", err)
 		return
 	}
-	ss := h.sdk.Sign(cfg, cliWire{}, cb)
+	ss := h.sdk.Sign(cfg, host, cb)
+	if perr := host.Pump(signCtx, h.sdk); perr != nil {
+		_ = host.Close()
+		cancel()
+		httpErr(w, http.StatusInternalServerError, "pump sign: %v", perr)
+		return
+	}
 
 	select {
 	case d := <-cb.decoded:
@@ -308,7 +323,7 @@ func (h *httpServer) signH(w http.ResponseWriter, r *http.Request) {
 		_, _ = rand.Read(idb[:])
 		id := hex.EncodeToString(idb[:])
 		h.mu.Lock()
-		h.pending[id] = &pendingSign{ss: ss, cb: cb}
+		h.pending[id] = &pendingSign{ss: ss, cb: cb, host: host, ctxCancel: cancel}
 		h.mu.Unlock()
 		writeJSON(w, http.StatusOK, map[string]any{
 			"id":       id,
@@ -317,6 +332,11 @@ func (h *httpServer) signH(w http.ResponseWriter, r *http.Request) {
 			"mismatch": json.RawMessage(orNull(d.mismatchJSON)),
 		})
 	case o := <-cb.done:
+		// Terminal before decode (security reject or pre-MPC fail). Release the
+		// host transport on this path too — it never reached the MPC phase but
+		// the libp2p host is alive.
+		_ = host.Close()
+		cancel()
 		if o.ok { // unexpected (no decode) but a result anyway
 			writeJSON(w, http.StatusOK, map[string]string{"rsv": o.payload})
 			return
@@ -353,6 +373,15 @@ func (h *httpServer) signDecisionH(w http.ResponseWriter, r *http.Request) {
 		p.ss.Reject()
 	}
 	o := <-p.cb.done
+	// Tear the libp2p host down once the terminal callback fired: the MPC
+	// phase is over either way (success or rejection), the host has no further
+	// inbound to ferry, and leaving it open holds a relay reservation slot.
+	if p.host != nil {
+		_ = p.host.Close()
+	}
+	if p.ctxCancel != nil {
+		p.ctxCancel()
+	}
 	if !o.ok {
 		httpErr(w, http.StatusBadGateway, "sign %s: %s", o.code, o.msg)
 		return
