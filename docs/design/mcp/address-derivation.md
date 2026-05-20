@@ -89,6 +89,44 @@ xpub 严格 owning-member-only:
 - **CLI(walletcli/sdk)**:成员设备经 B-side 取 xpub 后本地缓存,后续 `wallet address <i>` 单机离线派生。
 - 凭据/参数命名沿配置框架 v2 规范(`MPC_*` env / `--coord.*` CLI / `server.yaml`)。
 
+## 7.bis 派生地址持久化与 group 追溯(Q-A/B/C/D 用户裁定 2026-05-20,按 L1 推荐 bundle)
+
+新增 coorddb 表 `group_derived_addresses` 持久化**实际启用过**的 `(group_id, index) → 派生地址`,通过 `group_id` FK 自然追溯**该地址源自哪个 group**(用户需求:数据表指明来源 group)。
+
+### 7.bis.1 Schema(Q-B 最小,F4 风格,charter-10 新版本化迁移 `00005`)
+
+```sql
+-- 00005_group_derived_addresses.sql(charter-10:禁手改 00001/00003/00004)
+CREATE TABLE group_derived_addresses (
+  group_id     BLOB NOT NULL,
+  child_index  INTEGER NOT NULL CHECK (child_index >= 0 AND child_index < 2147483648), -- 非加固 [0, 2^31)
+  evm_address  TEXT NOT NULL,
+  tron_address TEXT NOT NULL,
+  child_pubkey BLOB NULL,                 -- 可选,SEC1 compressed 33B,便于事后验证
+  created_at   INTEGER NOT NULL,          -- unix sec
+  PRIMARY KEY (group_id, child_index),
+  FOREIGN KEY (group_id) REFERENCES groups(group_id) ON DELETE RESTRICT
+);
+CREATE INDEX idx_gda_group ON group_derived_addresses(group_id);
+```
+- `(group_id, child_index)` 主键 → 注册幂等;`ON DELETE RESTRICT` + 设计层 R7 公钥 append-only(distributed-mpc §R7)双重保证 group 不可删/不可孤儿。
+
+### 7.bis.2 Q-A 填充时机 = lazy 按需(L1 推荐)
+
+客户端首次启用某 child index 并"声明使用"时,经新 B-side `POST /v1/groups/{groupId}/derived/register` 注册一行(`api.md` B12)。**不预填**;表只存运行期实际启用过的地址,无浪费。
+
+### 7.bis.3 Q-C 读暴露面 = B-side owning-member-only(L1 推荐)
+
+仅本组成员经 `memberGate` 鉴权可 `GET /v1/groups/{groupId}/derived`(`api.md` B12);**禁** A 侧端点(F1 严格 owning-member-only)。**链接性既受用户已接受**(持 xpub 即可重算所有兄弟地址,非加固性质),不再经免鉴权列表便利化外暴露;A 侧若需地址→group 反查另案。
+
+### 7.bis.4 Q-D 写鉴权 = 任一成员 B-side(L1 推荐)
+
+本组任一已注册成员可经其 identity 签名注册自己组的新派生地址;门限不必要(派生本身离线 + 公钥纯算)。重放防护沿 B-side `ts+nonce`。
+
+### 7.bis.5 与 §7 xpub 端点协作
+
+正常调用流:① client `GET /v1/groups/{groupId}/xpub`(B8)取 xpub → 离线缓存 → ② `wallet address <i>` 单机离线派生 → ③ 启用时 `POST /v1/groups/{groupId}/derived/register`(B12)登记 → ④ 后续 `GET …/derived` 拉地址簿。
+
 ## 8. 后兼容(F5)
 
 - `f695aff` 之前建的 group:`chaincode IS NULL`,**单地址、不可 HD**;`GET /v1/groups/{groupId}/xpub` 对其返 **`409 STATE_CONFLICT`**(`api.md` C 表既有 code),错误体 `error.code = "LEGACY_NO_HD"`,`message = "group predates HD; multi-group remains the multi-address path"`。
@@ -110,7 +148,7 @@ xpub 严格 owning-member-only:
 - 全部 `AD-*` L3 **必须 useWorktree=true 隔离**(`o436xwlk`/`blh4o7cx` 共享树污染前车)。
 - 基线 `origin/main = f695aff`(禁引 `ecff6b5`/pre-squash hash)。
 - 零回归红线:核心 P0–P6 + 双 E2E 门 + 全 finalized 件(`FIX-004`/`DEP-001` fail-closed 已 file:line 核实真实)一律不动。
-- charter-10:仅新增 `00004` 迁移,禁手改既有迁移。
+- charter-10:本批仅新增 `00004`(AD-3)+ `00005`(AD-6 group_derived_addresses)迁移,禁手改既有迁移。
 - `api.md` 属 `docs/design/contract/` **L1 权威**,本设计的 A1/B-side xpub 端点由 **L1 改**(非 L3)。
 - 任何 §1–§9 外**新设计分叉** L2 升 L1,L2/L3 不得自决(constraint 6)。
 - H-005(AD-5)阻 implement 收尾门:未通过则不入 review-park。
@@ -118,12 +156,13 @@ xpub 严格 owning-member-only:
 ## 11. 任务 DAG(L2 执行)
 
 ```
-F1–F5 锁定(本件)
-   ├── AD-2 init commit-reveal 产 c          (internal/mpc + cli/mpcnet keygen 段 + transport 复用)
-   ├── AD-3 coorddb chaincode 持久化         (00004 迁移 + GroupRecord/ProvisionGroup + 测试)
+F1–F5 + 7.bis 锁定(本件)
+   ├── AD-2 init commit-reveal 产 c          (internal/mpc + cli/mpcnet keygen 段 + transport 复用)  ✅ FINALIZED bb6bfee
+   ├── AD-3 coorddb chaincode 持久化         (00004 迁移 + GroupRecord/ProvisionGroup + 测试)        ✅ FINALIZED 380b320
    └─→ AD-1 签名 KDD 接线                    (internal/mpc + cli/mpcnet signing 段,新 internal/hd 离线 IL helper)
-       ├─→ AD-4 coord api + walletcli 离线派生命令  (B-side xpub 端点 + walletcli `wallet address <i>`;api.md 由 L1 改)
-       └─→ AD-5 H-005 复核(docs/security-review.md;§9 全项)→ 收尾门
+       ├─→ AD-4 walletcli 离线派生命令         (walletcli `wallet address <i>` + B-side xpub 客户端;api.md B8 由 L1 已落)
+       ├─→ AD-6 group_derived_addresses 持久化 (§7.bis;00005 迁移 + repo + 测试 + B12 register/list 实现;api.md B12 由 L1 已落)
+       └─→ AD-5 H-005 复核                    (docs/security-review.md;§9 全项 + §7.bis 链接性二度披露)→ 收尾门
 ```
 
-AD-2 ∥ AD-3 文件不相交可并;AD-1 依赖 AD-2(c 可得)+ AD-3(sd 载体已含 chaincode 列);AD-4 依 AD-1。每 AD 隔离 worktree、显式 pathspec、校准 `-race` + 双 E2E + cat-file。
+AD-2 ∥ AD-3 文件不相交可并(已完成);AD-1 依赖 AD-2 + AD-3;AD-4 ∥ AD-6 文件不相交可并(AD-4 触 walletcli/sdk;AD-6 触 coorddb/coord),均依 AD-1;AD-5 H-005 收尾门覆盖全批含 §7.bis。每 AD 隔离 worktree、显式 pathspec、校准 `-race` + 双 E2E + cat-file。

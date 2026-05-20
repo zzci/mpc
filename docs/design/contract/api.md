@@ -74,6 +74,56 @@ Resp { items:[ { ...信封字段..., status, remainingTTL(秒) } ], serverTime }
 - 由 signers 中**指定一方**上报;coord 用组公钥验签,有效 → `SIGNED→RETURNED` 并回传外部服务,无效 → `FAILED`。
 - 多方重复上报幂等取首个有效。
 
+### B8 拉取扩展公钥(address-derivation §7,owning-member-only)
+`GET /v1/groups/{groupId}/xpub`(memberGate 鉴权,本组成员)→ `200 { ecdsaPubkeyHex, chaincodeHex }`
+- 仅向**本组已注册成员的自有设备**返回扩展公钥(Q_master, chaincode);**绝不**经 A 侧或任何外部接口暴露 `chaincode`(F1 owning-member-only 严格)。
+- 客户端缓存后**单机离线**派生任意 `m/<index>` 子地址(`Q_child = Q_master + IL·G`,纯公钥运算,零方在线)。
+- legacy group(`chaincode IS NULL`,本设计落地前建)→ `409 { code: "LEGACY_NO_HD" }`(F5)。
+
+### B9 发起 keygen(distributed-mpc §3,coord 事件引导)
+`POST /v1/groups/{groupId}/keygen`(memberGate)
+```
+Req  { sessionID, t, n, memberSet[](identity_pubkey hex), deadline(unix ms), proposerSig }
+Resp 202 { sessionID, accepted:true, startsAt }
+```
+- Pre-cond:① 发起方 identity ∈ `coord.external.expected_members`(强制集);② `memberSet ⊆ expected_members` 且 `|memberSet|=n`;③ proposerSig 有效;④ 该 groupId 无既有 `ecdsa_pubkey`(防重 keygen,既有组只可 reshare)。
+- coord 经 dispatchHub 派发 `keygen-START` 给 n 方;tss-lib 多轮 + commit-reveal chaincode 经 relay+Noise 直接交换,**coord 不在密码学路径**(R3)。
+- 失败 4xx 详见 C 表;新增 `LEGACY_NO_HD` / `EXPECTED_MEMBER_MISMATCH` 见 C。
+
+### B10 发起 reshare(distributed-mpc §3.bis,旧+新委员会双签)
+`POST /v1/groups/{groupId}/reshare`(memberGate)
+```
+Req  { sessionID, oldMemberSig, newMemberSet[], newMemberSig[], deadline }
+Resp 202 { sessionID, accepted:true, startsAt }
+```
+- Pre-cond:旧 memberSet = 当前 `groups.members`;新 memberSet 全员 ∈ `expected_members`;旧+新签名有效。
+- `chaincode` 不变(reshare 不动 xpub);旧份额抹除强制(R1 衍生)。
+
+### B11 客户端 attestation(distributed-mpc §3.ter,客户端为真)
+`PUT /v1/groups/{groupId}/attestation`(memberGate)
+```
+Req  { identityPubkey, holdsShare:bool, groupPubkeyHex?, chaincodeHex?, ts, sig }
+Resp 200 { groupState: REGISTERED|NEEDS_KEYGEN|NEEDS_RESHARE|INCONSISTENT,
+           ourView: { ecdsaPubkey?, chaincode?, nMembersReporting, nHoldingShare } }
+```
+- holdsShare=true 时 client 附 `groupPubkey`/`chaincode`(本机 keystore 直读);coord 聚合 n 方上报定 groupState。
+- coord 仅记 attestation 元数据,**永不**索 share。重放防护沿 B-side `ts+nonce`。
+
+### B12 派生地址注册/列出(group_derived_addresses,Q-A/B/C/D 用户裁定 2026-05-20)
+**写**:`POST /v1/groups/{groupId}/derived/register`(memberGate,**lazy 按需**,本组任一成员可注册)
+```
+Req  { index(uint32, <2^31), evmAddress, tronAddress, childPubkeyHex?, ts, sig }
+Resp 200 { registered:true } (idempotent on (groupId, index))
+```
+- 客户端**首次启用**某 child index 时调此注册一行;若该 `(groupId, index)` 已存在且地址一致 → 幂等 200;矛盾 → `409 STATE_CONFLICT`。
+- coord 不重派生、仅记录客户端上报值(可选 `childPubkeyHex` 用于事后验证)。
+
+**读**:`GET /v1/groups/{groupId}/derived?since=…`(memberGate,**B-side owning-member-only**)
+```
+Resp { items:[ { index, evmAddress, tronAddress, createdAt } ], serverTime }
+```
+- 仅本组成员经身份签名鉴权可读;**禁** A 侧暴露(F1 严格 owning-member-only;经 xpub 已可枚举的链接性既受用户接受,但避免免鉴权便利化外暴露)。
+
 ## C. 错误码
 
 | HTTP | code | 含义 |
@@ -83,6 +133,8 @@ Resp { items:[ { ...信封字段..., status, remainingTTL(秒) } ], serverTime }
 | 403 | FORBIDDEN | 跨组/无权 |
 | 404 | NOT_FOUND | requestId/group 不存在 |
 | 409 | STATE_CONFLICT | 状态不允许该操作(已终态/已派发) |
+| 409 | LEGACY_NO_HD | 既有 group 不可 HD(F5,本设计前建,仅单地址) |
+| 409 | EXPECTED_MEMBER_MISMATCH | identity 未在 `coord.external.expected_members` 强制集(B9/B10/B11) |
 | 410 | EXPIRED | 请求已过期 |
 | 429 | RATE_LIMITED | 限流 |
 | 503 | LOCKED | coord 库锁定,服务不可用(见下) |
