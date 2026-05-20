@@ -66,6 +66,27 @@ E2E **必须**做完整端到端,由两个测试替身配对组成(均非产品,
 - **断言**:同 §3.1 完整环(provision→A1→A2→法定人数→MPC keygen/sign/reshare 经真实 libp2p Noise+circuit-relay **跨容器**→{R,S,V}→webhook→三链 ETH/BSC/TRON 恢复验签)+ EXPIRED;额外验真实网络隔离下 relay 中转必经(无 localhost 直连)、各设备 keystore 物理隔离。
 - **定位(用户裁定)**:Docker E2E 为**更强隔离的补充验证**,与 §3.1 localhost E2E 并存(后者为快速门);Docker E2E 真 GREEN 纳入最终验收完成条件(故项目由「待验收」转为「核心已交付 finalized + Docker-E2E 硬化在制,最终验收增此门」)。**不得 un-finalize/回归任何已交付件**(零回归红线)。
 
+### 3.4 分布式 MPC E2E(DM-6 §G 验收,`e2e-distributed-mpc`)
+
+DM-6 closure-gate(commit `e70bd75`)产出独立 Bun/TS 套件
+`tests/e2e/test/e2e-distributed-mpc/`,验证真分布式 MPC(n 方各自独立进程 +
+真实 libp2p 路径,**非** CLI-001 单机多进程仿真)。
+
+- **门控(`gate.ts`)**:
+  - `attestationOnlyGate()` —— 需 Go toolchain + `coorddb.CommitAttestationQuorum`
+    存在(DM-6 主提交;已在 main)。**默认可跑**(`attestation-quorum.test.ts`)。
+  - `realMpcGate()` —— `attestationOnlyGate` + `internal/cli/host_transport.go`
+    存在(DM-5 主提交;已在 main)+ **显式开关 `E2E_DMPC=1`**(默认 skip,
+    防 CI 误触发长跑)。
+- **用例(4 件)**:
+  - `attestation-quorum.test.ts`:同事务 B11 commit 路径(幂等、INCONSISTENT、R7 violation)
+  - `keygen-3of3.test.ts` / `sign-2of3.test.ts` / `reshare.test.ts`:真 n 方
+    keygen / sign / reshare 经 DM-5 host_transport 跑通。
+- **运行**:`cd tests/e2e && E2E_DMPC=1 bun test test/e2e-distributed-mpc`;
+  默认 CI 跑 attestation-quorum,real-MPC 三件作可选门(operator 主动开启)。
+- **定位**:E2E-001(§3.1)+ E2E-002(§3.3)是回归门(单进程/Docker 仿真);
+  e2e-distributed-mpc 是**真分布式实证门**,DM-1..DM-6 闭环硬判据。
+
 ## 4. 安全专项(对应 security.md §5)
 
 每条攻击对策须有对应用例:relay 抓包仅密文且无法伪造 `from`;跨 sessionId 注入被丢弃;无 PSK/能力令牌无法预约 relay/注册 rendezvous;分裂攻击(不同成员不同信封)产不出有效签名;重放被拒;`tx-decode` 模糊不产生「误签」(只产「拒签」)。

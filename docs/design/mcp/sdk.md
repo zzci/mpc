@@ -22,20 +22,33 @@
 gomobile 约束 → 仅扁平类型,复杂类型 JSON/bytes 进出,异步用 callback 接口:
 
 ```
-KeyGen(configJSON string, cb KeyGenCallback)         // 后台 PreParams,进度回调
-Sign(startJSON string, cb SignCallback)              // startJSON=StartSigning
-Reshare(configJSON string, cb ReshareCallback)
-OnWireMessage(b []byte)                               // transport 收到的 MPC 消息回灌
+KeyGen(configJSON string, wire WireCallbacks, cb KeyGenCallback)
+Sign(configJSON string, wire WireCallbacks, cb SignCallback) *SignSession
+Reshare(configJSON string, wire WireCallbacks, cb ReshareCallback)
+OnWireMessage(b []byte)                               // host→Go MPC 消息回灌
 ExportShare(passphrase string) []byte / ImportShare(...)
-FetchTransactions(reqJSON string) (string, error)    // 经 coord 获取交易信息(见下)
+FetchTransactions(reqJSON string) (string, error)    // 经 coord 获取交易信息(见 §2.1)
+FetchXpub(reqJSON string) (string, error)            // owning-member-only xpub 拉取(B8)
+
+interface WireCallbacks {                              // Go→host 出站桥(DM-3)
+  OnWireMessage(b []byte)                              // host 负责按 tag 路由到 peer
+}
 
 interface SignCallback {
   OnDecoded(aFactsJSON string, bInfoJSON string, mismatchJSON string)  // 待人审
-  Approve() / Reject()                                                  // UI 决策回传
   OnResult(rsv []byte) / OnError(code string, msg string)
 }
+// Sign 返回 *SignSession,UI 通过 ss.Approve() / ss.Reject() 决策回传。
 ```
+
+**DM-3 hard-cut(commit `9d2fe86`)**:`configJSON` 是必填的密封信封,字段集
+`{groupId, sessionID, partyIndex, n, t (Sign/KeyGen) | oldT/newT (Reshare),
+memberSet[], relay{peerID, addrs[]}, role, passphrase}`;旧版缺字段直接拒。
+`WireCallbacks` 是 gomobile 桥必填第三参数(host 端实现 libp2p 出站),无桥即
+无 MPC——SDK 不再自带 transport。详见 `distributed-mpc-impl.md §B DM-3`。
+
 - 复杂 tss-lib 类型全封装 Go 侧;RN 仅见 string/[]byte/回调。
+- 实际签名:`sdk/sdk.go`(对外门面)+ `internal/mobileapi/`(扁平实现)。
 
 ### 2.1 经 coord 获取交易信息(用户裁定 2026-05-19)
 

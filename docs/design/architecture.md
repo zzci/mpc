@@ -35,6 +35,7 @@
 | coord 持久化 | server | SQLite:待签列表/状态机/组公钥/审计/推送 token(relay 无状态) | server/database.md |
 | 管理面 | server | 单一运维管理员:交易/历史会话查看、防滥用、审计;不签发准入 | server/admin.md |
 | mcp SDK | mcp | MPC(keygen/sign/reshare)、keystore、tx-decode、transport、RN 桥 | mcp/sdk.md |
+| walletcli | mcp | PC 钱包成员端(`cli` shell + `cli serve` HTTP + htmx UI):WYSIWYS 审批 / 备份导入 / 离线地址派生;非生产工具,本机运维与 E2E 调试用 | mcp/walletcli-ui.md |
 | 契约 | contract | 信封、API、libp2p 协议、心跳、START | contract/api.md, contract/protocol.md |
 
 ## 3. 部署拓扑

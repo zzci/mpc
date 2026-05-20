@@ -15,9 +15,9 @@ import (
 
 // HTTP surface: docs/design/contract/api.md A (external) + B (member) and
 // docs/spec/group-provisioning.md /v1/groups*. Stdlib net/http only — the
-// repo baseline is go 1.23 and the go 1.22+ ServeMux (method+wildcard
+// repo baseline is go 1.25 and the go 1.22+ ServeMux (method+wildcard
 // patterns, r.PathValue) covers routing with no dependency, so go.mod stays
-// pinned (go 1.23, protobuf v1.31.0) with no toolchain bump.
+// pinned (go 1.25, protobuf v1.36.6, libp2p v0.48.0) per PLAN.md §1.
 //
 // Every data endpoint is wrapped by lockGate: when the store is LOCKED it
 // returns 503 LOCKED and nothing else (fail-closed, api.md:81-84,

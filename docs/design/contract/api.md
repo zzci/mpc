@@ -68,7 +68,8 @@ Resp { items:[ { ...信封字段..., status, remainingTTL(秒) } ], serverTime }
 - coord 验签后写在线集(内存 SQLite,`expires_at` + 周期清理);**不依赖 relay 上报**。
 
 ### B6 接收 START
-- 首选**推送**(FCM/APNs)唤起;补充**长轮询** `GET /v1/groups/{groupId}/dispatch?wait=…`
+- 主路径:**长轮询** `GET /v1/groups/{groupId}/dispatch?wait=…`(coord 内部 dispatchHub fan-out,B9/B10/B11/keygen 多事件共享通道,DM-4 commit `74ca04c`)。
+- 旁路通知:coord 经**单一固定 webhook**(配置 `coord.notify.url/secret/api_key`,CFG-001 ruling 2026-05-19)向外部通知渠道投递唤醒事件,由外部渠道负责 FCM/APNs 翻译/投递;coord **不**持任何 FCM/APNs 凭证。
 - START 载荷:`{ requestId, 完整信封, signers[], deadline }`;设备据 `contract/protocol.md` 进入 MPC 前流程(tx-decode + 人审 + 未过期校验)。
 
 ### B7 上报签名结果

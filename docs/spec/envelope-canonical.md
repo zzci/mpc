@@ -5,6 +5,7 @@
 - **基线引用提交**：与 docs/design/ 全树基线一致（DESIGN-REVIEW-001.md:4）。
 - **日期**：2026-05-18
 - **产出体**：L3/bkd，隶属 L2(57o81fv9)
+- **状态**：✅ 已实施(2026-05)。规范化逻辑见 `internal/contract/envelope.go` 与 `internal/server/coord/provision_canonical.go`。
 
 ---
 

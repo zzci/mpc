@@ -1,8 +1,10 @@
-# 分布式 MPC 引擎实施件(Phase 1 — L2 proposal L1 ratified)
+# 分布式 MPC 引擎实施件(Phase 2 — ✅ 全部交付 2026-05-20)
 
 > 性质:L1 权威实施件(对照设计件 `distributed-mpc.md` @ `5c8a90b`,Phase 1)。中文。
-> Phase 1 = 实施细节定稿,纯设计层零代码;**Phase 2 implement 严格队列**:地址派生 AD-1→AD-4/AD-6→AD-5 H-005 全 finalize 之后再启。
+> Phase 1 = 设计件;**Phase 2 implement** 已 6 层全 finalize in main(下 §B 表)。
 > 用户裁定 2026-05-20:批准 L1 推荐 bundle("按推荐处理")。L1 2 项澄清已 adopt:DM-1 措辞 **ADDITIVE** 非 refactor;DM-3 configJSON 切换 = **hard-cut**(旧缺新字段拒)。
+>
+> **交付总览**(2026-05-20 finalize):DM-1 `327c715` → DM-2 `a968ed8` → DM-3 `9d2fe86` → DM-4 `74ca04c` → DM-5 `941fa87` → DM-6 `e70bd75`。Phase 2 真分布式 MPC 闭环已实证;§G E2E 验收套件(`tests/e2e/test/e2e-distributed-mpc/`)亦在 main(默认 attestation-quorum 跑,真多进程 keygen/sign/reshare 经 `E2E_DMPC=1` 显式启用)。
 
 ## §A 锚定 & 范围
 
@@ -14,14 +16,14 @@
 
 每层 useWorktree=true 隔离,文件不相交于本批;与地址派生跨批文件归属冲突见 §D。
 
-| 层 | 范围 | 文件归属(枚举) |
-|---|---|---|
-| **DM-1** mpc 单方入口(**ADDITIVE** 非 refactor) | 既有 `internal/mpc/{keygen,signing,resharing}.go` 全 n 模拟签名/行为**零变更**(测试沿用);**新增** `internal/mpc/singleparty.go` 单方 API,返单方 share_i | `internal/mpc/singleparty.go`(NEW);相邻文件**禁改** |
-| **DM-2** 生产网络引擎抽取 | 从 `internal/cli/mpcnet.go` 抽取 tss-over-libp2p pump 泛化;**复制+泛化非搬迁**,`internal/cli/mpcnet.go` 保留(E2E 载体零回归) | NEW `internal/mpcnet/{engine.go, session.go, transport_adapter.go, *_test.go}` |
-| **DM-3** SDK 单方化 + wire 回调(**hard-cut**) | `sdk.KeyGen/Sign/Reshare` 入参 configJSON 加 `{groupId,sessionID,partyIndex,n,t,memberSet,relay{peerID,addrs[]},role}`,只产 share_i;**旧 configJSON 缺新字段 → 拒**(`CodeBadConfig`);新增出站 wire 回调 Go→host;`OnWireMessage` 接活 R5 gate;`docs/design/mcp/sdk.md` 同步修订 L1 落 | `sdk/sdk.go`、`internal/mobileapi/wirecallbacks.go`(NEW)、`internal/mobileapi/{keygen,sign,reshare}.go`;`docs/design/mcp/sdk.md` L1 改 |
-| **DM-4** coord 事件契约 + R7 守卫 | 配置 `Coord.External.ExpectedMembers`、identity 注册扩展、keygen/reshare/attestation 端点(api.md B9/B10/B11 已落)、dispatchHub 扩 keygen-START/reshare-START/attestation-ACK、**R7 双层守卫**(§E) | `internal/server/config.go`、`internal/server/coord/{identity.go(NEW),members.go,keygen.go(NEW),reshare.go(NEW),attestation.go(NEW),dispatch.go,api.go}`、`coorddb/migrations/00006_groups_pubkey_append_only.sql`(NEW;**注意**:AD-6 占 00005,本迁移取 **00006**)、`coorddb/repo.go` R7 app 守卫 |
-| **DM-5** host 传输接线 | PC CLI 复用 `internal/transport`,实现 wire 回调 host 侧;移动桥同接口零改;**先 PC CLI 打通真 3 进程 keygen+sign+reshare** | `internal/cli/host_transport.go`(NEW);移动桥侧零改 |
-| **DM-6 收尾** 组记录同事务一致性 + 验收 | 跨 n 方 attestation 一致性(全等才写 groups)+ §G E2E 真多进程 n 方验收硬判据全过 | `internal/server/coord/provisioning.go`、`internal/server/coorddb/repo.go`、`tests/e2e/test/e2e-distributed-mpc/` NEW |
+| 层 | 范围 | 文件归属(枚举) | 交付 |
+|---|---|---|---|
+| **DM-1** mpc 单方入口(**ADDITIVE** 非 refactor) | 既有 `internal/mpc/{keygen,signing,resharing}.go` 全 n 模拟签名/行为**零变更**(测试沿用);**新增** `internal/mpc/singleparty.go` 单方 API,返单方 share_i | `internal/mpc/singleparty.go`(NEW);相邻文件**禁改** | ✅ `327c715` |
+| **DM-2** 生产网络引擎抽取 | 从 `internal/cli/mpcnet.go` 抽取 tss-over-libp2p pump 泛化;**复制+泛化非搬迁**,`internal/cli/mpcnet.go` 保留(E2E 载体零回归) | NEW `internal/mpcnet/{engine.go, session.go, transport_adapter.go, *_test.go}` | ✅ `a968ed8` |
+| **DM-3** SDK 单方化 + wire 回调(**hard-cut**) | `sdk.KeyGen/Sign/Reshare` 入参 configJSON 加 `{groupId,sessionID,partyIndex,n,t,memberSet,relay{peerID,addrs[]},role}`,只产 share_i;**旧 configJSON 缺新字段 → 拒**(`CodeBadConfig`);新增出站 wire 回调 Go→host;`OnWireMessage` 接活 R5 gate | `sdk/sdk.go`、`internal/mobileapi/wirecallbacks.go`(NEW)、`internal/mobileapi/{keygen,sign,reshare}.go` | ✅ `9d2fe86` |
+| **DM-4** coord 事件契约 + R7 守卫 | 配置 `Coord.External.ExpectedMembers`、identity 注册扩展、keygen/reshare/attestation 端点(api.md B9/B10/B11)、dispatchHub 扩 keygen-START/reshare-START/attestation-ACK、**R7 双层守卫**(§E) | `internal/server/config.go`、`internal/server/coord/{identity,members,keygen,reshare,attestation,dispatch,api}.go`、`coorddb/migrations/00006_groups_pubkey_append_only.sql`、`coorddb/repo.go` | ✅ `74ca04c` |
+| **DM-5** host 传输接线 | PC CLI 复用 `internal/transport`,实现 wire 回调 host 侧;移动桥同接口零改;**先 PC CLI 打通真 3 进程 keygen+sign+reshare** | `internal/cli/host_transport.go`(NEW);`internal/walletcli/{httpapi,ops,walletcli}.go` env 驱动接线;移动桥侧零改 | ✅ `941fa87` |
+| **DM-6 收尾** 组记录同事务一致性 + 验收 | 跨 n 方 attestation 一致性(全等才写 groups)+ §G E2E 真多进程 n 方验收脚手架 | `internal/server/coord/{attestation,errors,provisioning}.go`、`internal/server/coorddb/repo.go`、`tests/e2e/test/e2e-distributed-mpc/` NEW | ✅ `e70bd75` |
 
 ## §C 每层硬门套件
 
@@ -46,7 +48,7 @@
 | DM-5 | `internal/cli/*` | DM-5 必待 **AD-4** finalize |
 | DM-6 | `internal/server/coord/provisioning.go` + `coorddb/repo.go` | DM-6 必待 **AD-3 + AD-4 + AD-6 + AD-5 H-005** finalize |
 
-**结论**:Phase 2 整体 implement **必排在地址派生 AD-1→AD-4/AD-6→AD-5 全 finalize 之后**。Phase 1 本件 = 设计层零代码,与地址派生 AD-* 并行无冲突。
+**结论**:Phase 2 整体 implement **必排在地址派生 AD-1→AD-4/AD-6→AD-5 全 finalize 之后**。Phase 1 本件 = 设计层零代码,与地址派生 AD-* 并行无冲突。**实际**(2026-05-20):地址派生 AD-1/AD-2/AD-3/AD-4/AD-6 + H-005(AD-5)全 finalize 后,Phase 2 DM-1..DM-6 按 §H 严格逐层节奏全部 finalize in main(见 §B 末列)。
 
 ## §E R7 pubkey append-only 双层守卫
 

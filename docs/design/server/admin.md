@@ -46,9 +46,20 @@ coord 进程经 API 本就接收信封明文(必须,才能入待签列表/编排
 
 ## 5. 部署与暴露
 
-- `admin-api` 随 coord 进程(`coord.enable=true`);`admin-ui` 独立静态站点。
-- **不对公网暴露**:仅内网 / VPN / mTLS / IP 允许列表;与外部业务服务、成员 API 端口隔离。
+- `admin-api` 与 `admin-ui` 同进程:`internal/server/admin/ui.go` 通过
+  `//go:embed uiassets/{htmx.min.js, tw.css, templates/*.tmpl}` 嵌入 Go 二进制,
+  由 `admin-api` 同一 `http.ServeMux` 直接 serve(commit `b36ae4b` 之前已落地)。
+  **无独立前端部署步骤、无 Node 构建链、无 npm install**;升级 admin-api 即升级 UI。
+- **不对公网暴露**:仅内网 / VPN / mTLS / IP 允许列表(`s.netGate` 已实施
+  IP allowlist);与外部业务服务、成员 API 端口隔离(`coord.admin.listen` ≠
+  `coord.external.listen` ≠ `coord.member.listen`)。
 - 单一全局管理员(非每组);组级别可见性通过查询过滤,不引入组管理员角色。
+- 路由表(实测,`internal/server/admin/ui.go:158-174`):
+  - 静态资产:`GET /admin/ui/assets/{htmx.min.js,tw.css}`
+  - 鉴权:`GET /admin/ui/login`、`POST /admin/ui/session`、`POST /admin/ui/logout`
+  - 仪表盘(LOCKED 可达):`GET /admin/ui` / `GET /admin/ui/`
+  - 数据页(LOCKED fail-closed):`GET /admin/ui/transactions` /
+    `/admin/ui/transactions/{requestId}` / `/admin/ui/audit` / `/admin/ui/relay`
 
 ## 6. 数据来源
 

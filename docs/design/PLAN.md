@@ -101,7 +101,8 @@ SigningRequest { requestId, chain, unsignedTx/intent(库视为不透明),
 | `transport` | `Transport` 接口;首实现 = libp2p(Noise + GossipSub + circuit-relay 客户端) | Go |
 | `node`(单程序,双角色) | 同一二进制,配置 `relay.enable` / `coord.enable` 各自开关(可单开/双开):<br>· **relay 角色**:通用零信任 circuit-relay v2 + rendezvous;无状态、无明文<br>· **coord 角色**:收信封/待签列表、连通性追踪、法定人数发起、推送、外部对接 API、`{R,S,V}` 回传<br>详见 `docs/design/server/server.md` | Go |
 | `admin-api` | coord 内管理接口:交易/历史会话只读查询 + 防滥用控制(配额/封禁/PSK 轮换);全操作入 `admin_audit`;不签发成员准入 | Go |
-| `admin-ui` | 运维 Web 控制台,消费 `admin-api`;非公网暴露 | TS/Web |
+| `admin-ui` | 运维 Web 控制台,**htmx + tailwindcss 服务端渲染**,与 `admin-api` 同进程(`//go:embed uiassets`,无 Node 构建链);非公网暴露 | Go (htmx + tailwindcss) |
+| `walletcli` | PC 钱包成员端(`cli serve`):JSON `/v1/*` API + htmx UI(`/ui/*`,WYSIWYS sign approval / import / fetch / xpub / address);非生产工具,运维与调试用 | Go (htmx + tailwindcss) |
 | `addr` (可选) | 公钥→ETH/TRON 地址纯派生;非核心 | Go |
 | `rn-bridge` | React Native 原生模块,桥接 gomobile lib ↔ JS | Kotlin/Swift/TS |
 | `sample-app` (可选) | RN 集成示例:keygen/sign/reshare + 多方审批演示;非产品 | TS/RN |
@@ -149,4 +150,4 @@ SigningRequest { requestId, chain, unsignedTx/intent(库视为不透明),
 
 ---
 
-_状态:仅规划,无代码。所有开放点闭环(含管理面、库加密锁定)。开发文档体系见 §0 索引;P0 详细任务分解见 `docs/design/P0-tasks.md`。数据库:**SQLite 单文件、整库加密 + 默认锁定(口令解锁,仅内存,fail-closed)**;coord 单节点 + 文件备份/Litestream 容灾;内存 SQLite 承载无状态在线集;历史长期保留以支撑管理面。_
+_状态(2026-05-20):P0–P3 + P3.5 已交付,真分布式 MPC 闭环(DM-1..DM-6)+ 地址派生(AD-1..AD-6 + H-005 GREEN)+ admin-ui + wallet-cli UI 全部 in main;P4 移动封装(gomobile bind 脚本就位,GM-001 .aar 实证可构;真机后继门待移动环境)、P5 sample-app/韧性场景、P6 持续加固为后续工作。所有开放点闭环;开发文档体系见 §0 索引;P0 详细任务分解见 `docs/design/P0-tasks.md`。数据库:**SQLite 单文件、整库加密 + 默认锁定(口令解锁,仅内存,fail-closed)**;coord 单节点 + 文件备份/Litestream 容灾;内存 SQLite 承载无状态在线集;历史长期保留以支撑管理面。_

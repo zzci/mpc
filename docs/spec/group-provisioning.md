@@ -1,5 +1,8 @@
 # 规约补全:keygen 后组/成员开通契约(DREV-001 D2-1)
 
+> **状态**:✅ 已实施(2026-05)。路由见 `internal/server/coord/api.go:73-75` 的
+> `POST /v1/groups`、`POST /v1/groups/{groupId}/membership`、`GET /v1/groups/{groupId}`,
+> 持久化见 `internal/server/coord/provisioning.go` + `internal/server/coorddb/repo.go`。
 > 性质:**设计补全规约**,补 `docs/design/` 权威留白,**不改 docs/design/**、不写实现。实施 **X-001**(coord 角色:组成员开通)、**D-001**(coord 数据库)据此。
 > 关联权威:`docs/design/contract/api.md`、`docs/design/contract/protocol.md`、`docs/design/server/database.md`、`docs/design/server/server.md`、`docs/design/server/admin.md`、`docs/design/mcp/sdk.md`。
 > 风格沿用 `docs/design/contract/api.md:5`:HTTPS + JSON,REST 语义;字节字段 base64;时间 RFC3339 UTC;版本前缀 `/v1`;错误码沿用 `api.md` C 表(`docs/design/contract/api.md:65-79`)。

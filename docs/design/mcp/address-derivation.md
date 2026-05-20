@@ -159,10 +159,10 @@ CREATE INDEX idx_gda_group ON group_derived_addresses(group_id);
 F1–F5 + 7.bis 锁定(本件)
    ├── AD-2 init commit-reveal 产 c          (internal/mpc + cli/mpcnet keygen 段 + transport 复用)  ✅ FINALIZED bb6bfee
    ├── AD-3 coorddb chaincode 持久化         (00004 迁移 + GroupRecord/ProvisionGroup + 测试)        ✅ FINALIZED 380b320
-   └─→ AD-1 签名 KDD 接线                    (internal/mpc + cli/mpcnet signing 段,新 internal/hd 离线 IL helper)
-       ├─→ AD-4 walletcli 离线派生命令         (walletcli `wallet address <i>` + B-side xpub 客户端;api.md B8 由 L1 已落)
-       ├─→ AD-6 group_derived_addresses 持久化 (§7.bis;00005 迁移 + repo + 测试 + B12 register/list 实现;api.md B12 由 L1 已落)
-       └─→ AD-5 H-005 复核                    (docs/security-review.md;§9 全项 + §7.bis 链接性二度披露)→ 收尾门
+   └─→ AD-1 签名 KDD 接线                    (internal/mpc + cli/mpcnet signing 段 + internal/hd 离线 IL helper)  ✅ FINALIZED cf8adc8
+       ├─→ AD-4 walletcli 离线派生命令         (walletcli `wallet address <i>` + B-side xpub 客户端;api.md B8)  ✅ FINALIZED c08555c
+       ├─→ AD-6 group_derived_addresses 持久化 (§7.bis;00005 迁移 + repo + B12 register/list;api.md B12)        ✅ FINALIZED cff15b6
+       └─→ AD-5 H-005 复核                    (docs/security-review.md;§9 全项 + §7.bis 链接性二度披露)         ✅ FINALIZED 22d1445
 ```
 
 AD-2 ∥ AD-3 文件不相交可并(已完成);AD-1 依赖 AD-2 + AD-3;AD-4 ∥ AD-6 文件不相交可并(AD-4 触 walletcli/sdk;AD-6 触 coorddb/coord),均依 AD-1;AD-5 H-005 收尾门覆盖全批含 §7.bis。每 AD 隔离 worktree、显式 pathspec、校准 `-race` + 双 E2E + cat-file。
