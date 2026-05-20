@@ -1,0 +1,40 @@
+{{define "sign_detail.tmpl"}}{{template "head" .}}
+{{template "nav" .}}
+<div class="flex items-center justify-between mb-4">
+  <h1 class="text-xl font-bold text-slate-100">Sign request <span class="font-mono text-slate-400">{{.D.ID}}</span></h1>
+  <a href="/ui/sign" class="text-sm text-sky-400">&larr; Back to list</a>
+</div>
+
+<div class="grid grid-cols-2 gap-4 mb-4">
+  <div class="card">
+    <div class="text-sm text-slate-400 uppercase tracking-wide mb-2">A-facts (device-recomputed)</div>
+    <pre class="font-mono text-xs break-all">{{prettyJSON .D.AFacts}}</pre>
+  </div>
+  <div class="card">
+    <div class="text-sm text-slate-400 uppercase tracking-wide mb-2">B-info (from envelope)</div>
+    <pre class="font-mono text-xs break-all">{{prettyJSON .D.BInfo}}</pre>
+  </div>
+</div>
+
+<div class="card mb-6">
+  <div class="text-sm text-slate-400 uppercase tracking-wide mb-2">Mismatch</div>
+  {{if and .D.Mismatch (ne .D.Mismatch "[]") (ne .D.Mismatch "null")}}
+    <div class="badge badge-warn mb-2">flagged</div>
+    <pre class="font-mono text-xs break-all">{{prettyJSON .D.Mismatch}}</pre>
+  {{else}}
+    <div class="badge badge-ok">no A/B discrepancies</div>
+  {{end}}
+</div>
+
+<div id="sign-decision" class="card">
+  <div class="text-sm text-slate-400 mb-3">Approving will produce a signature; rejecting tears the session down and returns an error. Either choice is terminal — the operator cannot undo it.</div>
+  <div class="flex gap-3">
+    <button class="btn"
+            hx-post="/ui/sign/{{.D.ID}}/approve"
+            hx-target="#sign-decision" hx-swap="outerHTML">Approve &amp; sign</button>
+    <button class="btn btn-ghost"
+            hx-post="/ui/sign/{{.D.ID}}/reject"
+            hx-target="#sign-decision" hx-swap="outerHTML">Reject</button>
+  </div>
+</div>
+{{template "foot" .}}{{end}}

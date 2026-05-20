@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/zzci/mpc/sdk"
 )
@@ -16,7 +17,14 @@ func testServer(t *testing.T, token string) *httpServer {
 	if err != nil {
 		t.Fatalf("NewSDK: %v", err)
 	}
-	return &httpServer{sdk: s, token: token, pending: map[string]*pendingSign{}}
+	hs := &httpServer{
+		sdk:     s,
+		token:   token,
+		pending: map[string]*pendingSign{},
+		now:     time.Now,
+	}
+	hs.ui = newUI(hs)
+	return hs
 }
 
 func TestIsLoopbackAddr(t *testing.T) {

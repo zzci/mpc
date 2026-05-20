@@ -1,0 +1,23 @@
+{{define "sign_list.tmpl"}}{{template "head" .}}
+{{template "nav" .}}
+<h1 class="text-xl font-bold text-slate-100 mb-4">Pending signs</h1>
+{{if .Items}}
+<div class="overflow-x-auto">
+<table>
+  <thead><tr><th>ID</th><th>Age</th><th>Mismatch</th><th></th></tr></thead>
+  <tbody>
+  {{range .Items}}
+    <tr>
+      <td class="font-mono">{{short .ID}}</td>
+      <td>{{sinceMS .CreatedAt}}</td>
+      <td>{{if and .Mismatch (ne .Mismatch "[]") (ne .Mismatch "null")}}<span class="badge badge-warn">flagged</span>{{else}}<span class="badge badge-ok">clean</span>{{end}}</td>
+      <td><a class="btn btn-ghost" href="/ui/sign/{{.ID}}">Review</a></td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{else}}
+<div class="card text-center text-slate-400">No pending sign requests.</div>
+{{end}}
+{{template "foot" .}}{{end}}

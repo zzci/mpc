@@ -1,0 +1,20 @@
+{{define "index.tmpl"}}{{template "head" .}}
+{{template "nav" .}}
+<div class="grid grid-cols-2 gap-4 mb-6">
+  <div class="card">
+    <div class="text-sm text-slate-400 uppercase tracking-wide mb-2">Version</div>
+    <div class="text-lg text-slate-100 font-mono">{{.Version}}</div>
+  </div>
+  <div class="card">
+    <div class="text-sm text-slate-400 uppercase tracking-wide mb-2">Auth</div>
+    <div class="text-lg text-slate-100">{{if .AuthEnabled}}<span class="badge badge-ok">token gate</span>{{else}}<span class="badge badge-warn">loopback open</span>{{end}}</div>
+  </div>
+</div>
+<a href="/ui/sign" class="card flex items-center justify-between" style="text-decoration:none">
+  <div>
+    <div class="text-lg font-semibold text-slate-100 mb-2">Pending signs</div>
+    <div class="text-sm text-slate-400">Two-step sign requests awaiting an explicit operator decision. Each carries the device-recomputed WYSIWYS decode; approving is the only path to a signature.</div>
+  </div>
+  <div class="text-2xl font-bold {{if .Pending}}text-amber-400{{else}}text-slate-500{{end}}">{{.Pending}}</div>
+</a>
+{{template "foot" .}}{{end}}

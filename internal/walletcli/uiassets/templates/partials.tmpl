@@ -1,0 +1,33 @@
+{{define "head"}}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>wallet-cli · {{.Active}}</title>
+<link rel="stylesheet" href="/ui/assets/tw.css">
+<script src="/ui/assets/htmx.min.js" defer></script>
+</head>
+<body class="min-h-screen">
+<div class="mx-auto max-w-6xl p-6">{{end}}
+
+{{define "nav"}}
+<header class="flex items-center justify-between mb-6 border-b border-slate-700 py-3">
+  <div class="flex items-center gap-3">
+    <span class="text-xl font-bold text-slate-100">wallet-cli</span>
+    <span class="badge">WYSIWYS</span>
+  </div>
+  <nav class="flex gap-3 text-sm">
+    <a href="/ui" class="{{if eq .Active "home"}}text-sky-400 font-semibold{{else}}text-slate-300{{end}}">Overview</a>
+    <a href="/ui/sign" class="{{if eq .Active "sign"}}text-sky-400 font-semibold{{else}}text-slate-300{{end}}">Pending signs</a>
+    {{if .AuthEnabled}}<form method="post" action="/ui/logout" class="inline-flex"><button class="text-slate-400" type="submit">Sign out</button></form>{{end}}
+  </nav>
+</header>{{end}}
+
+{{define "foot"}}
+<footer class="mt-6 text-xs text-slate-500 text-center">
+  wallet-cli panel · approve / reject is the only mutating action; keygen / reshare / import / export remain JSON-only (/v1/*).
+</footer>
+</div>
+</body>
+</html>{{end}}

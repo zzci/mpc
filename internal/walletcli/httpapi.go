@@ -53,7 +53,13 @@ func serveHTTP(args []string) int {
 		wf(os.Stderr, "error: open keystore: %v\n", err)
 		return 1
 	}
-	srv := &httpServer{sdk: s, token: token, pending: map[string]*pendingSign{}}
+	srv := &httpServer{
+		sdk:     s,
+		token:   token,
+		pending: map[string]*pendingSign{},
+		now:     time.Now,
+	}
+	srv.ui = newUI(srv)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/health", srv.guard(srv.health))
@@ -66,6 +72,7 @@ func serveHTTP(args []string) int {
 	mux.HandleFunc("/v1/wire", srv.guard(srv.wireH))
 	mux.HandleFunc("/v1/sign", srv.guard(srv.signH))
 	mux.HandleFunc("/v1/sign/", srv.guard(srv.signDecisionH))
+	srv.ui.register(mux)
 
 	hs := &http.Server{
 		Addr:              *listen,
@@ -102,18 +109,32 @@ type httpServer struct {
 	token   string
 	mu      sync.Mutex
 	pending map[string]*pendingSign
+	now     func() time.Time // injectable clock (tests + UI)
+	ui      *uiHandler
+}
+
+// signSession is the minimal Approve/Reject seam pendingSign drives. The
+// production type is *sdk.SignSession; tests pass a fake so they do not have
+// to spin up a full MPC ring just to exercise the HTTP/UI plumbing.
+type signSession interface {
+	Approve()
+	Reject()
 }
 
 // pendingSign is an in-flight two-step signing request awaiting an explicit
 // approve/reject decision (WYSIWYS preserved over HTTP). The libp2p host is
 // held alongside ss/cb so signDecisionH can Close it after the terminal
 // callback fires (success or failure), and ctxCancel releases the per-session
-// context that bounds the MPC operation.
+// context that bounds the MPC operation. The decoded snapshot and createdAt
+// are kept so the UI can render the WYSIWYS approval view and a list of
+// pending sessions without re-running prepareSign.
 type pendingSign struct {
-	ss        *sdk.SignSession
+	ss        signSession
 	cb        *signCB
 	host      *cli.HostTransport
 	ctxCancel context.CancelFunc
+	decoded   signDecode
+	createdAt time.Time
 }
 
 // guard enforces the optional bearer token (constant-time) before any handler.
@@ -323,7 +344,10 @@ func (h *httpServer) signH(w http.ResponseWriter, r *http.Request) {
 		_, _ = rand.Read(idb[:])
 		id := hex.EncodeToString(idb[:])
 		h.mu.Lock()
-		h.pending[id] = &pendingSign{ss: ss, cb: cb, host: host, ctxCancel: cancel}
+		h.pending[id] = &pendingSign{
+			ss: ss, cb: cb, host: host, ctxCancel: cancel,
+			decoded: d, createdAt: h.now(),
+		}
 		h.mu.Unlock()
 		writeJSON(w, http.StatusOK, map[string]any{
 			"id":       id,
