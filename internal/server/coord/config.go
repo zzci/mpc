@@ -43,6 +43,14 @@ type Config struct {
 	// DispatchTimeout bounds the wait after DISPATCHED; it is further clamped
 	// to the remaining TTL (docs/design/server/server.md C5).
 	DispatchTimeout time.Duration
+	// ExpectedMembers is the per-group strict identity allowlist
+	// (distributed-mpc R3 / §2.1, api.md B9/B10/B11). Keys are groupIds,
+	// values are raw secp256k1 identity-pubkey bytes (33B or 65B); the
+	// translation from hex (server.CoordExternalConfig) lives in
+	// cmd/server. nil/empty for a group means no member is keygen
+	// eligible for that group; B9/B10/B11 fail-close with
+	// EXPECTED_MEMBER_MISMATCH.
+	ExpectedMembers map[string][][]byte
 }
 
 const (

@@ -30,12 +30,13 @@ type Coord struct {
 	callback        callbackSink
 	nonces          *nonceCache
 
-	hub         *dispatchHub
-	results     *resultHub
-	engine      *engine
-	provisionRL *rateLimiter
-	externalRL  *rateLimiter // P6: per-IP external (A) surface
-	memberRL    *rateLimiter // P6: per-IP member (B) surface
+	hub          *dispatchHub
+	results      *resultHub
+	engine       *engine
+	attestations *attestationCache
+	provisionRL  *rateLimiter
+	externalRL   *rateLimiter // P6: per-IP external (A) surface
+	memberRL     *rateLimiter // P6: per-IP member (B) surface
 
 	httpSrv *http.Server
 }
@@ -109,6 +110,7 @@ func New(cfg Config, store *coorddb.Store, presence *coorddb.Presence, opts ...O
 		nonces:          newNonceCache(),
 		hub:             newDispatchHub(),
 		results:         newResultHub(),
+		attestations:    newAttestationCache(),
 		provisionRL:     newRateLimiter(30, time.Minute),
 		externalRL:      newRateLimiter(extDefaultMax, time.Minute),
 		memberRL:        newRateLimiter(memberDefaultMax, time.Minute),

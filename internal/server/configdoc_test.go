@@ -34,10 +34,15 @@ func TestConfigDocKeyMatrix(t *testing.T) {
 
 // schemaLeafKeys independently re-derives, by reflection over Config, the set
 // of leaf yaml dotted paths and their generated MPC_ env names. It mirrors
-// walkEnv's rules (yaml-tag first segment, recurse structs, leaf = non-struct;
-// env name = envPrefix + upper-cased path with every separator a single '_')
-// on purpose: an independent reimplementation is what makes this a real
-// drift guard rather than a tautology.
+// walkEnv's rules (yaml-tag first segment, recurse structs, leaf = non-struct
+// and non-map; env name = envPrefix + upper-cased path with every separator a
+// single '_') on purpose: an independent reimplementation is what makes this
+// a real drift guard rather than a tautology.
+//
+// Map-typed fields (e.g. coord.external.expected_members) are intentionally
+// skipped — they cannot be expressed unambiguously via env/CLI (walkEnv also
+// skips them) and so are not candidates for the env-name doc table; the param
+// table and .env.example only enumerate env/CLI-addressable leaves.
 func schemaLeafKeys() (paths map[string]struct{}, envs map[string]struct{}) {
 	paths = map[string]struct{}{}
 	envs = map[string]struct{}{}
@@ -56,6 +61,9 @@ func schemaLeafKeys() (paths map[string]struct{}, envs map[string]struct{}) {
 			path := prefix + name
 			if f.Type.Kind() == reflect.Struct {
 				walk(f.Type, path+".")
+				continue
+			}
+			if f.Type.Kind() == reflect.Map {
 				continue
 			}
 			paths[path] = struct{}{}

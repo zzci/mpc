@@ -1,6 +1,7 @@
 package coorddb
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"errors"
@@ -74,12 +75,21 @@ type MemberRecord struct {
 // event (request_events style, actor=coord), per S-002 §3.1/§3.2/§51.
 // Auth/signature checks are X-001; this method only persists — the
 // caller must have validated already.
+//
+// R7 (distributed-mpc.md R7, impl §E): groups.ecdsa_pubkey is append-only.
+// The in-transaction guard refuses (a) NULL/empty writes and (b)
+// overwrites of an existing non-empty pubkey with a different value. The
+// 00006 migration triggers form a deep-defense second layer (RAISE ABORT
+// at the SQLite level on any UPDATE-to-different or DELETE).
 func (s *Store) ProvisionGroup(ctx context.Context, g GroupRecord, members []MemberRecord) error {
 	if len(g.Chaincode) != 0 && len(g.Chaincode) != chaincodeLen {
 		return fmt.Errorf("coorddb: chaincode must be 32 bytes or nil, got %d", len(g.Chaincode))
 	}
 	evmAddr, tronAddr := deriveChainAddrs(g.ECDSAPubkey)
 	return s.WithTx(ctx, func(tx *sql.Tx) error {
+		if err := guardR7AppendOnly(ctx, tx, g.GroupID, g.ECDSAPubkey); err != nil {
+			return err
+		}
 		if _, err := tx.ExecContext(ctx,
 			`INSERT INTO groups
 			 (group_id, ecdsa_pubkey, threshold_t, parties_n, group_pubkey, epoch, created_at, updated_at, evm_address, tron_address, chaincode)
@@ -246,4 +256,34 @@ func nullableBlob(b []byte) any {
 		return nil
 	}
 	return b
+}
+
+// guardR7AppendOnly enforces the application-layer R7 invariant
+// (distributed-mpc.md R7, impl §E): groups.ecdsa_pubkey is append-only.
+// Refuses NULL/empty writes outright, and refuses an overwrite of an
+// existing non-empty value with a different one. Must run inside the
+// same WithTx as the write so the read+check+write is atomic.
+//
+// An idempotent INSERT-with-same-bytes (which today is rejected at the
+// PK level — group_id is PK) is treated as a noop here too: this guard
+// only inspects ecdsa_pubkey, the PK conflict still surfaces at the
+// INSERT. Callers needing idempotent upsert detection check that at the
+// HTTP layer (coord/provisioning.go group(...) lookup).
+func guardR7AppendOnly(ctx context.Context, tx *sql.Tx, groupID string, newPubkey []byte) error {
+	if len(newPubkey) == 0 {
+		return ErrR7Violation
+	}
+	var existing []byte
+	err := tx.QueryRowContext(ctx,
+		`SELECT ecdsa_pubkey FROM groups WHERE group_id = ?`, groupID).Scan(&existing)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("coorddb: R7 pre-check read: %w", err)
+	}
+	if len(existing) > 0 && !bytes.Equal(existing, newPubkey) {
+		return ErrR7Violation
+	}
+	return nil
 }

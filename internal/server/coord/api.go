@@ -61,6 +61,14 @@ func (c *Coord) router() http.Handler {
 	mux.Handle("POST /v1/groups/{groupId}/derived/register", c.lockGate(http.HandlerFunc(c.hDerivedRegister)))
 	mux.Handle("GET /v1/groups/{groupId}/derived", c.lockGate(http.HandlerFunc(c.hDerivedList)))
 
+	// B9/B10/B11 — distributed-mpc coord event-orchestration (DM-4,
+	// distributed-mpc.md §3/§3.bis/§3.ter, api.md B9-B11). Member-only
+	// routes; the strict identity allowlist (coord.external.expected_members)
+	// fail-closes any identity not pre-declared with EXPECTED_MEMBER_MISMATCH.
+	mux.Handle("POST /v1/groups/{groupId}/keygen", c.lockGate(http.HandlerFunc(c.hKeygen)))
+	mux.Handle("POST /v1/groups/{groupId}/reshare", c.lockGate(http.HandlerFunc(c.hReshare)))
+	mux.Handle("PUT /v1/groups/{groupId}/attestation", c.lockGate(http.HandlerFunc(c.hAttestation)))
+
 	// S-002 — group/membership provisioning (self-attesting payloads).
 	mux.Handle("POST /v1/groups", c.lockGate(c.rateGate(http.HandlerFunc(c.hProvisionGroup))))
 	mux.Handle("POST /v1/groups/{groupId}/membership", c.lockGate(c.rateGate(http.HandlerFunc(c.hMembership))))
@@ -314,6 +322,10 @@ func (c *Coord) hDispatch(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	select {
 	case st := <-ch:
+		if st == nil {
+			c.writeJSON(w, http.StatusOK, map[string]any{})
+			return
+		}
 		c.writeJSON(w, http.StatusOK, st)
 	case <-time.After(wait):
 		c.writeJSON(w, http.StatusOK, map[string]any{})

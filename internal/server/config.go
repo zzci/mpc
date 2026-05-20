@@ -7,6 +7,7 @@
 package server
 
 import (
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
@@ -155,9 +156,20 @@ type OutboundWebhookConfig struct {
 // fixed Result webhook with anti-forgery callback auth (user ruling
 // 2026-05-19; renamed from result_webhook to result to disambiguate from
 // notify).
+//
+// ExpectedMembers is the per-group strict identity allowlist required by the
+// distributed-mpc design (R3 / §2.1 / api.md B9-B11, user ruling 2026-05-19):
+// keygen/reshare/attestation requests are accepted only when every relevant
+// identity is pre-declared here. Keys are groupId, values are the hex-encoded
+// secp256k1 identity pubkeys (33B compressed or 65B uncompressed) of the
+// allowed members. Empty / absent map = no group is keygen-eligible (DM-4
+// endpoints fail-close with EXPECTED_MEMBER_MISMATCH); coord still serves
+// existing provisioned groups for sign/dispatch. The map is config-file only
+// (env/CLI overrides not supported for nested map values).
 type CoordExternalConfig struct {
-	APIKey string                `yaml:"api_key"`
-	Result OutboundWebhookConfig `yaml:"result"`
+	APIKey          string                `yaml:"api_key"`
+	Result          OutboundWebhookConfig `yaml:"result"`
+	ExpectedMembers map[string][]string   `yaml:"expected_members"`
 }
 
 // CoordNotifyConfig is the single fixed notification webhook, flattened to
@@ -308,6 +320,45 @@ func (c Config) Validate() error {
 		if err := validateOutboundWebhook("notify", OutboundWebhookConfig(c.Coord.Notify)); err != nil {
 			return err
 		}
+		if err := validateExpectedMembers(c.Coord.External.ExpectedMembers); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// validateExpectedMembers fail-fasts a malformed
+// coord.external.expected_members entry: every hex value must decode to a
+// secp256k1 serialized pubkey length (33 compressed / 65 uncompressed), the
+// only forms accepted on the wire (api.md B9/B10 memberSet, distributed-mpc.md
+// §2.1). An empty map is permitted: it simply means no group is keygen
+// eligible until configured.
+func validateExpectedMembers(m map[string][]string) error {
+	for gid, members := range m {
+		if strings.TrimSpace(gid) == "" {
+			return fmt.Errorf("coord enabled: external.expected_members: empty groupId key")
+		}
+		if len(members) == 0 {
+			return fmt.Errorf("coord enabled: external.expected_members[%q]: empty member list", gid)
+		}
+		seen := map[string]bool{}
+		for i, hexKey := range members {
+			k := strings.TrimSpace(hexKey)
+			if k == "" {
+				return fmt.Errorf("coord enabled: external.expected_members[%q][%d]: empty hex pubkey", gid, i)
+			}
+			if seen[k] {
+				return fmt.Errorf("coord enabled: external.expected_members[%q][%d]: duplicate identity pubkey", gid, i)
+			}
+			seen[k] = true
+			b, err := hex.DecodeString(k)
+			if err != nil {
+				return fmt.Errorf("coord enabled: external.expected_members[%q][%d]: not hex: %w", gid, i, err)
+			}
+			if len(b) != 33 && len(b) != 65 {
+				return fmt.Errorf("coord enabled: external.expected_members[%q][%d]: pubkey length %d not 33/65", gid, i, len(b))
+			}
+		}
 	}
 	return nil
 }
@@ -414,6 +465,12 @@ func walkEnv(v reflect.Value, prefix string) error {
 			}
 			continue
 		}
+		// Map-typed leaves (e.g. coord.external.expected_members) are
+		// structured nested values; env/CLI cannot express them
+		// unambiguously and are intentionally config-file only.
+		if fv.Kind() == reflect.Map {
+			continue
+		}
 		raw, ok := os.LookupEnv(key)
 		if !ok {
 			continue
@@ -496,6 +553,9 @@ func fieldByYAMLPath(v reflect.Value, path []string) (reflect.Value, error) {
 		if len(path) == 1 {
 			if fv.Kind() == reflect.Struct {
 				return reflect.Value{}, fmt.Errorf("%q is a section, not a value", path[0])
+			}
+			if fv.Kind() == reflect.Map {
+				return reflect.Value{}, fmt.Errorf("%q is a map; configure via the file source", path[0])
 			}
 			return fv, nil
 		}

@@ -25,3 +25,12 @@ var ErrPlaintextMode = errors.New("coorddb: store is in plaintext (encryption-di
 // ErrNotPlaintext means OpenInsecure was called on an encrypted store
 // (NewStore): plaintext mount is only for a NewPlaintextStore store.
 var ErrNotPlaintext = errors.New("coorddb: OpenInsecure requires a plaintext (encryption-disabled) store")
+
+// ErrR7Violation is the application-layer R7 guard refusal: a
+// groups.ecdsa_pubkey write attempt either (a) carries a NULL/empty
+// value or (b) attempts to overwrite an existing non-empty value with a
+// different one (distributed-mpc.md R7, impl §E). The 00006 migration's
+// SQLite triggers form the deep-defense layer; this error is the
+// primary, in-transaction refusal. Callers map it to STATE_CONFLICT at
+// the HTTP edge.
+var ErrR7Violation = errors.New("coorddb: R7 violation — groups.ecdsa_pubkey is append-only")

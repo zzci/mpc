@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"os"
@@ -74,6 +75,11 @@ func runCoord(ctx context.Context, cfg server.Config) error {
 		return fmt.Errorf("coord dispatch.timeout: %w", err)
 	}
 
+	expected, err := decodeExpectedMembers(cc.External.ExpectedMembers)
+	if err != nil {
+		return fmt.Errorf("coord external.expected_members: %w", err)
+	}
+
 	ccfg := coord.Config{
 		Listen:          orDefault(cc.HTTP.Listen, ":8080"),
 		DBPath:          dbPath,
@@ -85,6 +91,7 @@ func runCoord(ctx context.Context, cfg server.Config) error {
 		SkewTolerance:   skew,
 		SignerSelect:    orDefault(cc.Quorum.SignerSelect, "liveness"),
 		DispatchTimeout: dispatch,
+		ExpectedMembers: expected,
 	}
 
 	// database.md §7.1: encryption.enable defaults true (encrypted + LOCKED,
@@ -177,6 +184,29 @@ func resolveRef(ref string) (string, error) {
 	default:
 		return ref, nil
 	}
+}
+
+// decodeExpectedMembers translates the hex-encoded
+// coord.external.expected_members from server.Config into the raw-byte map
+// coord.Config consumes. server.Config.Validate has already checked hex
+// well-formedness + 33/65B length; this decode is a clean pass-through.
+func decodeExpectedMembers(in map[string][]string) (map[string][][]byte, error) {
+	if len(in) == 0 {
+		return nil, nil
+	}
+	out := make(map[string][][]byte, len(in))
+	for gid, members := range in {
+		keys := make([][]byte, 0, len(members))
+		for _, hk := range members {
+			b, err := hex.DecodeString(strings.TrimSpace(hk))
+			if err != nil {
+				return nil, fmt.Errorf("group %q: %w", gid, err)
+			}
+			keys = append(keys, b)
+		}
+		out[gid] = keys
+	}
+	return out, nil
 }
 
 func orDefault(v, def string) string {

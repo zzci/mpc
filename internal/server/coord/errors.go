@@ -28,6 +28,7 @@ const (
 	codeNotFound        = "NOT_FOUND"
 	codeStateConflict   = "STATE_CONFLICT"
 	codeLegacyNoHD      = "LEGACY_NO_HD"
+	codeExpectedMember  = "EXPECTED_MEMBER_MISMATCH"
 	codeExpired         = "EXPIRED"
 	codeRateLimited     = "RATE_LIMITED"
 	codeLocked          = "LOCKED"
@@ -64,6 +65,15 @@ func errLegacyNoHD() *apiError {
 		code:    codeLegacyNoHD,
 		message: "group predates HD; multi-group remains the multi-address path",
 	}
+}
+
+// errExpectedMemberMismatch is the api.md C-table 409 EXPECTED_MEMBER_MISMATCH
+// returned by B9/B10/B11 when an identity is not present in
+// coord.external.expected_members for the target group (distributed-mpc R3
+// strict-set, prevents self-join). Message is operator-safe — never leaks
+// which key was rejected (api.md:79).
+func errExpectedMemberMismatch(msg string) *apiError {
+	return &apiError{status: http.StatusConflict, code: codeExpectedMember, message: msg}
 }
 
 func errExpired(msg string) *apiError {

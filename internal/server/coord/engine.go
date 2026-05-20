@@ -189,7 +189,7 @@ func (e *engine) evaluate(ctx context.Context, requestID string) {
 		signerSet[s] = true
 	}
 	for _, mid := range signers {
-		e.c.hub.publish(r.GroupID, contract.StartSigning{
+		e.c.hub.publish(r.GroupID, []string{mid}, contract.StartSigning{
 			RequestID: requestID,
 			Envelope:  *env,
 			Signers:   signers,
