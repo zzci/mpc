@@ -246,6 +246,144 @@ func (c *Coord) applyMembership(ctx context.Context, p *membershipUpdate) error 
 	})
 }
 
+// commitAttestationQuorum is the DM-6 closure-gate orchestrator
+// (distributed-mpc.md §3.7, impl §B DM-6 / §6.6). After every successful
+// B11 attestation upsert, the handler invokes this function: if every
+// expected_members identity has reported holdsShare=true with the SAME
+// (groupPubkey, chaincode), the coord commits the groups row + the
+// group_members rows + one provisioning audit event in ONE transaction.
+//
+// "Same transaction" here is exactly what coorddb.CommitAttestationQuorum
+// guarantees: the read+R7-check+INSERT+upsert+audit all run inside one
+// BEGIN IMMEDIATE so a concurrent second-attester triggering the same
+// commit either observes the first commit (idempotent noop) or queues
+// behind it. The R7 invariant is enforced by the same primitive +
+// 00006 SQLite triggers (impl §E).
+//
+// Returns committed=true only when this call performed the underlying
+// INSERT; an idempotent re-trigger against an already-committed group
+// returns committed=false with err=nil. The caller (hAttestation) uses
+// the boolean only for observability — there is no client-visible
+// behavior change between a fresh commit and an idempotent re-trigger,
+// the group state computation already surfaces REGISTERED in both.
+func (c *Coord) commitAttestationQuorum(ctx context.Context, groupID string) (committed bool, err error) {
+	expected := c.expectedSet(groupID)
+	if len(expected) == 0 {
+		// No strict-set configured for this group: DM-6 cannot decide
+		// quorum, so it never commits. This is fail-closed by design
+		// (impl §F / api.md B9-B11 EXPECTED_MEMBER_MISMATCH spirit) —
+		// a group with no expected_members is not eligible for
+		// distributed keygen, only for S-002 ProvisionGroup.
+		return false, nil
+	}
+	views := c.attestations.snapshot(groupID)
+	if len(views) < len(expected) {
+		return false, nil
+	}
+
+	// Build identity → view map; reject the commit if any expected
+	// identity is missing, did not hold a share, or reported a
+	// (pubkey, chaincode) inconsistent with the rest.
+	byIdentity := make(map[string]*attestationView, len(views))
+	for _, v := range views {
+		byIdentity[string(v.IdentityPubkey)] = v
+	}
+	var (
+		firstPub []byte
+		firstCC  []byte
+	)
+	for _, idPub := range expected {
+		v, ok := byIdentity[string(idPub)]
+		if !ok {
+			return false, nil
+		}
+		if !v.HoldsShare {
+			return false, nil
+		}
+		if len(v.GroupPubkey) == 0 || len(v.Chaincode) != 32 {
+			return false, nil
+		}
+		if firstPub == nil {
+			firstPub = v.GroupPubkey
+			firstCC = v.Chaincode
+			continue
+		}
+		if !bytes.Equal(v.GroupPubkey, firstPub) || !bytes.Equal(v.Chaincode, firstCC) {
+			return false, nil
+		}
+	}
+
+	// Quorum reached and fully consistent. Resolve each expected
+	// identity to a memberId for the group_members upsert. When the
+	// group_members rows already exist (current production path —
+	// S-002 pre-seeds them), the active lookup hits and we reuse the
+	// stored memberId. When they do not exist (future
+	// identity-registration path), we derive a stable memberId from
+	// the canonical order of expected_members; the upsert in
+	// CommitAttestationQuorum handles both cases.
+	rows, err := c.db.members(ctx, groupID)
+	if err != nil {
+		return false, fmt.Errorf("commitAttestationQuorum: members lookup: %w", err)
+	}
+	memberIDByIdentity := map[string]string{}
+	for _, mr := range rows {
+		memberIDByIdentity[string(mr.IdentityPubkey)] = mr.MemberID
+	}
+	memberRecords := make([]coorddb.MemberRecord, len(expected))
+	for i, idPub := range expected {
+		mid, ok := memberIDByIdentity[string(idPub)]
+		if !ok {
+			// No existing row: derive a deterministic memberId from
+			// the canonical strict-set order. Operators using S-002
+			// pre-seeding will not hit this branch; the deterministic
+			// fallback keeps the future identity-registration flow
+			// stable without coupling DM-6 to it.
+			mid = fmt.Sprintf("m%d", i)
+		}
+		memberRecords[i] = coorddb.MemberRecord{MemberID: mid, IdentityPubkey: idPub}
+	}
+
+	now := c.clock.Now().UTC().Format("2006-01-02T15:04:05.999999999Z07:00")
+	rec := coorddb.GroupRecord{
+		GroupID:     groupID,
+		ECDSAPubkey: firstPub,
+		// group_pubkey doubles as the cap-token trust anchor for this
+		// group. In the distributed-keygen flow the same key the
+		// members derived (firstPub) is reused — there is no separate
+		// cap-token key in this batch; legacy S-002 stayed
+		// distinguished only because the two keys originated in
+		// different ceremonies.
+		GroupPubkey: firstPub,
+		ThresholdT:  c.thresholdFromExpected(len(expected)),
+		PartiesN:    len(expected),
+		Epoch:       0,
+		CreatedAt:   now,
+		Chaincode:   firstCC,
+	}
+
+	committed, err = c.store.CommitAttestationQuorum(ctx, rec, memberRecords)
+	if err != nil {
+		return false, err
+	}
+	// committed is "alreadyCommitted" semantics from the primitive: we
+	// invert it for the caller so true ↔ "this call mutated state".
+	return !committed, nil
+}
+
+// thresholdFromExpected derives the t for a freshly-committed group from
+// the expected_members cardinality. Distributed-mpc.md §3 leaves the
+// concrete (t, n) split to the keygen proposer (B9 payload), but B11
+// attestation carries no t and DM-6 is currently invoked off
+// attestation, so a deterministic ⌈n/2⌉ fallback is used so the row is
+// well-formed. The future B9-driven path will replace this with the
+// proposer-supplied value (DM-7 / a follow-up wiring step).
+func (c *Coord) thresholdFromExpected(n int) int {
+	if n <= 1 {
+		return 1
+	}
+	return (n / 2) + 1
+}
+
 // groupPublicView is the GET /v1/groups/{id} response (§5.1) — public columns
 // only, never any share/private key. ActiveMembers/Degraded are derived (not
 // stored) so the member SDK can surface lost-member recovery urgency

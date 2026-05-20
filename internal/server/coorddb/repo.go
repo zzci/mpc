@@ -287,3 +287,87 @@ func guardR7AppendOnly(ctx context.Context, tx *sql.Tx, groupID string, newPubke
 	}
 	return nil
 }
+
+// CommitAttestationQuorum is the DM-6 closure-gate primitive
+// (distributed-mpc.md §3.7 / impl §B DM-6 / §6.6): when every expected
+// member has reported a consistent (groupPubkey, chaincode) attestation,
+// the coord persists the groups row + group_members rows + a single
+// provisioning audit event in ONE transaction. The same R7 guard as
+// ProvisionGroup applies — a different-pubkey overwrite is refused, and
+// the 00006 SQLite triggers form the deep-defense second layer.
+//
+// Idempotency: a second call against an already-committed group with the
+// SAME ecdsa_pubkey returns (alreadyCommitted=true, nil) without
+// touching the row. This lets the orchestrator re-trigger the commit on
+// every late-arriving attestation without producing duplicate audit
+// events.
+//
+// group_members upsert: per-member rows are upserted (INSERT … ON
+// CONFLICT … DO UPDATE) so the same primitive works whether members were
+// pre-seeded by a future identity-registration endpoint or are being
+// written for the first time here. identity_pubkey is refreshed on
+// conflict and status is set to 'active' (a re-joining member is
+// reactivated; this never deletes an existing 'removed' row outright,
+// because tombstone retention is required by database.md §6).
+func (s *Store) CommitAttestationQuorum(ctx context.Context, g GroupRecord, members []MemberRecord) (alreadyCommitted bool, err error) {
+	if len(g.ECDSAPubkey) == 0 {
+		return false, ErrR7Violation
+	}
+	if len(g.Chaincode) != 0 && len(g.Chaincode) != chaincodeLen {
+		return false, fmt.Errorf("coorddb: chaincode must be 32 bytes or nil, got %d", len(g.Chaincode))
+	}
+	evmAddr, tronAddr := deriveChainAddrs(g.ECDSAPubkey)
+	txErr := s.WithTx(ctx, func(tx *sql.Tx) error {
+		var existing []byte
+		row := tx.QueryRowContext(ctx,
+			`SELECT ecdsa_pubkey FROM groups WHERE group_id = ?`, g.GroupID)
+		switch err := row.Scan(&existing); {
+		case errors.Is(err, sql.ErrNoRows):
+			// First commit: INSERT the row + members + audit event.
+		case err != nil:
+			return fmt.Errorf("coorddb: DM-6 pre-check read: %w", err)
+		default:
+			// Row exists: idempotent on matching pubkey, R7 otherwise.
+			if bytes.Equal(existing, g.ECDSAPubkey) {
+				alreadyCommitted = true
+				return nil
+			}
+			return ErrR7Violation
+		}
+
+		if err := guardR7AppendOnly(ctx, tx, g.GroupID, g.ECDSAPubkey); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO groups
+			 (group_id, ecdsa_pubkey, threshold_t, parties_n, group_pubkey, epoch, created_at, updated_at, evm_address, tron_address, chaincode)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			g.GroupID, g.ECDSAPubkey, g.ThresholdT, g.PartiesN, g.GroupPubkey,
+			g.Epoch, g.CreatedAt, g.CreatedAt, evmAddr, tronAddr,
+			nullableBlob(g.Chaincode)); err != nil {
+			return fmt.Errorf("coorddb: DM-6 insert group: %w", err)
+		}
+		for _, m := range members {
+			if _, err := tx.ExecContext(ctx,
+				`INSERT INTO group_members
+				 (group_id, member_id, identity_pubkey, status)
+				 VALUES (?, ?, ?, 'active')
+				 ON CONFLICT(group_id, member_id)
+				 DO UPDATE SET identity_pubkey = excluded.identity_pubkey, status = 'active'`,
+				g.GroupID, m.MemberID, m.IdentityPubkey); err != nil {
+				return fmt.Errorf("coorddb: DM-6 upsert member %s: %w", m.MemberID, err)
+			}
+		}
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO request_events (request_id, from_status, to_status, actor, detail, at)
+			 VALUES (?, NULL, 'ATTESTATION_QUORUM_COMMITTED', 'coord', NULL, ?)`,
+			g.GroupID, g.CreatedAt); err != nil {
+			return fmt.Errorf("coorddb: DM-6 audit insert: %w", err)
+		}
+		return nil
+	})
+	if txErr != nil {
+		return false, txErr
+	}
+	return alreadyCommitted, nil
+}

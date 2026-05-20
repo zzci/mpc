@@ -22,9 +22,15 @@ import (
 //
 // DM-4 scope: accept, validate (memberGate + strict-set + replay), store
 // the latest attestation per (groupId, identity), and compute the
-// derived groupState. The actual cross-member commit-on-quorum write to
-// groups.{ecdsa_pubkey, chaincode} is DM-6 — this endpoint never mutates
-// groups.
+// derived groupState.
+//
+// DM-6 closure-gate addition: after a successful upsert, the handler
+// invokes commitAttestationQuorum (coord/provisioning.go). When every
+// expected_members identity has reported holdsShare=true with a
+// consistent (groupPubkey, chaincode), that orchestrator commits the
+// groups + group_members rows + one audit event in ONE transaction
+// (coorddb.CommitAttestationQuorum). The R7 invariant is enforced by
+// the same primitive + 00006 SQLite triggers (impl §E).
 //
 // Storage: in-memory map only (R3 says coord may record attestation
 // *metadata*; persistence is not a correctness requirement and a restart
@@ -203,6 +209,15 @@ func (c *Coord) hAttestation(w http.ResponseWriter, r *http.Request) {
 
 	if ok := c.attestations.upsert(groupID, b.IdentityPubkey, view); !ok {
 		c.writeErr(w, errStateConflict("attestation ts is not strictly greater than the last recorded ts"))
+		return
+	}
+
+	// DM-6 closure gate: with the fresh attestation in the cache, try
+	// to commit the group row + group_members in one transaction. A
+	// not-yet-quorum / inconsistent set is a noop (committed=false,
+	// err=nil); an R7 violation surfaces here.
+	if _, cerr := c.commitAttestationQuorum(r.Context(), groupID); cerr != nil {
+		c.writeErr(w, asAPIError(cerr))
 		return
 	}
 

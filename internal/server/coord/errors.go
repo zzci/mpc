@@ -110,5 +110,12 @@ func asAPIError(err error) *apiError {
 	if errors.Is(err, coorddb.ErrLocked) {
 		return errLocked()
 	}
+	// R7 (distributed-mpc.md R7, impl §E): an append-only violation
+	// surfaces from coorddb.CommitAttestationQuorum / ProvisionGroup
+	// as ErrR7Violation; it maps to STATE_CONFLICT at the HTTP edge
+	// (operator-safe message — never leaks the conflicting pubkey).
+	if errors.Is(err, coorddb.ErrR7Violation) {
+		return errStateConflict("R7 append-only: groups.ecdsa_pubkey cannot be overwritten")
+	}
 	return errInternal()
 }
