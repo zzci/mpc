@@ -64,11 +64,13 @@ func TestExportedSurfaceIsFlat(t *testing.T) {
 	}
 
 	// Callback interfaces: their methods are Go→host calls and must also be
-	// flat (string/[]byte only).
+	// flat (string/[]byte only). WireCallbacks joins KeyGen/Sign/Reshare
+	// callbacks under DM-3 as the outbound bridge.
 	for _, ci := range []reflect.Type{
 		reflect.TypeOf((*KeyGenCallback)(nil)).Elem(),
 		reflect.TypeOf((*SignCallback)(nil)).Elem(),
 		reflect.TypeOf((*ReshareCallback)(nil)).Elem(),
+		reflect.TypeOf((*WireCallbacks)(nil)).Elem(),
 	} {
 		for i := 0; i < ci.NumMethod(); i++ {
 			m := ci.Method(i)

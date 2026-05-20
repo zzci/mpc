@@ -2,90 +2,166 @@ package mobileapi
 
 import (
 	"context"
+	"encoding/json"
 	"reflect"
 	"testing"
 )
 
-// TestKeyGenInProcessAndCallbackOrder is the §B-001 acceptance core: a t-of-n
-// keygen runs to completion through the flat string API in-process, the
-// callbacks fire in the contracted order (progress* then exactly one result),
-// and every share is sealed in the keystore and held in memory. It asserts on
-// the single real keygen the package runs (sharedCommittee), so the heavy
-// fast=false keygen happens exactly once for the whole suite.
-func TestKeyGenInProcessAndCallbackOrder(t *testing.T) {
+// TestKeyGenDistributedAndCallbackOrder is the DM-3 acceptance core: a t-of-n
+// distributed keygen runs to completion across N SDKs wired via a ring
+// fabric (the test-only stand-in for the host transport, DM-5), the flat-
+// string API exposes the new single-party contract, the callbacks fire in
+// the contracted order on every device (progress* then exactly one result),
+// every device's keystore holds **exactly one** share (the §G acceptance
+// hard judgement), and every device converges on the same master public
+// key. It asserts on the single real distributed keygen the package runs
+// (sharedCommittee), so the heavy fast=false keygen happens exactly once
+// for the whole suite.
+func TestKeyGenDistributedAndCallbackOrder(t *testing.T) {
 	c := sharedCommittee(t)
+	c.fabric.assertNoErrs(t)
 
-	order := c.order
-	if len(order) < 2 || order[len(order)-1] != "result" {
-		t.Fatalf("expected progress*…result, got %v", order)
+	if len(c.sdks) != testParties {
+		t.Fatalf("committee has %d sdks, want %d", len(c.sdks), testParties)
 	}
-	for _, o := range order[:len(order)-1] {
-		if o != "progress" {
-			t.Fatalf("only progress may precede result, got %v", order)
+
+	pubHexes := make([]string, 0, testParties)
+	for i, sdk := range c.sdks {
+		share, thr, parties, partyIdx, ok := sdk.snapshotOwnShare()
+		if !ok {
+			t.Fatalf("device %d: snapshotOwnShare ok=false", i)
+		}
+		if thr != testThreshold || parties != testParties || partyIdx != i {
+			t.Fatalf("device %d: thr=%d parties=%d partyIdx=%d, want %d/%d/%d",
+				i, thr, parties, partyIdx, testThreshold, testParties, i)
+		}
+		// One-share-per-device hard judgement (distributed-mpc.md §7 closing
+		// acceptance): each keystore must hold exactly one share.
+		sdk.mu.Lock()
+		got := len(sdk.shares)
+		sdk.mu.Unlock()
+		if got != 1 {
+			t.Fatalf("device %d: in-memory shares = %d, want 1 (single-party invariant)", i, got)
+		}
+		// And recoverable from the sealed keystore with the passphrase.
+		loaded, err := sdk.store.Load(context.Background(), share.Moniker, c.pw)
+		if err != nil {
+			t.Fatalf("device %d: keystore Load: %v", i, err)
+		}
+		if loaded.Moniker != share.Moniker || len(loaded.SaveData) == 0 {
+			t.Fatalf("device %d: loaded share malformed: %q", i, loaded.Moniker)
+		}
+		ph, err := groupPubHex(share)
+		if err != nil {
+			t.Fatalf("device %d: pub: %v", i, err)
+		}
+		pubHexes = append(pubHexes, ph)
+	}
+	// Every device converges on one master public key.
+	for i := 1; i < len(pubHexes); i++ {
+		if pubHexes[i] != pubHexes[0] {
+			t.Fatalf("device %d pub %s != device 0 pub %s", i, pubHexes[i], pubHexes[0])
 		}
 	}
-	if len(c.progress) == 0 || c.progress[0] != "preparams" {
-		t.Fatalf("first progress stage = %v, want preparams first", c.progress)
+	if c.summary.GroupPubKey != pubHexes[0] {
+		t.Fatalf("summary pub %s != device 0 derived %s", c.summary.GroupPubKey, pubHexes[0])
 	}
-
-	sum := c.summary
-	if sum.Threshold != testThreshold || sum.Parties != testParties {
-		t.Fatalf("summary t/n = %d/%d", sum.Threshold, sum.Parties)
-	}
-	if len(sum.Monikers) != testParties || sum.GroupPubKey == "" {
-		t.Fatalf("bad summary: %+v", sum)
-	}
-
-	// Shares held in memory for in-process signing…
-	shares, thr, ok := c.sdk.snapshotShares()
-	if !ok || len(shares) != testParties || thr != testThreshold {
-		t.Fatalf("snapshotShares ok=%v n=%d t=%d", ok, len(shares), thr)
-	}
-	// …and recoverable from the sealed keystore with the passphrase.
-	got, err := c.sdk.store.Load(context.Background(), sum.Monikers[0], c.pw)
-	if err != nil {
-		t.Fatalf("keystore Load: %v", err)
-	}
-	if got.Moniker != sum.Monikers[0] || len(got.SaveData) == 0 {
-		t.Fatalf("loaded share malformed: %q", got.Moniker)
-	}
-
-	// Every share converges on one master public key.
-	hex0, err := groupPubHex(shares[0])
-	if err != nil {
-		t.Fatalf("pub: %v", err)
-	}
-	for _, sh := range shares[1:] {
-		h, err := groupPubHex(sh)
-		if err != nil || h != hex0 {
-			t.Fatalf("share %s pub mismatch (%v)", sh.Moniker, err)
-		}
-	}
-	if hex0 != sum.GroupPubKey {
-		t.Fatalf("summary pub %s != derived %s", sum.GroupPubKey, hex0)
+	if c.summary.Threshold != testThreshold || c.summary.Parties != testParties {
+		t.Fatalf("summary t/n = %d/%d", c.summary.Threshold, c.summary.Parties)
 	}
 }
 
+// TestKeyGenRejectsBadConfig: the DM-3 hard-cut. Every mandatory field —
+// the legacy schema plus the new envelope — must be rejected with
+// CodeBadConfig before any work begins. This is the "legacy configJSON
+// missing new fields => reject" acceptance gate (distributed-mpc-impl.md
+// §B DM-3).
 func TestKeyGenRejectsBadConfig(t *testing.T) {
-	sdk := newTestSDK(t)
-	cases := []struct{ name, cfg string }{
-		{"not json", `{`},
-		{"t>=n", `{"threshold":3,"parties":3,"passphrase":"pw"}`},
-		{"n<2", `{"threshold":1,"parties":1,"passphrase":"pw"}`},
-		{"empty passphrase", `{"threshold":1,"parties":3,"passphrase":""}`},
+	sdk := newTestSDK(t, 0)
+	// good is the canonical DM-3 envelope every case mutates a single
+	// field of, so any rejection traces back to ONE missing/invalid input.
+	good := keygenConfigPayload("g1", testSessionID, 0, testParties, testThreshold, testMembers, testRelay, testPassphrase)
+
+	type tc struct {
+		name string
+		mut  func(*keygenConfig)
+		want string
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
+
+	cases := []tc{
+		{"malformed json", nil, CodeBadConfig},
+		{"missing groupId", func(c *keygenConfig) { c.GroupID = nil }, CodeBadConfig},
+		{"missing sessionID", func(c *keygenConfig) { c.SessionID = nil }, CodeBadConfig},
+		{"missing partyIndex", func(c *keygenConfig) { c.PartyIndex = nil }, CodeBadConfig},
+		{"missing n", func(c *keygenConfig) { c.N = nil }, CodeBadConfig},
+		{"missing t", func(c *keygenConfig) { c.T = nil }, CodeBadConfig},
+		{"missing memberSet", func(c *keygenConfig) { c.MemberSet = nil }, CodeBadConfig},
+		{"missing relay", func(c *keygenConfig) { c.Relay = nil }, CodeBadConfig},
+		{"missing relay.peerID", func(c *keygenConfig) { c.Relay = &relayConfig{Addrs: testRelay.Addrs} }, CodeBadConfig},
+		{"missing relay.addrs", func(c *keygenConfig) { c.Relay = &relayConfig{PeerID: testRelay.PeerID} }, CodeBadConfig},
+		{"missing role", func(c *keygenConfig) { c.Role = nil }, CodeBadConfig},
+		{"missing passphrase", func(c *keygenConfig) { c.Passphrase = "" }, CodeBadConfig},
+		{"t >= n", func(c *keygenConfig) { v := testParties; c.T = &v }, CodeBadConfig},
+		{"n < 2", func(c *keygenConfig) { v := 1; c.N = &v }, CodeBadConfig},
+		{"partyIndex out of range", func(c *keygenConfig) { v := testParties; c.PartyIndex = &v }, CodeBadConfig},
+		{"memberSet length mismatch", func(c *keygenConfig) { c.MemberSet = []string{"only-one"} }, CodeBadConfig},
+	}
+
+	// Pre-canned malformed JSON case is special-cased — we feed raw bytes
+	// rather than a mutated structure.
+	t.Run("malformed json", func(t *testing.T) {
+		r := newRecorder()
+		sdk.KeyGen("{", noopWire{}, kgAdapter{r})
+		r.wait(t)
+		code, _, _, _ := r.result()
+		if code != CodeBadConfig {
+			t.Fatalf("code=%q want %q", code, CodeBadConfig)
+		}
+	})
+
+	for _, c := range cases[1:] {
+		t.Run(c.name, func(t *testing.T) {
+			cfg := good
+			c.mut(&cfg)
 			r := newRecorder()
-			sdk.KeyGen(tc.cfg, kgAdapter{r})
+			sdk.KeyGen(marshalConfig(t, cfg), noopWire{}, kgAdapter{r})
 			r.wait(t)
 			code, _, _, _ := r.result()
-			if code != CodeBadConfig {
-				t.Fatalf("code=%q want %q", code, CodeBadConfig)
+			if code != c.want {
+				t.Fatalf("code=%q want %q", code, c.want)
 			}
 			if reflect.DeepEqual(r.snapOrder(), []string{"progress"}) {
 				t.Fatal("config rejection must not start work")
 			}
 		})
+	}
+
+	t.Run("nil wire callbacks", func(t *testing.T) {
+		r := newRecorder()
+		sdk.KeyGen(marshalConfig(t, good), nil, kgAdapter{r})
+		r.wait(t)
+		if code, _, _, _ := r.result(); code != CodeBadConfig {
+			t.Fatalf("code=%q want %q", code, CodeBadConfig)
+		}
+	})
+}
+
+// TestKeyGenHardCutLegacyConfig: a configJSON in the OLD shape
+// {"threshold","parties","passphrase"} must be hard-cut as a bad config so
+// any caller still on the pre-DM-3 schema fails loud, never silently runs.
+func TestKeyGenHardCutLegacyConfig(t *testing.T) {
+	sdk := newTestSDK(t, 0)
+	legacy := map[string]any{
+		"threshold":  testThreshold,
+		"parties":    testParties,
+		"passphrase": testPassphrase,
+	}
+	raw, _ := json.Marshal(legacy)
+	r := newRecorder()
+	sdk.KeyGen(string(raw), noopWire{}, kgAdapter{r})
+	r.wait(t)
+	code, _, _, _ := r.result()
+	if code != CodeBadConfig {
+		t.Fatalf("legacy configJSON not hard-cut: code=%q want %q", code, CodeBadConfig)
 	}
 }

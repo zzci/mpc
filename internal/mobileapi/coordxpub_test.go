@@ -46,7 +46,7 @@ func TestFetchXpub_HappyPath(t *testing.T) {
 		`","chaincodeHex":"` + hex.EncodeToString(wantCC) + `"}`
 	srv := xpubCoordStub(t, http.StatusOK, body)
 
-	out, err := newTestSDK(t).FetchXpub(xpubReqJSON(srv.URL))
+	out, err := newTestSDK(t, 0).FetchXpub(xpubReqJSON(srv.URL))
 	if err != nil {
 		t.Fatalf("FetchXpub: %v", err)
 	}
@@ -68,7 +68,7 @@ func TestFetchXpub_HappyPath(t *testing.T) {
 func TestFetchXpub_LegacyErrorPassthrough(t *testing.T) {
 	srv := xpubCoordStub(t, http.StatusConflict,
 		`{"error":{"code":"LEGACY_NO_HD","message":"group predates HD; multi-group remains the multi-address path"}}`)
-	_, err := newTestSDK(t).FetchXpub(xpubReqJSON(srv.URL))
+	_, err := newTestSDK(t, 0).FetchXpub(xpubReqJSON(srv.URL))
 	if err == nil {
 		t.Fatal("expected LEGACY_NO_HD error")
 	}
@@ -79,7 +79,7 @@ func TestFetchXpub_LegacyErrorPassthrough(t *testing.T) {
 
 func TestFetchXpub_NoKeyRejected(t *testing.T) {
 	// No network: a missing / malformed member key is rejected before any call.
-	s := newTestSDK(t)
+	s := newTestSDK(t, 0)
 	for _, rj := range []string{
 		`{"coordBaseURL":"http://x","groupId":"g1","memberId":"m1"}`,
 		`{"coordBaseURL":"http://x","groupId":"g1","memberId":"m1","memberKeyHex":"zz"}`,

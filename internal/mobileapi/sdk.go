@@ -23,20 +23,29 @@ import (
 // Concurrency: every long-running operation (KeyGen/Sign/Reshare) runs on its
 // own background goroutine (docs/design/mcp/sdk.md §5 — never the UI thread) and
 // reports only through its callback. The mutex guards the in-memory share set,
-// group metadata and the session table.
+// group metadata, the signing-session table and the active wire session.
+//
+// Single-party model (distributed-mpc-impl.md §B DM-3): each device holds
+// only its own share_i; the in-memory `shares` map is sized for the small
+// case (Export/Import surface keeps a moniker-keyed map for compatibility).
 type SDK struct {
 	store *keystore.Store
 
 	mu       sync.Mutex
-	shares   map[string]mpc.Share    // moniker → unsealed share, minimal in-process residency
+	shares   map[string]mpc.Share    // moniker → unsealed share (typically one entry under DM-3)
 	group    *groupMeta              // set after a successful KeyGen/Reshare
 	sessions map[string]*SignSession // sessionId(=requestId) → active signing session
+	active   *wireSession            // the currently running wire-bound MPC session
 
 	// preParams is a test-only seam. On a real device it stays nil and mpc
 	// generates safe primes locally per party (RED LINE: never server-pushed,
 	// see mpc.KeygenConfig.PreParams). Tests inject tss-lib bundled fixtures so
 	// the suite does not pay the multi-minute safe-prime search. It is
 	// unexported, so it never reaches the gomobile-exported surface.
+	//
+	// Under DM-3 a single device drives a single party, so test fixtures
+	// supply exactly ONE LocalPreParams record per SDK instance (the
+	// committee is built by combining N independently-fixtured SDKs).
 	preParams []tsskeygen.LocalPreParams
 }
 
@@ -45,6 +54,7 @@ type SDK struct {
 type groupMeta struct {
 	threshold   int
 	parties     int
+	partyIndex  int    // this device's 0-based index in the committee (DM-3)
 	ecdsaPubHex string // compressed secp256k1 group master public key
 }
 
@@ -69,32 +79,38 @@ func NewSDK(keystoreDir string) (*SDK, error) {
 	}, nil
 }
 
-// setGroup records the keygen/reshare outcome: it replaces the in-memory share
-// set and group metadata atomically so a concurrent Sign sees a consistent
-// committee.
-func (s *SDK) setGroup(shares []mpc.Share, threshold int, pubHex string) {
+// setOwnShare records the keygen/reshare outcome for this device: it replaces
+// the in-memory share entry plus the group metadata atomically so a concurrent
+// Sign sees a consistent committee. share is THIS device's share_i (the only
+// secret material the device holds; distributed-mpc-impl.md §B DM-3).
+func (s *SDK) setOwnShare(share mpc.Share, threshold, parties, partyIndex int, pubHex string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.shares = make(map[string]mpc.Share, len(shares))
-	for _, sh := range shares {
-		s.shares[sh.Moniker] = sh
+	s.shares = map[string]mpc.Share{share.Moniker: share}
+	s.group = &groupMeta{
+		threshold:   threshold,
+		parties:     parties,
+		partyIndex:  partyIndex,
+		ecdsaPubHex: pubHex,
 	}
-	s.group = &groupMeta{threshold: threshold, parties: len(shares), ecdsaPubHex: pubHex}
 }
 
-// snapshotShares returns a copy of the current committee and its threshold for
-// an in-process signing/reshare. ok is false when this process holds no share.
-func (s *SDK) snapshotShares() (shares []mpc.Share, threshold int, ok bool) {
+// snapshotOwnShare returns a copy of this device's share, plus the group
+// (threshold, parties, partyIndex). ok is false when this process holds no
+// share.
+func (s *SDK) snapshotOwnShare() (share mpc.Share, threshold, parties, partyIndex int, ok bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.group == nil || len(s.shares) == 0 {
-		return nil, 0, false
+		return mpc.Share{}, 0, 0, 0, false
 	}
-	out := make([]mpc.Share, 0, len(s.shares))
 	for _, sh := range s.shares {
-		out = append(out, sh)
+		// Single-party invariant: exactly one entry under DM-3. We pick the
+		// first; ExportShare/ImportShare keep the map shape so an explicit
+		// moniker-by-moniker accessor stays available on the export surface.
+		return sh, s.group.threshold, s.group.parties, s.group.partyIndex, true
 	}
-	return out, s.group.threshold, true
+	return mpc.Share{}, 0, 0, 0, false
 }
 
 func (s *SDK) registerSession(id string, ss *SignSession) {

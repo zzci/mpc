@@ -265,7 +265,12 @@ func (se *session) cmdSign(args []string) {
 		return
 	}
 	cb := newSignCB(se.errw)
-	ss := se.sdk.Sign(string(startJSON), cb)
+	cfg, err := wrapSignConfig(startJSON)
+	if err != nil {
+		se.fail("wrap start: %v", err)
+		return
+	}
+	ss := se.sdk.Sign(cfg, cliWire{}, cb)
 
 	// The WYSIWYS gate: show the device-recomputed decode, then require an
 	// explicit operator decision before any MPC runs. OnError may also fire

@@ -25,6 +25,20 @@ func NewSDK(keystoreDir string) (*SDK, error) {
 	return &SDK{inner: s}, nil
 }
 
+// --- WireCallbacks --------------------------------------------------------
+
+// WireCallbacks mirrors internal/mobileapi.WireCallbacks: the host-supplied
+// outbound bridge (Go→host) for one single-party MPC session
+// (distributed-mpc-impl.md §B DM-3). The reverse direction (host→Go) is
+// SDK.OnWireMessage.
+type WireCallbacks interface {
+	OnWireMessage(b []byte)
+}
+
+type wireCB struct{ cb WireCallbacks }
+
+func (a wireCB) OnWireMessage(b []byte) { a.cb.OnWireMessage(b) }
+
 // --- KeyGen ---------------------------------------------------------------
 
 // KeyGenCallback mirrors internal/mobileapi.KeyGenCallback.
@@ -40,9 +54,12 @@ func (a keyGenCB) OnProgress(stage string)       { a.cb.OnProgress(stage) }
 func (a keyGenCB) OnResult(summaryJSON string)   { a.cb.OnResult(summaryJSON) }
 func (a keyGenCB) OnError(code string, m string) { a.cb.OnError(code, m) }
 
-// KeyGen runs a t-of-n ECDSA threshold keygen; outcomes arrive via cb.
-func (s *SDK) KeyGen(configJSON string, cb KeyGenCallback) {
-	s.inner.KeyGen(configJSON, keyGenCB{cb})
+// KeyGen runs THIS device's share of a t-of-n ECDSA threshold keygen. The
+// configJSON is the DM-3 hard-cut envelope (groupId, sessionID, partyIndex,
+// n, t, memberSet, relay{peerID,addrs[]}, role, passphrase); wire is the
+// host's outbound bridge (Go→host); outcomes arrive via cb.
+func (s *SDK) KeyGen(configJSON string, wire WireCallbacks, cb KeyGenCallback) {
+	s.inner.KeyGen(configJSON, wireCB{wire}, keyGenCB{cb})
 }
 
 // --- Sign -----------------------------------------------------------------
@@ -69,9 +86,12 @@ func (ss *SignSession) Approve() { ss.inner.Approve() }
 // Reject records the human's rejection (host→Go).
 func (ss *SignSession) Reject() { ss.inner.Reject() }
 
-// Sign runs the device-side WYSIWYS signing flow; returns a session handle.
-func (s *SDK) Sign(startJSON string, cb SignCallback) *SignSession {
-	return &SignSession{inner: s.inner.Sign(startJSON, signCB{cb})}
+// Sign runs the device-side WYSIWYS signing flow on a background goroutine
+// against the host-supplied wire transport. configJSON is the DM-3 envelope
+// wrapping the coord-delivered StartSigning plus this device's session
+// metadata; the returned SignSession is the host→Go Approve/Reject handle.
+func (s *SDK) Sign(configJSON string, wire WireCallbacks, cb SignCallback) *SignSession {
+	return &SignSession{inner: s.inner.Sign(configJSON, wireCB{wire}, signCB{cb})}
 }
 
 // --- Reshare --------------------------------------------------------------
@@ -89,9 +109,11 @@ func (a reshareCB) OnProgress(stage string)       { a.cb.OnProgress(stage) }
 func (a reshareCB) OnResult(summaryJSON string)   { a.cb.OnResult(summaryJSON) }
 func (a reshareCB) OnError(code string, m string) { a.cb.OnError(code, m) }
 
-// Reshare redistributes the committee onto a new (t', n'); pubkey invariant.
-func (s *SDK) Reshare(configJSON string, cb ReshareCallback) {
-	s.inner.Reshare(configJSON, reshareCB{cb})
+// Reshare redistributes THIS device's share onto a new (t', n') committee;
+// pubkey invariant. configJSON is the DM-3 envelope (groupId, sessionID,
+// partyIndex, n, oldT, newT, memberSet, relay, role, passphrase).
+func (s *SDK) Reshare(configJSON string, wire WireCallbacks, cb ReshareCallback) {
+	s.inner.Reshare(configJSON, wireCB{wire}, reshareCB{cb})
 }
 
 // --- keystore + wire ------------------------------------------------------
@@ -106,7 +128,9 @@ func (s *SDK) ImportShare(blob []byte, passphrase string) (string, error) {
 	return s.inner.ImportShare(blob, passphrase)
 }
 
-// OnWireMessage is the host→Go feed for a received MPC protocol message.
+// OnWireMessage is the host→Go feed for a received MPC protocol message. The
+// R5 gate (version + sessionId isolation) is enforced before the message is
+// applied to the device's running single-party engine.
 func (s *SDK) OnWireMessage(b []byte) error {
 	return s.inner.OnWireMessage(b)
 }

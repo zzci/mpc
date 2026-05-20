@@ -9,7 +9,7 @@ import (
 )
 
 func TestOnWireMessageGate(t *testing.T) {
-	sdk := newTestSDK(t)
+	sdk := newTestSDK(t, 0)
 	sdk.registerSession("live", newSignSession())
 
 	mustMsg := func(m contract.MpcMessage) []byte {

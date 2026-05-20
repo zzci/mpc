@@ -55,7 +55,7 @@ func TestFetchTransactions_PendingAssembly(t *testing.T) {
 		`"status":"PENDING","remainingTTL":120}]}`
 	srv := coordStub(t, pending, http.StatusOK, "")
 
-	out, err := newTestSDK(t).FetchTransactions(reqJSON(srv.URL, ""))
+	out, err := newTestSDK(t, 0).FetchTransactions(reqJSON(srv.URL, ""))
 	if err != nil {
 		t.Fatalf("FetchTransactions: %v", err)
 	}
@@ -88,7 +88,7 @@ func TestFetchTransactions_PendingAssembly(t *testing.T) {
 
 func TestFetchTransactions_SingleStatus(t *testing.T) {
 	srv := coordStub(t, "", http.StatusOK, `{"requestId":"r9","status":"RETURNED"}`)
-	out, err := newTestSDK(t).FetchTransactions(reqJSON(srv.URL, "r9"))
+	out, err := newTestSDK(t, 0).FetchTransactions(reqJSON(srv.URL, "r9"))
 	if err != nil {
 		t.Fatalf("FetchTransactions: %v", err)
 	}
@@ -109,7 +109,7 @@ func TestFetchTransactions_SingleStatus(t *testing.T) {
 func TestFetchTransactions_CoordErrorPassthrough(t *testing.T) {
 	srv := coordStub(t, "", http.StatusNotFound,
 		`{"error":{"code":"NOT_FOUND","message":"unknown requestId"}}`)
-	_, err := newTestSDK(t).FetchTransactions(reqJSON(srv.URL, "missing"))
+	_, err := newTestSDK(t, 0).FetchTransactions(reqJSON(srv.URL, "missing"))
 	if err == nil {
 		t.Fatal("expected coord NOT_FOUND surfaced as error")
 	}
@@ -120,7 +120,7 @@ func TestFetchTransactions_CoordErrorPassthrough(t *testing.T) {
 
 func TestFetchTransactions_NoKeyRejected(t *testing.T) {
 	// No network: a missing member key is rejected before any coord call.
-	s := newTestSDK(t)
+	s := newTestSDK(t, 0)
 	for _, rj := range []string{
 		`{"coordBaseURL":"http://x","groupId":"g1","memberId":"m1"}`,
 		`{"coordBaseURL":"http://x","groupId":"g1","memberId":"m1","memberKeyHex":"zz"}`,

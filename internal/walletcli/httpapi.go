@@ -295,7 +295,12 @@ func (h *httpServer) signH(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cb := newSignCB(discard{})
-	ss := h.sdk.Sign(string(req.Start), cb)
+	cfg, err := wrapSignConfig(req.Start)
+	if err != nil {
+		httpErr(w, http.StatusBadRequest, "wrap start: %v", err)
+		return
+	}
+	ss := h.sdk.Sign(cfg, cliWire{}, cb)
 
 	select {
 	case d := <-cb.decoded:

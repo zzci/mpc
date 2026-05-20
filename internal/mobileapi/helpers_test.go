@@ -11,7 +11,6 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2"
 
 	"github.com/zzci/mpc/internal/contract"
-	"github.com/zzci/mpc/internal/mpc"
 
 	tsskeygen "github.com/bnb-chain/tss-lib/v3/ecdsa/keygen"
 )
@@ -39,11 +38,33 @@ const (
 // literal like "pw" is hard-rejected by seal() post-H-001 merge.
 const testPassphrase = "Mobileapi-Test-Pass-9x!"
 
+// testSessionID is the canonical sessionId every multi-party fabric uses for
+// keygen / reshare. It is a stable string so test wires are easy to read; the
+// R5 gate enforces equality across every device in one ring.
+const testSessionID = "test-session-keygen-0001"
+
+// testMembers is the canonical memberSet for the shared 3-party committee:
+// stable strings the participantsFor() mapper consults to map memberId →
+// 0-based partyIndex.
+var testMembers = []string{"m1", "m2", "m3"}
+
+// testRelay is the host-relay coordinates every configJSON ships; the SDK
+// itself never dials, but the schema mandates non-empty values so any old
+// configJSON missing it is hard-cut.
+var testRelay = relayConfig{
+	PeerID: "12D3KooWTestRelay000000000000000000000000000000",
+	Addrs:  []string{"/ip4/127.0.0.1/tcp/0"},
+}
+
 // newTestSDK builds an SDK whose keygen/reshare uses tss-lib's bundled
 // pre-param fixtures (the unexported test seam) so the suite does not pay the
 // multi-minute safe-prime search. The fixtures are independent of (t, n);
 // only their safe primes / Paillier key are consumed.
-func newTestSDK(t *testing.T) *SDK {
+//
+// partyIndex selects which fixture entry this SDK consumes — under DM-3 each
+// device runs a single party and therefore needs only one LocalPreParams
+// record (the one matching its position in the committee).
+func newTestSDK(t *testing.T, partyIndex int) *SDK {
 	t.Helper()
 	sdk, err := NewSDK(t.TempDir())
 	if err != nil {
@@ -53,11 +74,10 @@ func newTestSDK(t *testing.T) *SDK {
 	if err != nil {
 		t.Fatalf("load keygen fixtures (run tss-lib keygen tests to generate them): %v", err)
 	}
-	pre := make([]tsskeygen.LocalPreParams, testParties)
-	for i := range pre {
-		pre[i] = fx[i].LocalPreParams
+	if partyIndex < 0 || partyIndex >= len(fx) {
+		t.Fatalf("partyIndex %d outside fixture range", partyIndex)
 	}
-	sdk.preParams = pre
+	sdk.preParams = []tsskeygen.LocalPreParams{fx[partyIndex].LocalPreParams}
 	return sdk
 }
 
@@ -174,12 +194,6 @@ func (r *recorder) result() (code, msg, summary string, rsv []byte) {
 	return r.code, r.msg, r.summary, append([]byte(nil), r.rsv...)
 }
 
-func (r *recorder) progressSnap() []string {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return append([]string(nil), r.progress...)
-}
-
 // kgAdapter / rsAdapter bridge the recorder to the string-summary OnResult
 // shape KeyGenCallback / ReshareCallback require.
 type kgAdapter struct{ *recorder }
@@ -195,18 +209,156 @@ type signAdapter struct{ *recorder }
 
 func (a signAdapter) OnResult(b []byte) { a.onResultRSV(b) }
 
-// committee is the single real in-process keygen the whole package shares.
-// Running the heavy fast=false keygen exactly once (instead of per test that
-// needs a signing committee) is the core robustness lever under the full-tree
-// -race gate: it removes almost all of the package's CPU-bound MPC work and
-// the contention that made the merged-tree run flake (B-001 RED retry).
+// --- ring fabric ---------------------------------------------------------
+
+// ringFabric simulates the host transport layer for a committee of N SDKs.
+// Each SDK plugs in a WireCallbacks whose OnWireMessage hands the bytes back
+// to the fabric, which routes them to every addressed peer SDK via
+// SDK.OnWireMessage. The fabric is the test-only stand-in for DM-5's PC CLI
+// libp2p host and the mobile native bridge: it owns transport, the SDK only
+// produces / consumes wire bytes.
+type ringFabric struct {
+	t    *testing.T
+	sdks []*SDK
+	// errs collects routing errors observed by OnWireMessage; checked at
+	// test end so a stray malformed envelope doesn't pass silently.
+	mu   sync.Mutex
+	errs []error
+}
+
+func newRingFabric(t *testing.T, sdks []*SDK) *ringFabric {
+	t.Helper()
+	return &ringFabric{t: t, sdks: sdks}
+}
+
+// wcFor returns the WireCallbacks an SDK at index from plugs into KeyGen /
+// Sign / Reshare. Routing inspects MpcMessage.To plus IsBroadcast: a
+// broadcast is fanned out to every other SDK; a directed envelope goes to
+// the addressed party (after stripping the reshare committee marker, if
+// present).
+func (f *ringFabric) wcFor(from int) WireCallbacks {
+	return ringWC{f: f, from: from}
+}
+
+func (f *ringFabric) recordErr(err error) {
+	if err == nil {
+		return
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.errs = append(f.errs, err)
+}
+
+// assertNoErrs reports any routing error the fabric recorded against t.
+// Callers pass their own *testing.T because the package-level bootstrap
+// fabric (buildSharedCommittee) has no test handle of its own.
+func (f *ringFabric) assertNoErrs(t *testing.T) {
+	t.Helper()
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, err := range f.errs {
+		t.Errorf("fabric routing error: %v", err)
+	}
+}
+
+// deliver routes one outbound envelope to every recipient SDK in the ring
+// (broadcast → every-other; directed → addressed parties). The wire payload
+// is the JSON-encoded MpcMessage the SDK emitted via WireCallbacks.
+func (f *ringFabric) deliver(from int, b []byte) {
+	var mm contract.MpcMessage
+	if err := json.Unmarshal(b, &mm); err != nil {
+		f.recordErr(err)
+		return
+	}
+	dests := map[int]bool{}
+	if mm.IsBroadcast && len(mm.To) == 0 {
+		for i := range f.sdks {
+			if i == from {
+				continue
+			}
+			dests[i] = true
+		}
+	} else {
+		for _, t := range mm.To {
+			if idx := destIndex(t); idx >= 0 && idx < len(f.sdks) {
+				dests[idx] = true
+			}
+		}
+	}
+	for idx := range dests {
+		// Re-marshal a fresh copy: SDKs may inspect the bytes byte-for-byte
+		// on R5 / AcceptInbound, and we want to mirror real transport
+		// fan-out which delivers each peer its own copy.
+		out, err := json.Marshal(mm)
+		if err != nil {
+			f.recordErr(err)
+			continue
+		}
+		if err := f.sdks[idx].OnWireMessage(out); err != nil {
+			f.recordErr(err)
+		}
+	}
+}
+
+// destIndex parses one addressed-To tag into a 0-based party index, stripping
+// the reshare committee marker ('O' / 'N' / 'B') if present. A malformed tag
+// returns -1.
+func destIndex(tag string) int {
+	if tag == "" {
+		return -1
+	}
+	if tag[0] == 'O' || tag[0] == 'N' || tag[0] == 'B' {
+		tag = tag[1:]
+	}
+	n := 0
+	for _, c := range tag {
+		if c < '0' || c > '9' {
+			return -1
+		}
+		n = n*10 + int(c-'0')
+	}
+	if n <= 0 {
+		return -1
+	}
+	return n - 1
+}
+
+// ringWC is one SDK's WireCallbacks implementation. The fabric routes the
+// emitted bytes to every addressed peer SDK.
+type ringWC struct {
+	f    *ringFabric
+	from int
+}
+
+func (rw ringWC) OnWireMessage(b []byte) {
+	// Copy the bytes: the SDK may reuse its underlying buffer after the call
+	// returns (gomobile-style fire-and-forget); the fabric routes a stable
+	// copy so concurrent recipients all see the same payload.
+	cp := append([]byte(nil), b...)
+	rw.f.deliver(rw.from, cp)
+}
+
+// noopWire is a no-op WireCallbacks for tests that exercise only the
+// pre-MPC paths (configJSON validation, security rejects); a Sign that
+// never enters MPC never emits anything, so dropping outbound bytes is safe.
+type noopWire struct{}
+
+func (noopWire) OnWireMessage([]byte) {}
+
+// --- shared committee ----------------------------------------------------
+
+// committee is the single real distributed-MPC keygen the whole package
+// shares. Running the heavy fast=false keygen exactly once across N SDKs
+// (instead of per test that needs a signing committee) is the core
+// robustness lever under the full-tree -race gate: it removes almost all of
+// the package's CPU-bound MPC work and the contention that made the
+// merged-tree run flake (B-001 RED retry).
 type committee struct {
-	sdk      *SDK // the SDK that ran the real flat KeyGen (keystore sealed)
-	keystore string
-	summary  keygenSummary
-	order    []string
-	progress []string
-	pw       string
+	sdks    []*SDK // one SDK per device, each holding only its own share_i
+	fabric  *ringFabric
+	summary keygenSummary // the partyIndex=0 device's summary
+	groupID string
+	pw      string
 }
 
 var (
@@ -215,10 +367,10 @@ var (
 	committeeErr  string
 )
 
-// sharedCommittee runs the one real flat-API keygen for the package (once) and
-// returns the cached result. Tests are not run in parallel within the package,
-// so the sync.Once body is reached serially — there is no intra-package
-// concurrency around it.
+// sharedCommittee runs the one real distributed keygen for the package
+// (once) and returns the cached result. Tests are not run in parallel within
+// the package, so the sync.Once body is reached serially — there is no
+// intra-package concurrency around it.
 func sharedCommittee(t *testing.T) *committee {
 	t.Helper()
 	committeeOnce.Do(buildSharedCommittee)
@@ -229,83 +381,154 @@ func sharedCommittee(t *testing.T) *committee {
 }
 
 func buildSharedCommittee() {
-	dir, err := os.MkdirTemp("", "mobileapi-committee")
-	if err != nil {
-		committeeErr = "mkdtemp: " + err.Error()
-		return
+	groupID := "shared-grp-1"
+	dirs := make([]string, testParties)
+	for i := range dirs {
+		d, err := os.MkdirTemp("", "mobileapi-committee")
+		if err != nil {
+			committeeErr = "mkdtemp: " + err.Error()
+			return
+		}
+		dirs[i] = d
 	}
-	sdk, err := NewSDK(dir)
-	if err != nil {
-		committeeErr = "NewSDK: " + err.Error()
-		return
-	}
+
 	fx, _, err := tsskeygen.LoadKeygenTestFixtures(testParties)
 	if err != nil {
 		committeeErr = "load fixtures: " + err.Error()
 		return
 	}
-	pre := make([]tsskeygen.LocalPreParams, testParties)
-	for i := range pre {
-		pre[i] = fx[i].LocalPreParams
-	}
-	sdk.preParams = pre
 
-	r := newRecorder()
-	cfg, _ := json.Marshal(keygenConfig{Threshold: testThreshold, Parties: testParties, Passphrase: testPassphrase})
-	sdk.KeyGen(string(cfg), kgAdapter{r})
-	if !r.waitFor(heavyWait) {
-		committeeErr = "keygen did not finish within heavyWait"
-		return
+	sdks := make([]*SDK, testParties)
+	for i := 0; i < testParties; i++ {
+		sdk, err := NewSDK(dirs[i])
+		if err != nil {
+			committeeErr = "NewSDK: " + err.Error()
+			return
+		}
+		sdk.preParams = []tsskeygen.LocalPreParams{fx[i].LocalPreParams}
+		sdks[i] = sdk
 	}
-	code, msg, summary, _ := r.result()
-	if code != "" {
-		committeeErr = "keygen errored: " + code + " " + msg
-		return
+
+	// Test-only fabric stand-in for testing.T: we cannot call newRingFabric
+	// without a *testing.T, but the shared committee bootstrap runs once
+	// for the package. We embed a minimal harness with its own error sink.
+	fabric := &ringFabric{sdks: sdks}
+
+	recs := make([]*recorder, testParties)
+	wg := sync.WaitGroup{}
+	wg.Add(testParties)
+	for i := 0; i < testParties; i++ {
+		recs[i] = newRecorder()
+		cfg := keygenConfigPayload(groupID, testSessionID, i, testParties, testThreshold, testMembers, testRelay, testPassphrase)
+		raw, err := json.Marshal(cfg)
+		if err != nil {
+			committeeErr = "marshal cfg: " + err.Error()
+			return
+		}
+		idx := i
+		go func() {
+			defer wg.Done()
+			sdks[idx].KeyGen(string(raw), fabric.wcFor(idx), kgAdapter{recs[idx]})
+		}()
 	}
-	var s keygenSummary
-	if err := json.Unmarshal([]byte(summary), &s); err != nil {
-		committeeErr = "parse summary: " + err.Error()
-		return
+
+	// Each recorder finishes when its KeyGen's OnResult/OnError fires.
+	doneCh := make(chan struct{})
+	go func() { wg.Wait(); close(doneCh) }()
+	for i := 0; i < testParties; i++ {
+		if !recs[i].waitFor(heavyWait) {
+			committeeErr = "keygen did not finish within heavyWait"
+			return
+		}
+		if code, _, _, _ := recs[i].result(); code != "" {
+			_, msg, _, _ := recs[i].result()
+			committeeErr = "keygen errored on party " + reshareTagFor(i) + ": " + code + " " + msg
+			return
+		}
+	}
+	<-doneCh
+
+	var sum keygenSummary
+	if _, _, s, _ := recs[0].result(); s != "" {
+		if err := json.Unmarshal([]byte(s), &sum); err != nil {
+			committeeErr = "parse summary: " + err.Error()
+			return
+		}
 	}
 	sharedComm = &committee{
-		sdk:      sdk,
-		keystore: dir,
-		summary:  s,
-		order:    r.snapOrder(),
-		progress: r.progressSnap(),
-		pw:       testPassphrase,
+		sdks:    sdks,
+		fabric:  fabric,
+		summary: sum,
+		groupID: groupID,
+		pw:      testPassphrase,
 	}
 }
 
-// committeeSDK returns a fresh SDK (own temp keystore) pre-loaded with the
-// shared committee's shares, so Sign/Reshare tests exercise their real flow
-// without paying for another keygen.
-func committeeSDK(t *testing.T) *SDK {
+// committeeSDKs returns the per-device SDK slice from the shared keygen, plus
+// a fresh fabric scoped to the caller's *testing.T that wires them together
+// for downstream Sign / Reshare runs. Tests that mutate state (e.g. Reshare
+// overwrites the shares) must do so against this slice and remain mindful of
+// test ordering — the package-level sharedComm is consumed by reference.
+func committeeSDKs(t *testing.T) ([]*SDK, *ringFabric, *committee) {
 	t.Helper()
 	c := sharedCommittee(t)
-	sdk, err := NewSDK(t.TempDir())
-	if err != nil {
-		t.Fatalf("NewSDK: %v", err)
-	}
-	fx, _, err := tsskeygen.LoadKeygenTestFixtures(testParties)
-	if err != nil {
-		t.Fatalf("load fixtures: %v", err)
-	}
-	pre := make([]tsskeygen.LocalPreParams, testParties)
-	for i := range pre {
-		pre[i] = fx[i].LocalPreParams
-	}
-	sdk.preParams = pre
-
-	src, _, ok := c.sdk.snapshotShares()
-	if !ok {
-		t.Fatal("shared committee holds no shares")
-	}
-	shares := make([]mpc.Share, len(src))
-	copy(shares, src)
-	sdk.setGroup(shares, testThreshold, c.summary.GroupPubKey)
-	return sdk
+	return c.sdks, newRingFabric(t, c.sdks), c
 }
+
+// keygenConfigPayload builds one device's KeyGen configJSON for the shared
+// committee bootstrap.
+func keygenConfigPayload(groupID, sessionID string, partyIndex, n, t int, members []string, relay relayConfig, passphrase string) keygenConfig {
+	role := "keygen"
+	return keygenConfig{
+		GroupID:    sptr(groupID),
+		SessionID:  sptr(sessionID),
+		PartyIndex: iptr(partyIndex),
+		N:          iptr(n),
+		T:          iptr(t),
+		MemberSet:  append([]string(nil), members...),
+		Relay:      &relayConfig{PeerID: relay.PeerID, Addrs: append([]string(nil), relay.Addrs...)},
+		Role:       sptr(role),
+		Passphrase: passphrase,
+	}
+}
+
+// reshareConfigPayload builds one device's Reshare configJSON.
+func reshareConfigPayload(groupID, sessionID string, partyIndex, n, oldT, newT int, members []string, relay relayConfig, passphrase string) reshareConfig {
+	role := "reshare"
+	return reshareConfig{
+		GroupID:    sptr(groupID),
+		SessionID:  sptr(sessionID),
+		PartyIndex: iptr(partyIndex),
+		N:          iptr(n),
+		OldT:       iptr(oldT),
+		NewT:       iptr(newT),
+		MemberSet:  append([]string(nil), members...),
+		Relay:      &relayConfig{PeerID: relay.PeerID, Addrs: append([]string(nil), relay.Addrs...)},
+		Role:       sptr(role),
+		Passphrase: passphrase,
+	}
+}
+
+// signConfigPayload builds one device's Sign configJSON wrapping the coord-
+// delivered StartSigning.
+func signConfigPayload(groupID string, partyIndex, n, t int, members []string, relay relayConfig, start *contract.StartSigning) signConfig {
+	role := "signer"
+	sid := start.RequestID
+	return signConfig{
+		GroupID:    sptr(groupID),
+		SessionID:  sptr(sid),
+		PartyIndex: iptr(partyIndex),
+		N:          iptr(n),
+		T:          iptr(t),
+		MemberSet:  append([]string(nil), members...),
+		Relay:      &relayConfig{PeerID: relay.PeerID, Addrs: append([]string(nil), relay.Addrs...)},
+		Role:       sptr(role),
+		Start:      start,
+	}
+}
+
+func sptr(s string) *string { return &s }
+func iptr(i int) *int       { return &i }
 
 func mustHex(t *testing.T, s string) []byte {
 	t.Helper()
@@ -330,7 +553,12 @@ const (
 // version, metaHash (absent → EmptyMetaHash), proposerSig over the canonical
 // preimage, and a recomputable EVM digest == digest32. mutate may tamper with
 // the envelope/START before (re)signing decisions are finalized.
-func buildStart(t *testing.T, mutate func(*contract.StartSigning, *btcec.PrivateKey)) string {
+//
+// signers is the memberId set that participates in this signing session
+// (must be a subset of testMembers); the default test signing committee is
+// the first t+1 = 2 members. The returned StartSigning's RequestID is the
+// canonical signing sessionId.
+func buildStart(t *testing.T, signers []string, mutate func(*contract.StartSigning, *btcec.PrivateKey)) *contract.StartSigning {
 	t.Helper()
 	priv, err := btcec.NewPrivateKey()
 	if err != nil {
@@ -350,12 +578,16 @@ func buildStart(t *testing.T, mutate func(*contract.StartSigning, *btcec.Private
 		Expiry:     now + 600_000,
 		MetaHash:   contract.EmptyMetaHash[:],
 	}
+	if signers == nil {
+		signers = append([]string(nil), testMembers[:testThreshold+1]...)
+	}
 	st := contract.StartSigning{
-		RequestID: env.RequestID,
-		Envelope:  env,
-		Signers:   []string{"m1", "m2"},
-		SelfRole:  true,
-		Deadline:  now + 600_000,
+		RequestID:  env.RequestID,
+		Envelope:   env,
+		Signers:    signers,
+		SelfRole:   true,
+		Deadline:   now + 600_000,
+		RelayHints: []string{testRelay.Addrs[0]},
 	}
 	if mutate != nil {
 		mutate(&st, priv)
@@ -365,9 +597,17 @@ func buildStart(t *testing.T, mutate func(*contract.StartSigning, *btcec.Private
 			t.Fatalf("SignEnvelope: %v", err)
 		}
 	}
-	b, err := json.Marshal(st)
+	return &st
+}
+
+// marshalConfig serializes any of the *Config payloads to a configJSON
+// string. Centralized so a test cannot drift from how the SDK consumes the
+// wire envelope.
+func marshalConfig(t *testing.T, cfg any) string {
+	t.Helper()
+	b, err := json.Marshal(cfg)
 	if err != nil {
-		t.Fatalf("marshal START: %v", err)
+		t.Fatalf("marshal cfg: %v", err)
 	}
 	return string(b)
 }
