@@ -189,6 +189,7 @@ func (h *uiHandler) register(mux *http.ServeMux) {
 	mux.Handle("GET /transactions/{requestId}", h.auth(h.s.lockGate(http.HandlerFunc(h.hTxDetail))))
 	mux.Handle("GET /audit", h.auth(h.s.lockGate(http.HandlerFunc(h.hAuditPage))))
 	mux.Handle("GET /relay", h.auth(h.s.lockGate(http.HandlerFunc(h.hRelayPage))))
+	mux.Handle("GET /devices", h.auth(h.s.lockGate(http.HandlerFunc(h.hDevicesPage))))
 
 	// Pairing console — LOCKED-reachable (tokens live in memory, no
 	// encrypted-store dependency). Hidden from the nav when not wired.

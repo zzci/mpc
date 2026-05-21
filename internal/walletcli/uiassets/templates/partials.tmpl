@@ -19,6 +19,7 @@
   </div>
   <nav class="flex gap-3 text-sm">
     <a href="/" class="{{if eq .Active "home"}}text-sky-400 font-semibold{{else}}text-slate-300{{end}}">Overview</a>
+    <a href="/groups" class="{{if eq .Active "groups"}}text-sky-400 font-semibold{{else}}text-slate-300{{end}}">Groups</a>
     <a href="/sign" class="{{if eq .Active "sign"}}text-sky-400 font-semibold{{else}}text-slate-300{{end}}">Pending signs</a>
     <a href="/fetch" class="{{if eq .Active "fetch"}}text-sky-400 font-semibold{{else}}text-slate-300{{end}}">Fetch</a>
     <a href="/xpub" class="{{if eq .Active "xpub"}}text-sky-400 font-semibold{{else}}text-slate-300{{end}}">Xpub</a>

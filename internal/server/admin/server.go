@@ -117,6 +117,11 @@ func (s *Server) router() http.Handler {
 	mux.Handle("GET /api/audit", s.guard(scopeRead, s.lockGate(http.HandlerFunc(s.hAudit))))
 	mux.Handle("GET /api/relay/metrics", s.guard(scopeRead, s.lockGate(http.HandlerFunc(s.hRelayMetrics))))
 
+	// Device cross-group view (multi-group, user ruling 2026-05-18): the
+	// operator types an identity pubkey hex and sees every group this
+	// device participates in. Read-only; fail-closes 503 LOCKED.
+	mux.Handle("GET /api/devices/{identityHex}/groups", s.guard(scopeRead, s.lockGate(http.HandlerFunc(s.hDevicesByIdentity))))
+
 	// Pairing CRUD (scopeControl) — reachable under LOCKED because tokens
 	// are an in-memory bootstrap surface (no encrypted-store dependency).
 	// The QR-render handler streams a PNG so the UI can <img src=…> it

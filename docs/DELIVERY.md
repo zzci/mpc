@@ -19,6 +19,7 @@
 | **cli-ui** wallet-cli htmx 面板(WYSIWYS + import + fetch/xpub/address) | ✅ FINALIZED 2026-05-20 | 下表 §5 |
 | **§G 真测** 真 n 进程 keygen/sign/reshare 实证 | ✅ FINALIZED 2026-05-21 `4028d54` | 下表 §6 |
 | **设备配对(pairing/QR)** | ✅ 2026-05-21 公开 coord enrollment + admin QR + wallet-cli `pair` | `internal/server/pairing.go`, `internal/server/coord/enroll.go`, `internal/server/admin/pairing.go`, `internal/walletcli/pair.go` |
+| **多 group(一个设备多个钱包)** | ✅ 2026-05-21 SDK 多 group + walletcli `groups` / `pairings.json` / `/groups` UI + admin `/devices` 跨组视图 | `internal/mobileapi/sdk.go`, `internal/walletcli/{pair,groups_test}.go`, `internal/server/admin/devices.go` |
 | **P4** 移动封装(gomobile bind + RN bridge + 真机) | 🟡 部分(脚本就位,GM-001 .aar 实证;真机 / .xcframework / RN bridge 待移动环境) | `docs/gomobile-build-report.md` |
 | **P5** sample-app + 韧性场景 | 🔵 空缺(reshare 单测已通,sample-app + 完整韧性剧本未做) | — |
 | **P6** 持续加固(WHA / RT / CFG / SDKCF / 安全审查持续) | 🟢 大部分 in main(逐项 finalized) | 下表 §7 |

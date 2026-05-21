@@ -154,6 +154,46 @@ coord 不在 MPC 路径上。
 6. **链无关内核**:库仅产 `{R,S,V}`,构造/广播均外部服务负责。
 7. **R7 公钥 append-only**:`groups.ecdsa_pubkey` 一旦写入永不可改(应用层 + SQLite trigger 二层守卫)。
 
+## 8.alpha 多 group(一个设备多个钱包)
+
+**用户裁定 2026-05-18**:多地址 = 多 group(**不**使用 BIP44/HD);一个设备可同
+时是多个钱包组的成员。实施在 2026-05-21 全量 wired through(`mobileapi.SDK`
+→ `walletcli` → `admin-ui`)。
+
+```
+┌── 一个设备 ────────────────────────────┐
+│  keystore (multi-moniker)              │
+│   ├─ share-mA (groupA committee)       │
+│   ├─ share-mB (groupB committee)       │
+│   └─ share-mC (groupC committee)       │
+│                                         │
+│  mobileapi.SDK.groups: map[groupId]Meta │
+│   ├─ groupA → {t=2,n=3, moniker=mA}     │
+│   ├─ groupB → {t=2,n=5, moniker=mB}     │
+│   └─ groupC → {t=1,n=2, moniker=mC}     │
+│                                         │
+│  walletcli pairings.json (list)         │
+│   ├─ {groupA, coordA, identity1}        │
+│   ├─ {groupB, coordB, identity1}        │
+│   └─ {groupC, coordA, identity2}        │
+└─────────────────────────────────────────┘
+   每次 KeyGen/Sign/Reshare 由 configJSON.GroupID 路由到正确的 share
+   B 面调用按 pairings.json 选对应 coord + identity 签名鉴权
+```
+
+- **SDK**:`ListGroupsJSON()` 公开列出本设备已加入的全部 group;
+  `Sign`/`Reshare` 经 configJSON.GroupID 路由到正确的 share(`snapshotShareForGroup`)。
+- **walletcli**:`wallet groups` shell 命令 + `/groups` UI 页(union of SDK +
+  persisted pairings);`pair` 命令 append 到 `pairings.json`(替换匹配
+  groupId 的旧行),legacy `pair.json` 自动迁移读入。
+- **coord**:`group_members.identity_pubkey` 无 UNIQUE 约束 — 同 identity 可
+  作多 group 成员;`POST /v1/groups/{groupId}/membership` 仍是单一 trust-anchor
+  入组路径(配对不直接改 membership)。
+- **admin-ui**:`/devices` 页接收 identity pubkey 查"该设备签哪些 group"
+  跨组视图;API `GET /api/devices/{identityHex}/groups`。
+
+详见 `docs/design/mcp/multi-group.md`。
+
 ## 8.bis 设备配对(pairing / QR 引导)
 
 新设备首次加入时(无既有凭据,无 SDK 配置),走**公开配对**:

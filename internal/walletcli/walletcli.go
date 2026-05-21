@@ -111,6 +111,7 @@ const helpText = `commands:
   address <i> <xpub-file>        offline-derive m/<i> ETH/BSC/TRON address
   wire <msg-file>                feed one received MPC wire message
   pair <config-url>              consume a coord pairing QR (fetch config, POST identity, persist)
+  groups                         list groups this device has paired / joined (multi-group)
   help                           show this help
   quit | exit                    leave the session
 `
@@ -152,6 +153,8 @@ func (se *session) loop() int {
 			se.cmdWire(rest)
 		case "pair":
 			se.cmdPair(rest)
+		case "groups":
+			se.cmdGroups(rest)
 		default:
 			wf(se.errw, "unknown command %q (try 'help')\n", cmd)
 		}

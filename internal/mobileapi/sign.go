@@ -267,7 +267,7 @@ func (s *SDK) runSign(configJSON string, wire WireCallbacks, cb SignCallback, ss
 	// host-owned wire (Go→host outbound; OnWireMessage host→Go inbound).
 	// participants are the start.Signers mapped through memberSet to 0-based
 	// indices; this device contributes only its own share_i (DM-3).
-	share, threshold, _, _, hasShare := s.snapshotOwnShare()
+	share, threshold, _, _, hasShare := s.snapshotShareForGroup(*cfg.GroupID)
 	if !hasShare {
 		cb.OnError(CodeNoShares, "no key share held for this group")
 		return

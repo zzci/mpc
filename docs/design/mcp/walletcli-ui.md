@@ -49,6 +49,7 @@
 | POST | `/xpub` | 同上 |
 | GET | `/address` | 离线 BIP32 非硬化派生 m/i |
 | POST | `/address` | 同上 |
+| GET | `/groups` | 多 group union 视图(SDK + 持久化 pairings,见 `multi-group.md`) |
 | GET | `/api/v1/{health,version,…}` | 机器调用面(同操作的 JSON 等价端点),详见 `httpapi.go` |
 
 ## 3. 鉴权与会话

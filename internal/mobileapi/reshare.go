@@ -115,9 +115,9 @@ func (s *SDK) Reshare(configJSON string, wire WireCallbacks, cb ReshareCallback)
 
 func (s *SDK) runReshare(cfg reshareConfig, wire WireCallbacks, cb ReshareCallback) {
 	ctx := context.Background()
-	old, _, _, _, ok := s.snapshotOwnShare()
+	old, _, _, _, ok := s.snapshotShareForGroup(*cfg.GroupID)
 	if !ok {
-		cb.OnError(CodeNoShares, "no key share held to reshare from")
+		cb.OnError(CodeNoShares, "no key share held for this group")
 		return
 	}
 
@@ -258,7 +258,7 @@ func (s *SDK) runReshare(cfg reshareConfig, wire WireCallbacks, cb ReshareCallba
 		return
 	}
 
-	s.setOwnShare(share, *cfg.NewT, *cfg.N, *cfg.PartyIndex, pubHex)
+	s.setOwnShare(*cfg.GroupID, share, *cfg.NewT, *cfg.N, *cfg.PartyIndex, pubHex)
 
 	out, err := json.Marshal(keygenSummary{
 		Threshold:   *cfg.NewT,

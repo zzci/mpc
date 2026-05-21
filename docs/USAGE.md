@@ -151,9 +151,35 @@ adm, _ := admin.New(admCfg, store,
 ```bash
 wallet> pair https://coord.example.com/v1/pairing/<token>/config
 {"paired":true,"groupId":"groupA","coordBaseUrl":"https://coord.example.com","identityPubHex":"02..."}
+wallet> pair https://other-coord.example.com/v1/pairing/<token2>/config
+{"paired":true,"groupId":"groupB",…}
+wallet> groups
+{"items":[{"groupId":"groupA",…},{"groupId":"groupB",…}]}
 ```
-落地文件 `<keystore-dir>/pair.json` 包含 coord URL、relay 引导信息、本地生成
-的身份密钥对(私钥仅本地,**不**回传 coord),供后续 B 面调用使用。
+落地文件 `<keystore-dir>/pairings.json`(JSON 数组,**多 group**)。再次 pair
+同一 groupId → 替换该 group 行;不同 groupId → append。每 pair 都本地生成新
+身份密钥对(私钥仅本地,**不**回传 coord),供后续 B 面调用使用。
+
+### 2.5 多 group(一个设备多个钱包)
+
+用户裁定 2026-05-18:多地址 = **多 group**(非 BIP44/HD)。一个设备可同时是
+N 个钱包组的成员。设计与实施详见 `docs/design/mcp/multi-group.md`。
+
+**操作员视角**:
+```bash
+wallet> groups            # 列本设备所有 group(sdk / pair / sdk+pair union)
+```
+浏览器:`GET /groups` UI 页同步展示。
+
+**SDK 编程接口**:
+```go
+js, _ := sdk.ListGroupsJSON() // {"items":[{groupId,t,n,partyIndex,ecdsaPubHex,moniker},…]}
+// KeyGen/Sign/Reshare 经 configJSON.GroupID 路由,无需"切换激活 group"
+```
+
+**admin 视角**:`/devices` 页面 — 输入 identity pubkey hex,查看该 device 在
+**全部 group** 中的 (groupId, memberId, status) 行。JSON:
+`GET /api/devices/{identityHex}/groups`。
 
 ## 3. 外部业务服务集成(A 面)
 

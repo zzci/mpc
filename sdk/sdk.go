@@ -155,3 +155,12 @@ func (s *SDK) FetchTransactions(reqJSON string) (string, error) {
 func (s *SDK) FetchXpub(reqJSON string) (string, error) {
 	return s.inner.FetchXpub(reqJSON)
 }
+
+// ListGroupsJSON returns a JSON document `{"items":[…]}` listing the
+// groups this device has joined (user ruling 2026-05-18: multi-group =
+// multi-address). Share material is not included; the metadata lets a
+// host route subsequent KeyGen/Sign/Reshare calls against the right
+// group via configJSON.GroupID.
+func (s *SDK) ListGroupsJSON() (string, error) {
+	return s.inner.ListGroupsJSON()
+}

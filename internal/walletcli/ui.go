@@ -167,6 +167,7 @@ func (h *uiHandler) register(mux *http.ServeMux) {
 	mux.Handle("POST /xpub", h.auth(http.HandlerFunc(h.hXpub)))
 	mux.Handle("GET /address", h.auth(http.HandlerFunc(h.hAddressForm)))
 	mux.Handle("POST /address", h.auth(http.HandlerFunc(h.hAddress)))
+	mux.Handle("GET /groups", h.auth(http.HandlerFunc(h.hGroupsPage)))
 }
 
 // authNeeded reports whether the panel currently requires a session/bearer.
@@ -580,6 +581,21 @@ func (h *uiHandler) queryResult(w http.ResponseWriter, r *http.Request, page, pa
 	}
 	data["Result"] = true
 	h.render(w, r, page, data)
+}
+
+// --- groups page --------------------------------------------------------
+
+// hGroupsPage renders /groups: the merged SDK + persisted-pair view of
+// every group this device has joined (multi-group, user ruling
+// 2026-05-18). The HTTP layer holds no extra state — both data sources
+// (SDK + pairings.json) come from the same shared httpServer.
+func (h *uiHandler) hGroupsPage(w http.ResponseWriter, r *http.Request) {
+	rows := h.s.groupsRows()
+	h.render(w, r, "groups.tmpl", map[string]any{
+		"Active":      "groups",
+		"AuthEnabled": h.authNeeded(),
+		"Items":       rows,
+	})
 }
 
 // --- render helpers -----------------------------------------------------

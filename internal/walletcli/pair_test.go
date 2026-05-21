@@ -87,15 +87,21 @@ func TestCmdPairHappyPath(t *testing.T) {
 	if len(f.postedIdent) != 66 {
 		t.Fatalf("posted identity not 33-byte hex: %q", f.postedIdent)
 	}
-	// pair.json should now exist in the keystore dir with matching identity.
-	b, err := os.ReadFile(filepath.Join(dir, pairFileName))
+	// pairings.json (multi-group) should now exist in the keystore dir
+	// with one matching record. The legacy pair.json is no longer
+	// produced; loadPairings still handles it for migration.
+	b, err := os.ReadFile(filepath.Join(dir, pairingsFileName))
 	if err != nil {
-		t.Fatalf("pair.json missing: %v", err)
+		t.Fatalf("pairings.json missing: %v", err)
 	}
-	var rec pairPersisted
-	if err := json.Unmarshal(b, &rec); err != nil {
-		t.Fatalf("pair.json bad json: %v", err)
+	var list []pairPersisted
+	if err := json.Unmarshal(b, &list); err != nil {
+		t.Fatalf("pairings.json bad json: %v", err)
 	}
+	if len(list) != 1 {
+		t.Fatalf("expected 1 pairing, got %d", len(list))
+	}
+	rec := list[0]
 	if rec.IdentityPubHex != f.postedIdent {
 		t.Fatalf("persisted pub != posted: %q vs %q", rec.IdentityPubHex, f.postedIdent)
 	}

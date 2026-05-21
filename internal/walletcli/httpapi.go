@@ -54,10 +54,11 @@ func serveHTTP(args []string) int {
 		return 1
 	}
 	srv := &httpServer{
-		sdk:     s,
-		token:   token,
-		pending: map[string]*pendingSign{},
-		now:     time.Now,
+		sdk:         s,
+		keystoreDir: *ksDir,
+		token:       token,
+		pending:     map[string]*pendingSign{},
+		now:         time.Now,
 	}
 	srv.ui = newUI(srv)
 
@@ -109,12 +110,67 @@ func isLoopbackAddr(addr string) bool {
 }
 
 type httpServer struct {
-	sdk     *sdk.SDK
-	token   string
-	mu      sync.Mutex
-	pending map[string]*pendingSign
-	now     func() time.Time // injectable clock (tests + UI)
-	ui      *uiHandler
+	sdk         *sdk.SDK
+	keystoreDir string // also the persistence root for pair / pairings.json
+	token       string
+	mu          sync.Mutex
+	pending     map[string]*pendingSign
+	now         func() time.Time // injectable clock (tests + UI)
+	ui          *uiHandler
+}
+
+// groupsRows returns the merged SDK+pair view for the /groups UI page.
+// It re-uses the same union logic as the shell `groups` command so the
+// two surfaces stay consistent.
+func (h *httpServer) groupsRows() []groupsView {
+	out := []groupsView{}
+	sdkJSON, err := h.sdk.ListGroupsJSON()
+	if err != nil {
+		return out
+	}
+	var sdkResp struct {
+		Items []struct {
+			GroupID     string `json:"groupId"`
+			Threshold   int    `json:"threshold"`
+			Parties     int    `json:"parties"`
+			PartyIndex  int    `json:"partyIndex"`
+			ECDSAPubHex string `json:"ecdsaPubHex"`
+			Moniker     string `json:"moniker"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal([]byte(sdkJSON), &sdkResp); err != nil {
+		return out
+	}
+	rows := map[string]groupsView{}
+	for _, it := range sdkResp.Items {
+		rows[it.GroupID] = groupsView{
+			GroupID: it.GroupID, Source: "sdk",
+			Threshold: it.Threshold, Parties: it.Parties,
+			PartyIndex: it.PartyIndex, ECDSAPubHex: it.ECDSAPubHex,
+			Moniker: it.Moniker,
+		}
+	}
+	if h.keystoreDir != "" {
+		persisted, _ := loadPairings(h.keystoreDir)
+		for _, p := range persisted {
+			row, exists := rows[p.GroupID]
+			if exists {
+				row.Source = "sdk+pair"
+			} else {
+				row = groupsView{GroupID: p.GroupID, Source: "pair"}
+			}
+			row.CoordBaseURL = p.CoordBaseURL
+			row.Label = p.Label
+			row.IdentityPubHex = p.IdentityPubHex
+			row.RelayPeerID = p.RelayPeerID
+			row.PairedAtMS = p.PairedAtMS
+			rows[p.GroupID] = row
+		}
+	}
+	for _, r := range rows {
+		out = append(out, r)
+	}
+	return out
 }
 
 // signSession is the minimal Approve/Reject seam pendingSign drives. The

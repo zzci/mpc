@@ -228,7 +228,7 @@ func (s *SDK) runKeyGen(cfg keygenConfig, wire WireCallbacks, cb KeyGenCallback)
 		return
 	}
 
-	s.setOwnShare(share, *cfg.T, *cfg.N, *cfg.PartyIndex, pubHex)
+	s.setOwnShare(*cfg.GroupID, share, *cfg.T, *cfg.N, *cfg.PartyIndex, pubHex)
 
 	out, err := json.Marshal(keygenSummary{
 		Threshold:   *cfg.T,

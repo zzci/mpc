@@ -2,6 +2,7 @@ package mobileapi
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"sync"
@@ -31,9 +32,21 @@ import (
 type SDK struct {
 	store *keystore.Store
 
-	mu       sync.Mutex
-	shares   map[string]mpc.Share    // moniker → unsealed share (typically one entry under DM-3)
-	group    *groupMeta              // set after a successful KeyGen/Reshare
+	mu sync.Mutex
+	// shares is moniker → unsealed share. Under DM-3 each device holds at
+	// most one share per group; the map is the union across all groups
+	// the device has joined (user ruling 2026-05-18: "multi-group is how
+	// we deliver multi-address; no BIP44 HD"). Keys are share monikers
+	// (which by convention double as the keystore filename anchor); the
+	// per-group bookkeeping lives in `groups` below and points at the
+	// matching moniker.
+	shares map[string]mpc.Share
+	// groups is groupID → per-group bookkeeping. Each group that this
+	// device has successfully completed keygen / reshare against owns
+	// one entry. KeyGen/Sign/Reshare are routed by configJSON.GroupID
+	// (DM-3 envelope) so multi-group operation does not require a
+	// "switch active group" call.
+	groups   map[string]*groupMeta
 	sessions map[string]*SignSession // sessionId(=requestId) → active signing session
 	active   *wireSession            // the currently running wire-bound MPC session
 
@@ -49,13 +62,16 @@ type SDK struct {
 	preParams []tsskeygen.LocalPreParams
 }
 
-// groupMeta is the minimal in-process record of the active wallet group needed
-// to drive an in-process signing/reshare without re-reading the keystore.
+// groupMeta is the minimal in-process record of one wallet group needed to
+// drive an in-process signing/reshare without re-reading the keystore.
+// Multi-group support: every entry holds the moniker of the share belonging
+// to this group; the shares map is dereferenced through it.
 type groupMeta struct {
 	threshold   int
 	parties     int
 	partyIndex  int    // this device's 0-based index in the committee (DM-3)
 	ecdsaPubHex string // compressed secp256k1 group master public key
+	moniker     string // keystore moniker of this group's share (key into s.shares)
 }
 
 // NewSDK opens (creating if absent) the device keystore rooted at
@@ -75,42 +91,103 @@ func NewSDK(keystoreDir string) (*SDK, error) {
 	return &SDK{
 		store:    store,
 		shares:   map[string]mpc.Share{},
+		groups:   map[string]*groupMeta{},
 		sessions: map[string]*SignSession{},
 	}, nil
 }
 
-// setOwnShare records the keygen/reshare outcome for this device: it replaces
-// the in-memory share entry plus the group metadata atomically so a concurrent
-// Sign sees a consistent committee. share is THIS device's share_i (the only
-// secret material the device holds; distributed-mpc-impl.md §B DM-3).
-func (s *SDK) setOwnShare(share mpc.Share, threshold, parties, partyIndex int, pubHex string) {
+// setOwnShare records the keygen/reshare outcome for one group on this
+// device. Pre-multi-group code called it once with a clobbering map; with
+// multi-group it appends — every previously-joined group's share survives
+// the call. DM-3 invariant: one share per group, but a device may join many
+// groups (user ruling 2026-05-18: multi-group is how we deliver multi-address;
+// no BIP44 HD). Concurrency safety: callers hold no SDK locks — this
+// mutates under s.mu (the only secret material the device holds).
+func (s *SDK) setOwnShare(groupID string, share mpc.Share, threshold, parties, partyIndex int, pubHex string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.shares = map[string]mpc.Share{share.Moniker: share}
-	s.group = &groupMeta{
+	s.shares[share.Moniker] = share
+	s.groups[groupID] = &groupMeta{
 		threshold:   threshold,
 		parties:     parties,
 		partyIndex:  partyIndex,
 		ecdsaPubHex: pubHex,
+		moniker:     share.Moniker,
 	}
 }
 
-// snapshotOwnShare returns a copy of this device's share, plus the group
-// (threshold, parties, partyIndex). ok is false when this process holds no
-// share.
+// snapshotShareForGroup returns this device's share + threshold/parties/
+// partyIndex for one specific group. Sign / Reshare call it with the
+// groupID pulled from configJSON (DM-3 envelope). ok=false means no share
+// is held for that group — caller surfaces CodeNoShares.
+func (s *SDK) snapshotShareForGroup(groupID string) (share mpc.Share, threshold, parties, partyIndex int, ok bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	gm, exists := s.groups[groupID]
+	if !exists {
+		return mpc.Share{}, 0, 0, 0, false
+	}
+	sh, has := s.shares[gm.moniker]
+	if !has {
+		return mpc.Share{}, 0, 0, 0, false
+	}
+	return sh, gm.threshold, gm.parties, gm.partyIndex, true
+}
+
+// snapshotOwnShare is the pre-multi-group helper kept for tests and
+// callers that only ever live in a single-group device. It returns the
+// share + meta only when exactly one group is held; with zero or many,
+// ok=false so the caller must use snapshotShareForGroup(groupID).
 func (s *SDK) snapshotOwnShare() (share mpc.Share, threshold, parties, partyIndex int, ok bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.group == nil || len(s.shares) == 0 {
+	if len(s.groups) != 1 {
 		return mpc.Share{}, 0, 0, 0, false
 	}
-	for _, sh := range s.shares {
-		// Single-party invariant: exactly one entry under DM-3. We pick the
-		// first; ExportShare/ImportShare keep the map shape so an explicit
-		// moniker-by-moniker accessor stays available on the export surface.
-		return sh, s.group.threshold, s.group.parties, s.group.partyIndex, true
+	for _, gm := range s.groups {
+		if sh, has := s.shares[gm.moniker]; has {
+			return sh, gm.threshold, gm.parties, gm.partyIndex, true
+		}
 	}
 	return mpc.Share{}, 0, 0, 0, false
+}
+
+// groupSummary is the per-row internal projection used to build the
+// ListGroupsJSON response. The exported surface keeps gomobile-flat: a
+// single JSON string out, no Go struct slices.
+type groupSummary struct {
+	GroupID     string `json:"groupId"`
+	Threshold   int    `json:"threshold"`
+	Parties     int    `json:"parties"`
+	PartyIndex  int    `json:"partyIndex"`
+	ECDSAPubHex string `json:"ecdsaPubHex"`
+	Moniker     string `json:"moniker"`
+}
+
+// ListGroupsJSON returns a JSON document `{"items":[{...},...]}` listing
+// the groups this device has joined. Share material is NOT included — only
+// the metadata an operator needs to recognise / route requests against
+// each group. Order is unspecified. The gomobile-flat contract is kept:
+// one string out, one (nil) error.
+func (s *SDK) ListGroupsJSON() (string, error) {
+	s.mu.Lock()
+	rows := make([]groupSummary, 0, len(s.groups))
+	for gid, gm := range s.groups {
+		rows = append(rows, groupSummary{
+			GroupID:     gid,
+			Threshold:   gm.threshold,
+			Parties:     gm.parties,
+			PartyIndex:  gm.partyIndex,
+			ECDSAPubHex: gm.ecdsaPubHex,
+			Moniker:     gm.moniker,
+		})
+	}
+	s.mu.Unlock()
+	out, err := json.Marshal(map[string]any{"items": rows})
+	if err != nil {
+		return "", err
+	}
+	return string(out), nil
 }
 
 func (s *SDK) registerSession(id string, ss *SignSession) {

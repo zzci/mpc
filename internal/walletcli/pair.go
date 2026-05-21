@@ -50,10 +50,15 @@ type pairPersisted struct {
 	PairedAtMS      int64    `json:"pairedAtMs"`
 }
 
-// pairFilePath is the on-disk location of the persisted pairing record
-// inside the keystore directory; relative names keep the file scoped to
-// the same operator the keystore belongs to.
+// pairFileName is the legacy single-record persisted pairing (pre
+// multi-group). Kept readable for migration; new writes go to
+// pairingsFileName.
 const pairFileName = "pair.json"
+
+// pairingsFileName is the multi-group persisted-pairings file: an array
+// of pairPersisted, keyed by groupId or by paired-at-ms when groupId is
+// empty. Atomically rewritten on every `pair` call (read-modify-write).
+const pairingsFileName = "pairings.json"
 
 // cmdPair drives the operator-facing `pair <config-url>` shell command.
 // It does three things:
@@ -179,9 +184,133 @@ func newIdentity() (privHex, pubHex string, err error) {
 	return hex.EncodeToString(buf[:]), hex.EncodeToString(pub.SerializeCompressed()), nil
 }
 
-// persistPair writes the pairing record atomically (write to tmp, rename)
-// to <keystoreDir>/pair.json with mode 0600. An existing file is replaced;
-// the operator can pair against a different coord later by re-running.
+// groupsView is one row in the `groups` listing — the merger of (a) the
+// SDK in-memory groups (the device's keygen / reshare outcomes for this
+// process) and (b) the persisted pairings (coord/relay bootstrap +
+// identity keypair for B-side calls). A row may be present in only one
+// side: persisted-only after pair but before keygen; SDK-only when a
+// keygen ran without going through pair (e.g. CLI member harness).
+type groupsView struct {
+	GroupID        string `json:"groupId,omitempty"`
+	Source         string `json:"source"` // "sdk", "pair", or "sdk+pair"
+	Threshold      int    `json:"threshold,omitempty"`
+	Parties        int    `json:"parties,omitempty"`
+	PartyIndex     int    `json:"partyIndex,omitempty"`
+	ECDSAPubHex    string `json:"ecdsaPubHex,omitempty"`
+	Moniker        string `json:"moniker,omitempty"`
+	CoordBaseURL   string `json:"coordBaseUrl,omitempty"`
+	Label          string `json:"label,omitempty"`
+	IdentityPubHex string `json:"identityPubHex,omitempty"`
+	RelayPeerID    string `json:"relayPeerID,omitempty"`
+	PairedAtMS     int64  `json:"pairedAtMs,omitempty"`
+}
+
+// cmdGroups prints the union of SDK groups and persisted pairings as JSON,
+// one row per groupID. Operators read this to confirm a device's
+// participation set ("which wallets does this PC sign for?") or to script
+// against it from automation.
+func (se *session) cmdGroups(args []string) {
+	if len(args) != 0 {
+		se.fail("usage: groups")
+		return
+	}
+	rowsBySDK := map[string]groupsView{}
+	sdkJSON, err := se.sdk.ListGroupsJSON()
+	if err != nil {
+		se.fail("groups: list sdk: %v", err)
+		return
+	}
+	var sdkResp struct {
+		Items []struct {
+			GroupID     string `json:"groupId"`
+			Threshold   int    `json:"threshold"`
+			Parties     int    `json:"parties"`
+			PartyIndex  int    `json:"partyIndex"`
+			ECDSAPubHex string `json:"ecdsaPubHex"`
+			Moniker     string `json:"moniker"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal([]byte(sdkJSON), &sdkResp); err != nil {
+		se.fail("groups: decode sdk: %v", err)
+		return
+	}
+	for _, it := range sdkResp.Items {
+		rowsBySDK[it.GroupID] = groupsView{
+			GroupID: it.GroupID, Source: "sdk",
+			Threshold: it.Threshold, Parties: it.Parties,
+			PartyIndex: it.PartyIndex, ECDSAPubHex: it.ECDSAPubHex,
+			Moniker: it.Moniker,
+		}
+	}
+	persisted, err := loadPairings(se.keystoreDir)
+	if err != nil {
+		se.fail("groups: load pairings: %v", err)
+		return
+	}
+	for _, p := range persisted {
+		row, exists := rowsBySDK[p.GroupID]
+		if exists {
+			row.Source = "sdk+pair"
+		} else {
+			row = groupsView{GroupID: p.GroupID, Source: "pair"}
+		}
+		row.CoordBaseURL = p.CoordBaseURL
+		row.Label = p.Label
+		row.IdentityPubHex = p.IdentityPubHex
+		row.RelayPeerID = p.RelayPeerID
+		row.PairedAtMS = p.PairedAtMS
+		rowsBySDK[p.GroupID] = row
+	}
+	out := make([]groupsView, 0, len(rowsBySDK))
+	for _, r := range rowsBySDK {
+		out = append(out, r)
+	}
+	body, err := json.MarshalIndent(map[string]any{"items": out}, "", "  ")
+	if err != nil {
+		se.fail("groups: marshal: %v", err)
+		return
+	}
+	wl(se.out, string(body))
+}
+
+// loadPairings reads the multi-group pairings file. If the legacy
+// pair.json (single record) is the only thing present, it is migrated
+// in-place: read once, wrapped into a one-element list, and the legacy
+// file is left in place (forward-compatible — older binaries can still
+// read it) until the next call overwrites pairings.json with the merged
+// list. Returns an empty slice when no file exists yet.
+func loadPairings(keystoreDir string) ([]pairPersisted, error) {
+	if keystoreDir == "" {
+		return nil, fmt.Errorf("keystore directory unknown")
+	}
+	out := filepath.Join(keystoreDir, pairingsFileName)
+	if b, err := os.ReadFile(out); err == nil {
+		var list []pairPersisted
+		if err := json.Unmarshal(b, &list); err != nil {
+			return nil, fmt.Errorf("pairings.json bad json: %w", err)
+		}
+		return list, nil
+	} else if !os.IsNotExist(err) {
+		return nil, err
+	}
+	// Legacy single-record fallback.
+	legacy := filepath.Join(keystoreDir, pairFileName)
+	if b, err := os.ReadFile(legacy); err == nil {
+		var rec pairPersisted
+		if err := json.Unmarshal(b, &rec); err != nil {
+			return nil, fmt.Errorf("legacy pair.json bad json: %w", err)
+		}
+		return []pairPersisted{rec}, nil
+	} else if !os.IsNotExist(err) {
+		return nil, err
+	}
+	return nil, nil
+}
+
+// persistPair appends or replaces a pairing record in the multi-group
+// pairings.json file. Replacement key is groupID when present, otherwise
+// the IdentityPubHex (which is unique per-pairing). The file is rewritten
+// atomically (write to tmp, rename) with mode 0600.
 func persistPair(keystoreDir string, rec pairPersisted) error {
 	if keystoreDir == "" {
 		return fmt.Errorf("keystore directory unknown")
@@ -189,9 +318,31 @@ func persistPair(keystoreDir string, rec pairPersisted) error {
 	if err := os.MkdirAll(keystoreDir, 0o700); err != nil {
 		return err
 	}
-	out := filepath.Join(keystoreDir, pairFileName)
+	list, err := loadPairings(keystoreDir)
+	if err != nil {
+		return err
+	}
+	// Replace by groupID match (preferred) or by identity pubkey.
+	replaced := false
+	for i := range list {
+		match := false
+		if rec.GroupID != "" && list[i].GroupID == rec.GroupID {
+			match = true
+		} else if rec.GroupID == "" && list[i].IdentityPubHex == rec.IdentityPubHex {
+			match = true
+		}
+		if match {
+			list[i] = rec
+			replaced = true
+			break
+		}
+	}
+	if !replaced {
+		list = append(list, rec)
+	}
+	out := filepath.Join(keystoreDir, pairingsFileName)
 	tmp := out + ".tmp"
-	b, err := json.MarshalIndent(rec, "", "  ")
+	b, err := json.MarshalIndent(list, "", "  ")
 	if err != nil {
 		return err
 	}

@@ -1,0 +1,45 @@
+{{define "devices.tmpl"}}{{template "head" .}}
+{{template "nav" .}}
+<h1 class="text-xl font-bold text-slate-100 mb-4">Devices — cross-group lookup</h1>
+<p class="text-sm text-slate-400 mb-4">A single device identity (secp256k1 pubkey)
+may be a member of multiple groups (user ruling 2026-05-18: multi-group = multi-address,
+no BIP44 HD). Paste a 33-byte compressed or 65-byte uncompressed hex pubkey
+to see every <code class="font-mono">group_members</code> row that identity is
+bound to across all groups.</p>
+
+<div class="card mb-4" style="max-width:46rem">
+  <form method="get" action="/devices" class="flex flex-col gap-3">
+    <label class="text-sm text-slate-400">Identity pubkey (hex)</label>
+    <input class="input w-full font-mono" type="text" name="id" placeholder="02..." value="{{.IdentityHex}}" required>
+    <button class="btn" type="submit">Look up</button>
+  </form>
+</div>
+
+{{if .Error}}
+<div class="card mb-4">
+  <div class="badge badge-err mb-2">lookup error</div>
+  <p class="text-sm text-slate-300">{{.Error}}</p>
+</div>
+{{end}}
+
+{{if .Items}}
+<h2 class="text-lg font-semibold text-slate-100 mb-2">Groups for this identity</h2>
+<div class="overflow-x-auto">
+<table>
+  <thead><tr><th>Group ID</th><th>Member ID</th><th>Status</th><th>Group created</th></tr></thead>
+  <tbody>
+  {{range .Items}}
+    <tr>
+      <td class="font-mono"><a class="text-sky-400" href="/transactions?group={{.GroupID}}">{{short .GroupID}}</a></td>
+      <td class="font-mono">{{.MemberID}}</td>
+      <td>{{if eq .Status "active"}}<span class="badge badge-ok">{{.Status}}</span>{{else}}<span class="badge badge-warn">{{.Status}}</span>{{end}}</td>
+      <td>{{msTime .CreatedAt}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{else if .IdentityHex}}
+<div class="card text-center text-slate-400">No groups found for this identity.</div>
+{{end}}
+{{template "foot" .}}{{end}}

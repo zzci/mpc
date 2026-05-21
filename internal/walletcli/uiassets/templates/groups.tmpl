@@ -1,0 +1,31 @@
+{{define "groups.tmpl"}}{{template "head" .}}
+{{template "nav" .}}
+<h1 class="text-xl font-bold text-slate-100 mb-4">Groups</h1>
+<p class="text-sm text-slate-400 mb-4">All groups this device is a member of.
+The union of (a) SDK in-memory groups (keygen / reshare outcomes in this process)
+and (b) persisted pairings on disk (<code class="font-mono">pairings.json</code>).
+A row may be in only one source — e.g. <code class="font-mono">pair</code> after
+the operator paired but before keygen runs.</p>
+{{if .Items}}
+<div class="overflow-x-auto">
+<table>
+  <thead><tr><th>Group ID</th><th>Source</th><th>t / n</th><th>Master pubkey</th><th>Coord</th><th>Label</th><th>Identity</th></tr></thead>
+  <tbody>
+  {{range .Items}}
+    <tr>
+      <td class="font-mono">{{if .GroupID}}{{short .GroupID}}{{else}}<span class="text-slate-500">(unset)</span>{{end}}</td>
+      <td>{{if eq .Source "sdk+pair"}}<span class="badge badge-ok">sdk+pair</span>{{else if eq .Source "sdk"}}<span class="badge badge-warn">sdk only</span>{{else}}<span class="badge">pair only</span>{{end}}</td>
+      <td>{{if .Threshold}}{{.Threshold}} / {{.Parties}} (i={{.PartyIndex}}){{else}}—{{end}}</td>
+      <td class="font-mono text-xs">{{if .ECDSAPubHex}}{{short .ECDSAPubHex}}{{else}}—{{end}}</td>
+      <td>{{if .CoordBaseURL}}<span class="font-mono text-xs">{{.CoordBaseURL}}</span>{{else}}—{{end}}</td>
+      <td>{{.Label}}</td>
+      <td class="font-mono text-xs">{{if .IdentityPubHex}}{{short .IdentityPubHex}}{{else}}—{{end}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{else}}
+<div class="card text-center text-slate-400">No groups joined (yet). Run <code class="font-mono">pair &lt;config-url&gt;</code> to bootstrap one, or <code class="font-mono">/api/v1/keygen</code> to mint one directly.</div>
+{{end}}
+{{template "foot" .}}{{end}}
