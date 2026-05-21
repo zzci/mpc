@@ -21,8 +21,25 @@ android {
 
 dependencies {
     implementation 'com.facebook.react:react-android'
-    // gomobile-bound device-signing SDK (.aar). Placed here by the packaging
-    // step; the flat mobileapi surface (SDK / *Callback / SignSession) is the
-    // only thing this module touches.
-    implementation files('libs/mobileapi.aar')
+    // gomobile-bound device-signing SDK (.aar). Placed under libs/ by the
+    // packaging step; the flat mobileapi surface (SDK / *Callback /
+    // SignSession) is the only thing this module touches.
+    //
+    // CI-004: scoped as compileOnly (was implementation) so the bridge can be
+    // packaged as an AAR by the sample-app's Gradle build. AGP refuses direct
+    // local .aar dependencies on a library module's runtime/publish classpath:
+    //   "Direct local .aar file dependencies are not supported when building
+    //    an AAR. The resulting AAR would be broken because the classes and
+    //    Android resources from any local .aar file dependencies would not be
+    //    packaged in the resulting AAR."
+    // The current bridge is a B-004 skeleton with no mobileapi.* references
+    // (McpWalletModule.kt only touches com.facebook.react.bridge.*), so the
+    // AAR is needed for forward compile-time wiring only and compileOnly is
+    // sufficient. The staging step in .github/workflows/sample-app.yml keeps
+    // libs/mobileapi.aar populated so this dependency resolves once the
+    // bridge code starts importing mobileapi.SDK. At that point the consuming
+    // app (a com.android.application, not a library — the local-AAR rule does
+    // not apply) must also depend on the AAR for runtime classloading; that
+    // wiring belongs with the implementation change, not this CI patch.
+    compileOnly files('libs/mobileapi.aar')
 }
