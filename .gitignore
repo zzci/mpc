@@ -51,3 +51,6 @@ Thumbs.db
 
 # tool crash dumps
 core
+
+# Claude Code local cache (per-workspace; never commit)
+.claude/
