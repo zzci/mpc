@@ -1,0 +1,452 @@
+name: Sample App Build
+
+# CI-001: builds installable React Native sample-app artifacts (Trine Signer
+# UI host of the device-signing SDK). Independent of ci.yml / release.yml so
+# the existing Go + gomobile gates remain unchanged.
+#
+# Jobs:
+#   * sample-app-quality : Node 20 + `npm install` (no lockfile tracked) +
+#                          `npm run typecheck`.
+#   * sample-app-android : builds the gomobile .aar, stages it under
+#                          mobile/bridge/android/libs/mobileapi.aar, scaffolds
+#                          a React Native 0.74.5 android/ project on the fly,
+#                          and runs Gradle. Produces a debug APK by default
+#                          (no secrets); produces a signed release APK when
+#                          the ANDROID_KEYSTORE_* secrets are all present.
+#   * sample-app-ios     : builds the gomobile xcframework, stages it under
+#                          mobile/bridge/ios/McpWallet.xcframework, scaffolds
+#                          a React Native 0.74.5 ios/ project on the fly,
+#                          and runs xcodebuild. Produces a signed IPA when
+#                          APPLE_TEAM_ID + P12_BASE64 + P12_PASSWORD +
+#                          PROVISIONING_PROFILE_BASE64 are all present AND
+#                          the attempt_ios_signing input is true; otherwise
+#                          builds an unsigned simulator .app and uploads it
+#                          as a .tar.gz.
+#
+# Trigger surface:
+#   * workflow_dispatch — primary entrypoint, exposes attempt_ios_signing.
+#   * push tags v*      — piggyback on existing release-tag publishing.
+#
+# Scaffold rationale: mobile/sample-app/ ships RN source only (no native
+# android/ios dirs in git, no Expo). We scaffold the same RN 0.74.5 template
+# with project name "McpSampleApp" (matches app.json#name), so the generated
+# native side's getMainComponentName() lines up with index.js's
+# AppRegistry.registerComponent. This keeps the source tree free of generated
+# native projects and avoids adding Expo to the sample-app dependency surface.
+#
+# Lockfile note: mobile/sample-app/package-lock.json is intentionally NOT
+# tracked. The L1 brief disallowed adding it silently, so the install step
+# uses `npm install` (not `npm ci`). If reproducibility of the JS dep tree
+# becomes required, that is a separate decision and should be coordinated
+# with the sample-app owner before adding a lockfile.
+
+on:
+  workflow_dispatch:
+    inputs:
+      attempt_ios_signing:
+        description: 'If true, attempt a signed IPA when iOS signing secrets are present. Falls back to an unsigned simulator .app when secrets are missing.'
+        required: false
+        default: true
+        type: boolean
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '20'
+  # React Native template version used to scaffold the host android/ios
+  # projects. Must match mobile/sample-app/package.json's react-native pin so
+  # the generated native side and the JS bundle agree.
+  RN_TEMPLATE_VERSION: '0.74.5'
+
+jobs:
+  sample-app-quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: mobile/sample-app
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Node
+        uses: actions/setup-node@0a44ba7841725637a19e28fa30b79a866c81b0a6 # v4.0.4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install sample-app deps (npm install; no lockfile tracked)
+        run: npm install --no-audit --no-fund
+
+      - name: Typecheck
+        run: npm run typecheck
+
+  sample-app-android:
+    needs: sample-app-quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build gomobile AAR (NDK + gomobile -> scripts/build-android.sh)
+        run: ./scripts/ci/setup-android-ndk.sh
+
+      - name: Stage AAR under bridge/android/libs/mobileapi.aar
+        # The RN bridge's android/build.gradle references files('libs/mobileapi.aar').
+        # The gomobile output ships as dist/mobile/mcpwallet.aar; copy under the
+        # bridge module so the sample-app gradle build can autolink the bridge.
+        run: |
+          set -euo pipefail
+          test -f dist/mobile/mcpwallet.aar
+          mkdir -p mobile/bridge/android/libs
+          cp dist/mobile/mcpwallet.aar mobile/bridge/android/libs/mobileapi.aar
+
+      - name: Setup Node
+        uses: actions/setup-node@0a44ba7841725637a19e28fa30b79a866c81b0a6 # v4.0.4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Java 17 (Android Gradle Plugin)
+        uses: actions/setup-java@8df1039502a15bceb9433410b1a100fbe190c53b # v4.5.0
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Scaffold android/ from the React Native template
+        # init McpSampleApp matches app.json#name; the generated native side's
+        # main component name aligns with AppRegistry.registerComponent in
+        # index.js. --skip-install: we install deps in the sample-app dir
+        # below. The scaffold's nested .git is left in the tmp directory and
+        # not copied (we copy only android/).
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          npx --yes @react-native-community/cli@latest init McpSampleApp \
+            --version "${RN_TEMPLATE_VERSION}" \
+            --pm npm \
+            --skip-install \
+            --directory "${tmp}/scaffold"
+          rm -rf mobile/sample-app/android
+          cp -R "${tmp}/scaffold/android" mobile/sample-app/android
+          rm -rf "${tmp}"
+
+      - name: Install sample-app deps (npm install)
+        working-directory: mobile/sample-app
+        run: npm install --no-audit --no-fund
+
+      - name: Decide Android signing mode
+        id: signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -n "${ANDROID_KEYSTORE_BASE64}" ] \
+             && [ -n "${ANDROID_KEY_ALIAS}" ] \
+             && [ -n "${ANDROID_STORE_PASSWORD}" ] \
+             && [ -n "${ANDROID_KEY_PASSWORD}" ]; then
+            echo "mode=release" >> "${GITHUB_OUTPUT}"
+            echo "Android signing secrets present -> assembleRelease"
+          else
+            echo "mode=debug" >> "${GITHUB_OUTPUT}"
+            echo "Android signing secrets absent -> assembleDebug"
+          fi
+
+      - name: Materialize Android keystore (release only)
+        if: steps.signing.outputs.mode == 'release'
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          echo "${ANDROID_KEYSTORE_BASE64}" | base64 -d \
+            > mobile/sample-app/android/app/release.keystore
+          # The scaffolded build.gradle does not pre-wire signingConfigs; append
+          # a release signingConfig referencing env-injected credentials and
+          # bind it to the release buildType. Idempotent: re-running prebuild
+          # regenerates the file from the template, so this patch only runs on
+          # the release path within the same job.
+          cat >> mobile/sample-app/android/app/build.gradle <<'EOF'
+
+          android {
+              signingConfigs {
+                  release {
+                      storeFile file("release.keystore")
+                      storePassword System.getenv("MCPWALLET_ANDROID_STORE_PASSWORD")
+                      keyAlias System.getenv("MCPWALLET_ANDROID_KEY_ALIAS")
+                      keyPassword System.getenv("MCPWALLET_ANDROID_KEY_PASSWORD")
+                  }
+              }
+              buildTypes {
+                  release {
+                      signingConfig signingConfigs.release
+                  }
+              }
+          }
+          EOF
+
+      - name: Build APK
+        working-directory: mobile/sample-app/android
+        env:
+          MCPWALLET_ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          MCPWALLET_ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          MCPWALLET_ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          chmod +x ./gradlew
+          if [ "${{ steps.signing.outputs.mode }}" = "release" ]; then
+            ./gradlew assembleRelease --no-daemon
+          else
+            ./gradlew assembleDebug --no-daemon
+          fi
+
+      - name: Upload Android APK
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sample-app-android-apk
+          path: |
+            mobile/sample-app/android/app/build/outputs/apk/**/*.apk
+          if-no-files-found: error
+          retention-days: 14
+
+  sample-app-ios:
+    needs: sample-app-quality
+    runs-on: macos-14
+    timeout-minutes: 75
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build gomobile xcframework (Xcode -> scripts/build-ios.sh)
+        run: ./scripts/ci/build-ios.sh
+
+      - name: Stage McpWallet.xcframework under bridge/ios/
+        # The RN bridge podspec vendors ios/McpWallet.xcframework. gomobile
+        # outputs Mcpwallet.xcframework (lowercase 'w' in the middle); on
+        # macOS HFS+/APFS default the filesystem is case-insensitive but the
+        # podspec lookup is case-sensitive via the framework's Info.plist
+        # CFBundleExecutable. We unzip to a tmp dir, then copy under the
+        # exact name the podspec expects.
+        run: |
+          set -euo pipefail
+          test -f dist/mobile/Mcpwallet.xcframework.zip
+          mkdir -p mobile/bridge/ios
+          tmp="$(mktemp -d)"
+          unzip -q dist/mobile/Mcpwallet.xcframework.zip -d "${tmp}"
+          src="$(find "${tmp}" -maxdepth 2 -type d -iname '*.xcframework' | head -1)"
+          test -n "${src}"
+          rm -rf mobile/bridge/ios/McpWallet.xcframework
+          cp -R "${src}" mobile/bridge/ios/McpWallet.xcframework
+          rm -rf "${tmp}"
+
+      - name: Setup Node
+        uses: actions/setup-node@0a44ba7841725637a19e28fa30b79a866c81b0a6 # v4.0.4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
+        with:
+          xcode-version: latest-stable
+
+      - name: Scaffold ios/ from the React Native template
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          npx --yes @react-native-community/cli@latest init McpSampleApp \
+            --version "${RN_TEMPLATE_VERSION}" \
+            --pm npm \
+            --skip-install \
+            --directory "${tmp}/scaffold"
+          rm -rf mobile/sample-app/ios
+          cp -R "${tmp}/scaffold/ios" mobile/sample-app/ios
+          rm -rf "${tmp}"
+
+      - name: Install sample-app deps (npm install)
+        working-directory: mobile/sample-app
+        run: npm install --no-audit --no-fund
+
+      - name: CocoaPods install
+        working-directory: mobile/sample-app/ios
+        run: |
+          set -euo pipefail
+          # Use the bundled gem set when available (Bundler is preinstalled
+          # on macos-14); fall back to a direct `pod install`.
+          if [ -f Gemfile ]; then
+            bundle install --quiet
+            bundle exec pod install --repo-update
+          else
+            pod install --repo-update
+          fi
+
+      - name: Decide iOS signing mode
+        id: signing
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          P12_BASE64: ${{ secrets.P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
+          PROVISIONING_PROFILE_BASE64: ${{ secrets.PROVISIONING_PROFILE_BASE64 }}
+          ATTEMPT_SIGNING: ${{ inputs.attempt_ios_signing }}
+        run: |
+          set -euo pipefail
+          # ATTEMPT_SIGNING defaults to true on workflow_dispatch; on tag
+          # pushes the input is not bound, so treat empty as true to mirror
+          # the dispatch default.
+          attempt="${ATTEMPT_SIGNING:-true}"
+          if [ "${attempt}" = "true" ] \
+             && [ -n "${APPLE_TEAM_ID}" ] \
+             && [ -n "${P12_BASE64}" ] \
+             && [ -n "${P12_PASSWORD}" ] \
+             && [ -n "${PROVISIONING_PROFILE_BASE64}" ]; then
+            echo "mode=signed" >> "${GITHUB_OUTPUT}"
+            echo "iOS signing secrets present -> signed IPA"
+          else
+            echo "mode=simulator" >> "${GITHUB_OUTPUT}"
+            echo "iOS signing missing or disabled -> unsigned simulator .app"
+          fi
+
+      - name: Import signing assets (signed only)
+        if: steps.signing.outputs.mode == 'signed'
+        env:
+          P12_BASE64: ${{ secrets.P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
+          PROVISIONING_PROFILE_BASE64: ${{ secrets.PROVISIONING_PROFILE_BASE64 }}
+        run: |
+          set -euo pipefail
+          keychain_path="${RUNNER_TEMP}/build.keychain-db"
+          keychain_password="$(uuidgen)"
+          security create-keychain -p "${keychain_password}" "${keychain_path}"
+          security set-keychain-settings -lut 21600 "${keychain_path}"
+          security unlock-keychain -p "${keychain_password}" "${keychain_path}"
+          p12_path="${RUNNER_TEMP}/cert.p12"
+          echo "${P12_BASE64}" | base64 -d > "${p12_path}"
+          security import "${p12_path}" \
+            -k "${keychain_path}" \
+            -P "${P12_PASSWORD}" \
+            -A -t cert -f pkcs12
+          security set-key-partition-list \
+            -S apple-tool:,apple: \
+            -k "${keychain_password}" "${keychain_path}"
+          # Prepend our build keychain to the user search list so codesign
+          # can find the imported identity, while preserving the existing
+          # default keychains. `security list-keychains` quotes each entry,
+          # so strip quotes per line before re-applying.
+          existing="$(security list-keychains -d user \
+            | sed -e 's/^[[:space:]]*//' -e 's/^"//' -e 's/"$//' \
+            | tr '\n' ' ')"
+          # shellcheck disable=SC2086  # intentional word splitting
+          security list-keychains -d user -s "${keychain_path}" ${existing}
+          profile_dir="${HOME}/Library/MobileDevice/Provisioning Profiles"
+          mkdir -p "${profile_dir}"
+          echo "${PROVISIONING_PROFILE_BASE64}" | base64 -d \
+            > "${profile_dir}/build.mobileprovision"
+          rm -f "${p12_path}"
+
+      - name: Build signed IPA
+        if: steps.signing.outputs.mode == 'signed'
+        working-directory: mobile/sample-app/ios
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          archive_path="${RUNNER_TEMP}/McpSampleApp.xcarchive"
+          export_path="${RUNNER_TEMP}/ipa"
+          export_plist="${RUNNER_TEMP}/ExportOptions.plist"
+
+          xcodebuild \
+            -workspace McpSampleApp.xcworkspace \
+            -scheme McpSampleApp \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -archivePath "${archive_path}" \
+            -allowProvisioningUpdates \
+            DEVELOPMENT_TEAM="${APPLE_TEAM_ID}" \
+            archive
+
+          # ExportOptions: development method + team id. We omit
+          # signingStyle so xcodebuild can match the installed profile to
+          # the archive's bundle id without requiring an explicit
+          # provisioningProfiles map (the scaffolded bundle id is the
+          # RN-template default; users wanting a different bundle id must
+          # set PRODUCT_BUNDLE_IDENTIFIER or commit a customized ios/
+          # project, which is out of CI-001 scope).
+          cat > "${export_plist}" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>development</string>
+            <key>teamID</key>
+            <string>${APPLE_TEAM_ID}</string>
+          </dict>
+          </plist>
+          EOF
+
+          xcodebuild -exportArchive \
+            -archivePath "${archive_path}" \
+            -exportOptionsPlist "${export_plist}" \
+            -exportPath "${export_path}"
+
+          mkdir -p "${GITHUB_WORKSPACE}/dist/sample-app-ios"
+          cp "${export_path}"/*.ipa "${GITHUB_WORKSPACE}/dist/sample-app-ios/"
+
+      - name: Build unsigned simulator .app (fallback)
+        if: steps.signing.outputs.mode == 'simulator'
+        working-directory: mobile/sample-app/ios
+        run: |
+          set -euo pipefail
+          derived="${RUNNER_TEMP}/derived"
+          xcodebuild \
+            -workspace McpSampleApp.xcworkspace \
+            -scheme McpSampleApp \
+            -configuration Release \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "${derived}" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build
+
+          mkdir -p "${GITHUB_WORKSPACE}/dist/sample-app-ios"
+          app_path="$(find "${derived}/Build/Products" -maxdepth 4 -type d -name '*.app' | head -1)"
+          test -n "${app_path}"
+          ( cd "$(dirname "${app_path}")" \
+            && tar -czf "${GITHUB_WORKSPACE}/dist/sample-app-ios/McpSampleApp-simulator.tar.gz" "$(basename "${app_path}")" )
+
+      - name: Upload iOS artifact (signed IPA)
+        if: steps.signing.outputs.mode == 'signed'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sample-app-ios-ipa
+          path: dist/sample-app-ios/*.ipa
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload iOS artifact (unsigned simulator)
+        if: steps.signing.outputs.mode == 'simulator'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sample-app-ios-simulator
+          path: dist/sample-app-ios/McpSampleApp-simulator.tar.gz
+          if-no-files-found: error
+          retention-days: 14
