@@ -159,6 +159,25 @@ jobs:
           fi
           grep '^org.gradle.jvmargs=' "${props}"
 
+      - name: Align scaffolded app minSdkVersion with bridge (>=24)
+        # mobile/bridge/android/build.gradle declares minSdk 24, but the RN
+        # 0.74 template's android/build.gradle pins minSdkVersion = 23 in the
+        # buildscript ext{} block. Gradle's manifest merger then refuses the
+        # app at 23 against the bridge library at 24:
+        #   "uses-sdk:minSdkVersion 23 cannot be smaller than version 24
+        #    declared in library [:mcp_rn-bridge]"
+        # app/build.gradle defers to rootProject.ext.minSdkVersion, so
+        # patching the root extra property propagates to processDebugManifest
+        # and the app module's defaultConfig.minSdkVersion. Idempotent:
+        # the sed only matches the unbumped (23) value, and the post-grep
+        # verifies the file landed on 24+ regardless of which path ran.
+        run: |
+          set -euo pipefail
+          gradle=mobile/sample-app/android/build.gradle
+          test -f "${gradle}"
+          sed -i -E 's/(minSdkVersion[[:space:]]*=[[:space:]]*)23\b/\124/' "${gradle}"
+          grep -E '^[[:space:]]*minSdkVersion[[:space:]]*=[[:space:]]*(2[4-9]|[3-9][0-9])\b' "${gradle}"
+
       - name: Install sample-app deps (npm install)
         working-directory: mobile/sample-app
         run: npm install --no-audit --no-fund
