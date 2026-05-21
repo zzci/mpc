@@ -1,6 +1,6 @@
 {{define "transactions.tmpl"}}{{template "head" .}}{{template "nav" .}}
 <h1 class="text-xl font-bold text-slate-100 mb-4">Transactions</h1>
-<form class="flex flex-wrap gap-2 mb-4" hx-get="/admin/ui/transactions"
+<form class="flex flex-wrap gap-2 mb-4" hx-get="/transactions"
       hx-target="#tx-body" hx-select="#tx-body" hx-swap="outerHTML" hx-push-url="true">
   <input class="input" type="text" name="group" placeholder="group id" value="{{.F.group}}">
   <input class="input" type="text" name="proposer" placeholder="proposer" value="{{.F.proposer}}">

@@ -40,16 +40,16 @@ func uiReq(t *testing.T, h *httpServer, method, path, bearer, sid, body string) 
 // (loopback-only mode) and the index renders without a session.
 func TestUIAuthLoopback(t *testing.T) {
 	h := testServer(t, "")
-	w, body := uiReq(t, h, "GET", "/ui", "", "", "")
+	w, body := uiReq(t, h, "GET", "/", "", "", "")
 	if w.Code != http.StatusOK {
 		t.Fatalf("index code = %d, want 200", w.Code)
 	}
 	if !strings.Contains(body, "wallet-cli") {
 		t.Fatalf("index missing branding: %s", body[:min(len(body), 120)])
 	}
-	w, _ = uiReq(t, h, "GET", "/ui/login", "", "", "")
-	if w.Code != http.StatusSeeOther || w.Header().Get("Location") != "/ui" {
-		t.Fatalf("/ui/login w/o token: code=%d loc=%s", w.Code, w.Header().Get("Location"))
+	w, _ = uiReq(t, h, "GET", "/login", "", "", "")
+	if w.Code != http.StatusSeeOther || w.Header().Get("Location") != "/" {
+		t.Fatalf("/login w/o token: code=%d loc=%s", w.Code, w.Header().Get("Location"))
 	}
 }
 
@@ -57,15 +57,15 @@ func TestUIAuthLoopback(t *testing.T) {
 // either a cookie or a Bearer; browsers without either redirect to /login.
 func TestUIAuthTokenGate(t *testing.T) {
 	h := testServer(t, "s3cret")
-	w, _ := uiReq(t, h, "GET", "/ui", "", "", "")
-	if w.Code != http.StatusSeeOther || w.Header().Get("Location") != "/ui/login" {
+	w, _ := uiReq(t, h, "GET", "/", "", "", "")
+	if w.Code != http.StatusSeeOther || w.Header().Get("Location") != "/login" {
 		t.Fatalf("no creds: code=%d loc=%s", w.Code, w.Header().Get("Location"))
 	}
-	w, _ = uiReq(t, h, "GET", "/ui", "wrong", "", "")
+	w, _ = uiReq(t, h, "GET", "/", "wrong", "", "")
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("wrong bearer: code=%d", w.Code)
 	}
-	w, _ = uiReq(t, h, "GET", "/ui", "s3cret", "", "")
+	w, _ = uiReq(t, h, "GET", "/", "s3cret", "", "")
 	if w.Code != http.StatusOK {
 		t.Fatalf("good bearer: code=%d", w.Code)
 	}
@@ -75,16 +75,16 @@ func TestUIAuthTokenGate(t *testing.T) {
 // /ui; subsequent requests carry the cookie. Logout drops the cookie.
 func TestUISessionFlow(t *testing.T) {
 	h := testServer(t, "s3cret")
-	w, body := uiReq(t, h, "GET", "/ui/login", "", "", "")
-	if w.Code != http.StatusOK || !strings.Contains(body, `action="/ui/session"`) {
+	w, body := uiReq(t, h, "GET", "/login", "", "", "")
+	if w.Code != http.StatusOK || !strings.Contains(body, `action="/session"`) {
 		t.Fatalf("login form missing form action: code=%d body=%s", w.Code, body[:min(len(body), 200)])
 	}
-	w, _ = uiReq(t, h, "POST", "/ui/session", "", "", "token=wrong")
-	if w.Code != http.StatusSeeOther || w.Header().Get("Location") != "/ui/login?e=1" {
+	w, _ = uiReq(t, h, "POST", "/session", "", "", "token=wrong")
+	if w.Code != http.StatusSeeOther || w.Header().Get("Location") != "/login?e=1" {
 		t.Fatalf("wrong token: code=%d loc=%s", w.Code, w.Header().Get("Location"))
 	}
-	w, _ = uiReq(t, h, "POST", "/ui/session", "", "", "token=s3cret")
-	if w.Code != http.StatusSeeOther || w.Header().Get("Location") != "/ui" {
+	w, _ = uiReq(t, h, "POST", "/session", "", "", "token=s3cret")
+	if w.Code != http.StatusSeeOther || w.Header().Get("Location") != "/" {
 		t.Fatalf("good token: code=%d loc=%s", w.Code, w.Header().Get("Location"))
 	}
 	cookie := w.Result().Cookies()
@@ -95,15 +95,15 @@ func TestUISessionFlow(t *testing.T) {
 		t.Fatalf("cookie weak: HttpOnly=%v SameSite=%d", cookie[0].HttpOnly, cookie[0].SameSite)
 	}
 	sid := cookie[0].Value
-	w, _ = uiReq(t, h, "GET", "/ui", "", sid, "")
+	w, _ = uiReq(t, h, "GET", "/", "", sid, "")
 	if w.Code != http.StatusOK {
 		t.Fatalf("with sid cookie: code=%d", w.Code)
 	}
-	w, _ = uiReq(t, h, "POST", "/ui/logout", "", sid, "")
-	if w.Code != http.StatusSeeOther || w.Header().Get("Location") != "/ui/login" {
+	w, _ = uiReq(t, h, "POST", "/logout", "", sid, "")
+	if w.Code != http.StatusSeeOther || w.Header().Get("Location") != "/login" {
 		t.Fatalf("logout: code=%d loc=%s", w.Code, w.Header().Get("Location"))
 	}
-	w, _ = uiReq(t, h, "GET", "/ui", "", sid, "")
+	w, _ = uiReq(t, h, "GET", "/", "", sid, "")
 	if w.Code != http.StatusSeeOther {
 		t.Fatalf("post-logout: code=%d (cookie should be invalid)", w.Code)
 	}
@@ -114,8 +114,8 @@ func TestUISessionFlow(t *testing.T) {
 func TestUIAssets(t *testing.T) {
 	h := testServer(t, "s3cret")
 	for path, ct := range map[string]string{
-		"/ui/assets/htmx.min.js": "text/javascript",
-		"/ui/assets/tw.css":      "text/css",
+		"/assets/htmx.min.js": "text/javascript",
+		"/assets/tw.css":      "text/css",
 	} {
 		w, body := uiReq(t, h, "GET", path, "", "", "")
 		if w.Code != http.StatusOK {
@@ -142,15 +142,15 @@ func TestUIPendingList(t *testing.T) {
 		},
 		createdAt: time.Now(),
 	}
-	w, body := uiReq(t, h, "GET", "/ui", "", "", "")
+	w, body := uiReq(t, h, "GET", "/", "", "", "")
 	if w.Code != http.StatusOK || !strings.Contains(body, ">1<") {
 		t.Fatalf("index pending count missing (looking for >1< near pending counter): code=%d", w.Code)
 	}
-	w, body = uiReq(t, h, "GET", "/ui/sign", "", "", "")
+	w, body = uiReq(t, h, "GET", "/sign", "", "", "")
 	if w.Code != http.StatusOK || !strings.Contains(body, "abc123") {
 		t.Fatalf("sign list missing id: code=%d", w.Code)
 	}
-	w, body = uiReq(t, h, "GET", "/ui/sign/abc123", "", "", "")
+	w, body = uiReq(t, h, "GET", "/sign/abc123", "", "", "")
 	if w.Code != http.StatusOK {
 		t.Fatalf("sign detail code=%d", w.Code)
 	}
@@ -160,7 +160,7 @@ func TestUIPendingList(t *testing.T) {
 		}
 	}
 	// hx-post wiring: detail must reference both approve and reject endpoints.
-	for _, want := range []string{`hx-post="/ui/sign/abc123/approve"`, `hx-post="/ui/sign/abc123/reject"`} {
+	for _, want := range []string{`hx-post="/sign/abc123/approve"`, `hx-post="/sign/abc123/reject"`} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("sign detail missing hx-post: %q", want)
 		}
@@ -170,7 +170,7 @@ func TestUIPendingList(t *testing.T) {
 // TestUISignDetail404: an unknown sign id returns 404 HTML.
 func TestUISignDetail404(t *testing.T) {
 	h := testServer(t, "")
-	w, _ := uiReq(t, h, "GET", "/ui/sign/nope", "", "", "")
+	w, _ := uiReq(t, h, "GET", "/sign/nope", "", "", "")
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("unknown id code=%d", w.Code)
 	}
@@ -187,7 +187,7 @@ func TestUIMismatchFlag(t *testing.T) {
 		},
 		createdAt: time.Now(),
 	}
-	w, body := uiReq(t, h, "GET", "/ui/sign/m1", "", "", "")
+	w, body := uiReq(t, h, "GET", "/sign/m1", "", "", "")
 	if w.Code != http.StatusOK || !strings.Contains(body, "flagged") {
 		t.Fatalf("mismatch flag missing: code=%d", w.Code)
 	}
@@ -208,7 +208,7 @@ func TestUIResolveApproveReject(t *testing.T) {
 			}
 			cb.done <- outcome{ok: action == "approve", payload: "deadbeef", code: "ECODE", msg: "msg"}
 			form := url.Values{}.Encode()
-			r := httptest.NewRequestWithContext(context.Background(), "POST", "/ui/sign/X/"+action, strings.NewReader(form))
+			r := httptest.NewRequestWithContext(context.Background(), "POST", "/sign/X/"+action, strings.NewReader(form))
 			r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 			r.Header.Set("HX-Request", "true")
 			rec := httptest.NewRecorder()
@@ -243,7 +243,7 @@ func TestUIResolveApproveReject(t *testing.T) {
 func TestUIImportFormNoPassphrase(t *testing.T) {
 	t.Setenv(passphraseEnv, "")
 	h := testServer(t, "")
-	w, body := uiReq(t, h, "GET", "/ui/import", "", "", "")
+	w, body := uiReq(t, h, "GET", "/import", "", "", "")
 	if w.Code != http.StatusOK {
 		t.Fatalf("import form code=%d", w.Code)
 	}
@@ -259,7 +259,7 @@ func TestUIImportFormNoPassphrase(t *testing.T) {
 func TestUIImportFormPassphraseSet(t *testing.T) {
 	t.Setenv(passphraseEnv, "pw")
 	h := testServer(t, "")
-	w, body := uiReq(t, h, "GET", "/ui/import", "", "", "")
+	w, body := uiReq(t, h, "GET", "/import", "", "", "")
 	if w.Code != http.StatusOK {
 		t.Fatalf("code=%d", w.Code)
 	}
@@ -278,7 +278,7 @@ func TestUIImportNoPassphrasePost(t *testing.T) {
 	t.Setenv(passphraseEnv, "")
 	h := testServer(t, "")
 	form, contentType := multipartBackup(t, "backup", "file.bin", []byte("blob"))
-	r := httptest.NewRequestWithContext(context.Background(), "POST", "/ui/import", form)
+	r := httptest.NewRequestWithContext(context.Background(), "POST", "/import", form)
 	r.Header.Set("Content-Type", contentType)
 	r.Header.Set("HX-Request", "true")
 	rec := httptest.NewRecorder()
@@ -299,7 +299,7 @@ func TestUIImportNoPassphrasePost(t *testing.T) {
 func TestUIImportNoFile(t *testing.T) {
 	t.Setenv(passphraseEnv, "pw")
 	h := testServer(t, "")
-	r := httptest.NewRequestWithContext(context.Background(), "POST", "/ui/import",
+	r := httptest.NewRequestWithContext(context.Background(), "POST", "/import",
 		strings.NewReader(""))
 	r.Header.Set("Content-Type", "multipart/form-data; boundary=xxxxxx")
 	r.Header.Set("HX-Request", "true")
@@ -322,7 +322,7 @@ func TestUIImportBadBlob(t *testing.T) {
 	t.Setenv(passphraseEnv, "pw")
 	h := testServer(t, "")
 	form, contentType := multipartBackup(t, "backup", "garbage.bin", []byte("not-a-real-backup"))
-	r := httptest.NewRequestWithContext(context.Background(), "POST", "/ui/import", form)
+	r := httptest.NewRequestWithContext(context.Background(), "POST", "/import", form)
 	r.Header.Set("Content-Type", contentType)
 	r.Header.Set("HX-Request", "true")
 	rec := httptest.NewRecorder()
@@ -365,9 +365,9 @@ func TestUIQueryForms(t *testing.T) {
 	for _, c := range []struct {
 		path, action, fieldNames string
 	}{
-		{"/ui/fetch", `action="/ui/fetch"`, `name="req"`},
-		{"/ui/xpub", `action="/ui/xpub"`, `name="req"`},
-		{"/ui/address", `action="/ui/address"`, `name="index"`},
+		{"/fetch", `action="/fetch"`, `name="req"`},
+		{"/xpub", `action="/xpub"`, `name="req"`},
+		{"/address", `action="/address"`, `name="index"`},
 	} {
 		w, body := uiReq(t, h, "GET", c.path, "", "", "")
 		if w.Code != http.StatusOK {
@@ -384,8 +384,8 @@ func TestUIQueryForms(t *testing.T) {
 // TestUIAddressForm: nav highlights the active tab.
 func TestUIAddressNav(t *testing.T) {
 	h := testServer(t, "")
-	_, body := uiReq(t, h, "GET", "/ui/address", "", "", "")
-	if !strings.Contains(body, `href="/ui/address" class="text-sky-400`) {
+	_, body := uiReq(t, h, "GET", "/address", "", "", "")
+	if !strings.Contains(body, `href="/address" class="text-sky-400`) {
 		t.Fatalf("address nav not highlighted: %s", body[:min(len(body), 200)])
 	}
 }
@@ -396,7 +396,7 @@ func TestUIAddressMissingFields(t *testing.T) {
 	h := testServer(t, "")
 	form := url.Values{}
 	form.Set("index", "0") // xpub missing
-	r := httptest.NewRequestWithContext(context.Background(), "POST", "/ui/address",
+	r := httptest.NewRequestWithContext(context.Background(), "POST", "/address",
 		strings.NewReader(form.Encode()))
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	r.Header.Set("HX-Request", "true")
@@ -420,7 +420,7 @@ func TestUIAddressBadIndex(t *testing.T) {
 		form := url.Values{}
 		form.Set("index", bad)
 		form.Set("xpub", `{}`)
-		r := httptest.NewRequestWithContext(context.Background(), "POST", "/ui/address",
+		r := httptest.NewRequestWithContext(context.Background(), "POST", "/address",
 			strings.NewReader(form.Encode()))
 		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		r.Header.Set("HX-Request", "true")

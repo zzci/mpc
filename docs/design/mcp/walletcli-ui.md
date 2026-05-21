@@ -9,8 +9,8 @@
 `internal/walletcli/`(commit `b36ae4b` / `3bbe502` / `b6531cc`)是 **PC 钱包
 成员端**(非移动 SDK,非生产 admin 面),为开发与运维提供:
 - 交互式 shell(`cli` 入口,见 `walletcli.go`)。
-- HTTP JSON API(`cli serve`,`/v1/*`,见 `httpapi.go`)。
-- **htmx 服务端渲染面板**(本文件)`/ui/*`,作为 JSON API 的可视化前端。
+- HTTP JSON API(`cli serve`,`/api/v1/*`,见 `httpapi.go`)。
+- **htmx 服务端渲染面板**(本文件)`/*`,作为 JSON API 的可视化前端。
 
 **不是 admin-ui**:admin-ui(`internal/server/admin/ui.go`)运行在 **coord**
 进程,看的是 coord 持久库(交易/审计/relay 指标)。wallet-cli UI 运行在
@@ -23,38 +23,45 @@
 
 ## 2. 路由(`internal/walletcli/ui.go:131-148`)
 
+**JSON API**(`internal/walletcli/httpapi.go`):路径前缀 `/api/v1/*` —— 集成
+脚本、自动化、原 `cli` 子进程外的所有机器调用都走这条。
+
+**htmx UI**(`internal/walletcli/ui.go`):路径根 `/*` —— 浏览器导航默认即 UI。
+无 `/ui` 前缀;一个反向代理可按 `/api` vs 其他做路径切分。
+
 | 方法 | 路径 | 作用 |
 |---|---|---|
-| GET | `/ui/assets/htmx.min.js` | vendored htmx |
-| GET | `/ui/assets/tw.css` | tailwind 子集(与 admin-ui 同基线,见 §4) |
-| GET | `/ui/login` | 登录表单(仅当 `MPC_WALLET_HTTP_TOKEN` 配置时) |
-| POST | `/ui/session` | 验 token、设 cookie、跳 `/ui` |
-| POST | `/ui/logout` | 清 cookie、跳回 |
-| GET | `/ui` | 概览(version、auth 模式、pending 计数) |
-| GET | `/ui/sign` | 待签列表(id、age、mismatch 标记) |
-| GET | `/ui/sign/{id}` | 待签详情:WYSIWYS A-facts / B-info / mismatch JSON + Approve/Reject |
-| POST | `/ui/sign/{id}/approve` | 通过(htmx 内联交换 → `sign_result`) |
-| POST | `/ui/sign/{id}/reject` | 拒绝 |
-| GET | `/ui/import` | 备份恢复表单(multipart) |
-| POST | `/ui/import` | 处理 ExportShare 备份,$MPC_WALLET_PASSPHRASE 必备 |
-| GET | `/ui/fetch` | 经 coord 查询交易信息(只读) |
-| POST | `/ui/fetch` | 同上 |
-| GET | `/ui/xpub` | 拉 owning-member xpub(只读,memberGate) |
-| POST | `/ui/xpub` | 同上 |
-| GET | `/ui/address` | 离线 BIP32 非硬化派生 m/i |
-| POST | `/ui/address` | 同上 |
+| GET | `/assets/htmx.min.js` | vendored htmx |
+| GET | `/assets/tw.css` | tailwind 子集(与 admin-ui 同基线,见 §4) |
+| GET | `/login` | 登录表单(仅当 `MPC_WALLET_HTTP_TOKEN` 配置时) |
+| POST | `/session` | 验 token、设 cookie、跳 `/` |
+| POST | `/logout` | 清 cookie、跳回 |
+| GET | `/{$}` | 概览(version、auth 模式、pending 计数;exact-match 根) |
+| GET | `/sign` | 待签列表(id、age、mismatch 标记) |
+| GET | `/sign/{id}` | 待签详情:WYSIWYS A-facts / B-info / mismatch JSON + Approve/Reject |
+| POST | `/sign/{id}/approve` | 通过(htmx 内联交换 → `sign_result`) |
+| POST | `/sign/{id}/reject` | 拒绝 |
+| GET | `/import` | 备份恢复表单(multipart) |
+| POST | `/import` | 处理 ExportShare 备份,$MPC_WALLET_PASSPHRASE 必备 |
+| GET | `/fetch` | 经 coord 查询交易信息(只读) |
+| POST | `/fetch` | 同上 |
+| GET | `/xpub` | 拉 owning-member xpub(只读,memberGate) |
+| POST | `/xpub` | 同上 |
+| GET | `/address` | 离线 BIP32 非硬化派生 m/i |
+| POST | `/address` | 同上 |
+| GET | `/api/v1/{health,version,…}` | 机器调用面(同操作的 JSON 等价端点),详见 `httpapi.go` |
 
 ## 3. 鉴权与会话
 
 - **Token 模式**(`MPC_WALLET_HTTP_TOKEN` 设):
-  - 浏览器从 `/ui/login` 提交 token → POST `/ui/session` 常时比较 → 派生
-    256-bit 随机 sid → `Set-Cookie: wallet_ui_sid=<sid>; Path=/ui;
+  - 浏览器从 `/login` 提交 token → POST `/session` 常时比较 → 派生
+    256-bit 随机 sid → `Set-Cookie: wallet_ui_sid=<sid>; Path=/;
     HttpOnly; SameSite=Strict; MaxAge=30m`。
   - 后续请求:cookie 或 `Authorization: Bearer <token>` 二选一即放行
     (代理/自动化用 Bearer,人用 cookie)。token 永不回显给浏览器。
-  - Bearer 但 token 不匹配 → `401`(自动化反馈错误);浏览器缺凭据 → `303 → /ui/login`。
+  - Bearer 但 token 不匹配 → `401`(自动化反馈错误);浏览器缺凭据 → `303 → /login`。
 - **无 token 模式**(默认 loopback):JSON guard 已允许无鉴权;UI 同步跳过
-  session 流(`/ui/login` 重定向到 `/ui`),全部路由开放。
+  session 流(`/login` 重定向到 `/`),全部路由开放。
 - **CSRF**:依赖 `SameSite=Strict` cookie + `HttpOnly`;同源策略阻止跨站
   form submission。不引入额外 CSRF token(单租户工具,SameSite=Strict
   已足够;参考 admin-ui 同款决策)。
@@ -76,14 +83,14 @@
 模板与 ui.go 通过 `//go:embed uiassets/htmx.min.js uiassets/tw.css
 uiassets/templates/*.tmpl` 嵌入 Go 二进制,**无独立前端构建**。
 
-## 5. WYSIWYS 流程(`/ui/sign`)
+## 5. WYSIWYS 流程(`/sign`)
 
-1. 操作员或自动化通过 JSON `POST /v1/sign` 提交 START envelope → coord
+1. 操作员或自动化通过 JSON `POST /api/v1/sign` 提交 START envelope → coord
    逻辑跑 prepareSign → 设备侧解码 → 进入 pending 状态(decode 字段持
    入 `pendingSign.decoded` 供 UI 渲染)。
-2. 浏览器 GET `/ui/sign/{id}` 显示 A-facts / B-info / mismatch JSON
+2. 浏览器 GET `/sign/{id}` 显示 A-facts / B-info / mismatch JSON
    pretty-printed;mismatch=`[]` 时显示 `clean` 徽章,非空显 `flagged`。
-3. 操作员 `Approve`:`POST /ui/sign/{id}/approve` → 后端调用
+3. 操作员 `Approve`:`POST /sign/{id}/approve` → 后端调用
    `pendingSign.ss.Approve()` → MPC 跑 → terminal callback 触发 →
    htmx 片段 `sign_result.tmpl` 内联交换显示 RSV(hex)或错误码。
 4. `Reject` 同路径不进 MPC。
@@ -97,7 +104,7 @@ context 取消(`internal/walletcli/ui.go:344-360`)。
 
 UI 仅暴露**只读 + 已存在的批准动作**(同 admin-ui Q1 默认):
 - 待签列表/详情(只读)、approve/reject(已存在 JSON 路径,UI 是视图)
-- 备份导入(`/ui/import`,passphrase env-only,unset 即 disabled fail-fast)
+- 备份导入(`/import`,passphrase env-only,unset 即 disabled fail-fast)
 - 只读查询:fetch、xpub、address(无密钥/无副作用)
 
 **不暴露**:
@@ -149,8 +156,8 @@ UI 仅暴露**只读 + 已存在的批准动作**(同 admin-ui Q1 默认):
 ## 10. 交付历史
 
 - `b36ae4b` 2026-05-20 — htmx 面板 + WYSIWYS sign approval(主轮廓)
-- `3bbe502` 2026-05-20 — `/ui/import` 备份恢复(passphrase env-only)
-- `b6531cc` 2026-05-20 — `/ui/fetch` / `/ui/xpub` / `/ui/address` 只读补全
+- `3bbe502` 2026-05-20 — `/import` 备份恢复(passphrase env-only)
+- `b6531cc` 2026-05-20 — `/fetch` / `/xpub` / `/address` 只读补全
 
 所有 hard gates GREEN:gofmt / build / vet / race `-timeout=1200s` 19/19
 packages / golangci-lint walletcli 0 issues。

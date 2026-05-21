@@ -44,7 +44,11 @@ var uiFS embed.FS
 
 const (
 	uiCookieName = "admin_ui_sid"
-	uiPathPrefix = "/admin/ui"
+	// uiRoot is the htmx panel's root; JSON API lives under "/api/*"
+	// (see server.go). One origin, two prefixes — keeps reverse-proxy
+	// routing trivial and the cookie scope clean ("/" for both).
+	uiRoot       = "/"
+	uiLoginPath  = "/login"
 	uiSessionTTL = 30 * time.Minute
 )
 
@@ -156,22 +160,23 @@ func (s *Server) newUI() *uiHandler {
 // s.guard (which mandates a bearer): the panel uses uiAuth (StrongAuth +
 // session-or-bearer). netGate already wraps the whole mux in router().
 func (h *uiHandler) register(mux *http.ServeMux) {
-	mux.HandleFunc("GET /admin/ui/assets/htmx.min.js", h.asset("uiassets/htmx.min.js", "text/javascript"))
-	mux.HandleFunc("GET /admin/ui/assets/tw.css", h.asset("uiassets/tw.css", "text/css"))
+	mux.HandleFunc("GET /assets/htmx.min.js", h.asset("uiassets/htmx.min.js", "text/javascript"))
+	mux.HandleFunc("GET /assets/tw.css", h.asset("uiassets/tw.css", "text/css"))
 
-	mux.Handle("GET /admin/ui/login", h.strong(http.HandlerFunc(h.hLogin)))
-	mux.Handle("POST /admin/ui/session", h.strong(http.HandlerFunc(h.hSession)))
-	mux.Handle("POST /admin/ui/logout", h.strong(http.HandlerFunc(h.hLogout)))
+	mux.Handle("GET /login", h.strong(http.HandlerFunc(h.hLogin)))
+	mux.Handle("POST /session", h.strong(http.HandlerFunc(h.hSession)))
+	mux.Handle("POST /logout", h.strong(http.HandlerFunc(h.hLogout)))
 
 	// Dashboard is reachable under LOCKED (admin.md §8: only lock state).
-	mux.Handle("GET /admin/ui", h.auth(http.HandlerFunc(h.hIndex)))
-	mux.Handle("GET /admin/ui/", h.auth(http.HandlerFunc(h.hIndex)))
+	// Use "/{$}" (Go 1.22 exact match) so the bare root resolves to the
+	// dashboard without swallowing /api/* and other prefixes.
+	mux.Handle("GET /{$}", h.auth(http.HandlerFunc(h.hIndex)))
 
 	// Data pages fail closed under LOCKED via the shared s.lockGate.
-	mux.Handle("GET /admin/ui/transactions", h.auth(h.s.lockGate(http.HandlerFunc(h.hTxList))))
-	mux.Handle("GET /admin/ui/transactions/{requestId}", h.auth(h.s.lockGate(http.HandlerFunc(h.hTxDetail))))
-	mux.Handle("GET /admin/ui/audit", h.auth(h.s.lockGate(http.HandlerFunc(h.hAuditPage))))
-	mux.Handle("GET /admin/ui/relay", h.auth(h.s.lockGate(http.HandlerFunc(h.hRelayPage))))
+	mux.Handle("GET /transactions", h.auth(h.s.lockGate(http.HandlerFunc(h.hTxList))))
+	mux.Handle("GET /transactions/{requestId}", h.auth(h.s.lockGate(http.HandlerFunc(h.hTxDetail))))
+	mux.Handle("GET /audit", h.auth(h.s.lockGate(http.HandlerFunc(h.hAuditPage))))
+	mux.Handle("GET /relay", h.auth(h.s.lockGate(http.HandlerFunc(h.hRelayPage))))
 }
 
 // strong runs the StrongAuth seam (admin.md §4) when wired, threading the
@@ -211,7 +216,7 @@ func (h *uiHandler) auth(next http.Handler) http.Handler {
 			h.fail(w, r, http.StatusUnauthorized, "invalid token")
 			return
 		}
-		http.Redirect(w, r, uiPathPrefix+"/login", http.StatusSeeOther)
+		http.Redirect(w, r, uiLoginPath, http.StatusSeeOther)
 	}))
 }
 
@@ -252,7 +257,7 @@ func (h *uiHandler) hSession(w http.ResponseWriter, r *http.Request) {
 	read := subtle.ConstantTimeCompare([]byte(tok), []byte(h.s.cfg.ReadToken)) == 1
 	if !ctrl && !read {
 		h.s.log.Warn("admin-ui login rejected", "src", clientIP(r))
-		http.Redirect(w, r, uiPathPrefix+"/login?e=1", http.StatusSeeOther)
+		http.Redirect(w, r, uiLoginPath+"?e=1", http.StatusSeeOther)
 		return
 	}
 	sid, err := h.sess.create()
@@ -263,13 +268,13 @@ func (h *uiHandler) hSession(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     uiCookieName,
 		Value:    sid,
-		Path:     uiPathPrefix,
+		Path:     uiRoot,
 		HttpOnly: true,
 		Secure:   h.s.tlsCfg != nil,
 		SameSite: http.SameSiteStrictMode,
 		MaxAge:   int(uiSessionTTL.Seconds()),
 	})
-	http.Redirect(w, r, uiPathPrefix, http.StatusSeeOther)
+	http.Redirect(w, r, uiRoot, http.StatusSeeOther)
 }
 
 func (h *uiHandler) hLogout(w http.ResponseWriter, r *http.Request) {
@@ -277,10 +282,10 @@ func (h *uiHandler) hLogout(w http.ResponseWriter, r *http.Request) {
 		h.sess.drop(c.Value)
 	}
 	http.SetCookie(w, &http.Cookie{
-		Name: uiCookieName, Value: "", Path: uiPathPrefix,
+		Name: uiCookieName, Value: "", Path: uiRoot,
 		HttpOnly: true, SameSite: http.SameSiteStrictMode, MaxAge: -1,
 	})
-	http.Redirect(w, r, uiPathPrefix+"/login", http.StatusSeeOther)
+	http.Redirect(w, r, uiLoginPath, http.StatusSeeOther)
 }
 
 // --- read pages ----------------------------------------------------------

@@ -42,7 +42,7 @@ MPC_COORD_DB_PATH="/var/lib/mcp/coord.db" \
 ```bash
 curl -X POST -u "admin:<bearer>" \
   -d '{"passphrase":"<operator passphrase>"}' \
-  https://<admin-host>/admin/unlock
+  https://<admin-host>/api/unlock
 ```
 
 口令仅经此交互入,**不入配置 / env / KMS / 日志**;内存驻留;`relock` 或 idle
@@ -87,8 +87,8 @@ coord:
 
 合并部署后 admin-ui 自动随 admin-api 进程对外:
 
-- `GET https://<admin-host>:8090/admin/ui/login` → 提交 read/control token
-- 主页 `…/admin/ui`:LOCKED 态可达(仅显锁定);UNLOCKED 后显示 Transactions / Audit / Relay 卡片。
+- `GET https://<admin-host>:8090/login` → 提交 read/control token
+- 主页 `/`:LOCKED 态可达(仅显锁定);UNLOCKED 后显示 Transactions / Audit / Relay 卡片。
 - 受 `s.netGate`(IP allowlist)+ StrongAuth seam(mTLS/OIDC 可注入)保护。
 
 详见 `docs/design/server/admin.md` §3-§5。
@@ -301,22 +301,22 @@ export MPC_WALLET_HTTP_TOKEN="<bearer>"   # 非 loopback 必需
 ```
 
 JSON API(等价 shell 命令):
-- `GET /v1/health` / `GET /v1/version`
-- `POST /v1/keygen` `{Threshold, Parties}`
-- `POST /v1/reshare` `{OldThreshold, NewThreshold, NewParties}`
-- `POST /v1/import` `{blob: base64}` / `POST /v1/export` `{moniker}`
-- `POST /v1/sign` `{start: <coord START JSON>}` → `{id, aFacts, bInfo, mismatch}`
-- `POST /v1/sign/{id}/approve` 或 `/reject` → `{rsv}` 或 `{error}`
-- `POST /v1/fetch` (body = req JSON) → coord 交易信息
-- `POST /v1/wire` `{msg: base64}` → 手动灌 MPC 消息(测试通道)
+- `GET /api/v1/health` / `GET /api/v1/version`
+- `POST /api/v1/keygen` `{Threshold, Parties}`
+- `POST /api/v1/reshare` `{OldThreshold, NewThreshold, NewParties}`
+- `POST /api/v1/import` `{blob: base64}` / `POST /api/v1/export` `{moniker}`
+- `POST /api/v1/sign` `{start: <coord START JSON>}` → `{id, aFacts, bInfo, mismatch}`
+- `POST /api/api/v1/sign/{id}/approve` 或 `/reject` → `{rsv}` 或 `{error}`
+- `POST /api/v1/fetch` (body = req JSON) → coord 交易信息
+- `POST /api/v1/wire` `{msg: base64}` → 手动灌 MPC 消息(测试通道)
 
-### 6.3 htmx 检查面板(`/ui/*`)
+### 6.3 htmx 检查面板(根路径 `/*`,API 在 `/api/v1/*`)
 
 浏览器访问 `http://127.0.0.1:8787/ui`(或带 token):
 - `/ui` 概览(version、auth、pending count)
-- `/ui/sign` 待签列表 → `/ui/sign/{id}` WYSIWYS 详情 + Approve/Reject
-- `/ui/import` 备份恢复表单(passphrase 经 env;UI 禁经 HTTP 输入)
-- `/ui/fetch` / `/ui/xpub` / `/ui/address` 只读查询
+- `/sign` 待签列表 → `/sign/{id}` WYSIWYS 详情 + Approve/Reject
+- `/import` 备份恢复表单(passphrase 经 env;UI 禁经 HTTP 输入)
+- `/fetch` / `/xpub` / `/address` 只读查询
 
 **WYSIWYS 不变量**:UI 与 JSON 共用同一 pendingSign + signSession;UI 是 JSON
 的可视化封装,**不是另一条审批渠道**。详见 `docs/design/mcp/walletcli-ui.md`。
@@ -374,7 +374,7 @@ wallet> export m0 backup-m0.bin
 
 # Import(恢复到另一设备 / 另一进程)
 MPC_WALLET_PASSPHRASE="..." wallet> import backup-m0.bin
-# 或经 UI:/ui/import 上传 backup-m0.bin
+# 或经 UI:/import 上传 backup-m0.bin
 ```
 
 ExportShare 用口令派生密钥(Argon2id 强度,见 keystore.go)对称封装,**绝不**明
@@ -397,7 +397,7 @@ ExportShare 用口令派生密钥(Argon2id 强度,见 keystore.go)对称封装,*
 
 | 错误码 | 含义 | 处置 |
 |---|---|---|
-| `503 LOCKED` | coord 库未解锁 | admin POST `/admin/unlock` 输入口令 |
+| `503 LOCKED` | coord 库未解锁 | admin POST `/api/unlock` 输入口令 |
 | `400 INVALID_ENVELOPE` | proposerSig 无效 / metaHash 不匹配 / expiry 过期 | 重新构造信封;检查时钟同步 |
 | `404 NOT_FOUND` | groupId / requestId 未知 | 先 A1 申请地址 / 检查 requestId |
 | `409 STATE_CONFLICT` | 状态机不允许的迁移(R7 violation / 重复 commit) | 不应重试;检查业务逻辑 |

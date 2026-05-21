@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <title>admin-ui · {{.Active}}</title>
-<link rel="stylesheet" href="/admin/ui/assets/tw.css">
-<script src="/admin/ui/assets/htmx.min.js" defer></script>
+<link rel="stylesheet" href="/assets/tw.css">
+<script src="/assets/htmx.min.js" defer></script>
 </head>
 <body class="min-h-screen">
 <div class="mx-auto max-w-6xl p-6">{{end}}
@@ -18,11 +18,11 @@
     <span class="badge">read-only</span>
   </div>
   <nav class="flex gap-3 text-sm">
-    <a href="/admin/ui" class="{{if eq .Active "home"}}text-sky-400 font-semibold{{else}}text-slate-300{{end}}">Overview</a>
-    <a href="/admin/ui/transactions" class="{{if eq .Active "tx"}}text-sky-400 font-semibold{{else}}text-slate-300{{end}}">Transactions</a>
-    <a href="/admin/ui/audit" class="{{if eq .Active "audit"}}text-sky-400 font-semibold{{else}}text-slate-300{{end}}">Audit</a>
-    <a href="/admin/ui/relay" class="{{if eq .Active "relay"}}text-sky-400 font-semibold{{else}}text-slate-300{{end}}">Relay</a>
-    <form method="post" action="/admin/ui/logout" class="inline-flex"><button class="text-slate-400" type="submit">Sign out</button></form>
+    <a href="/" class="{{if eq .Active "home"}}text-sky-400 font-semibold{{else}}text-slate-300{{end}}">Overview</a>
+    <a href="/transactions" class="{{if eq .Active "tx"}}text-sky-400 font-semibold{{else}}text-slate-300{{end}}">Transactions</a>
+    <a href="/audit" class="{{if eq .Active "audit"}}text-sky-400 font-semibold{{else}}text-slate-300{{end}}">Audit</a>
+    <a href="/relay" class="{{if eq .Active "relay"}}text-sky-400 font-semibold{{else}}text-slate-300{{end}}">Relay</a>
+    <form method="post" action="/logout" class="inline-flex"><button class="text-slate-400" type="submit">Sign out</button></form>
   </nav>
 </header>{{end}}
 

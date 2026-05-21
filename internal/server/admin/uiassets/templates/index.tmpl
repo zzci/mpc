@@ -6,15 +6,15 @@
   <span class="badge badge-ok">UNLOCKED</span>
 </div>
 <div class="grid grid-cols-3 gap-4">
-  <a href="/admin/ui/transactions" class="card">
+  <a href="/transactions" class="card">
     <div class="text-lg font-semibold text-slate-100 mb-2">Transactions</div>
     <div class="text-sm text-slate-400">Signing requests &amp; full lifecycle: status timeline, signers, approvals, result {R,S,V}, elapsed.</div>
   </a>
-  <a href="/admin/ui/audit" class="card">
+  <a href="/audit" class="card">
     <div class="text-lg font-semibold text-slate-100 mb-2">Audit</div>
     <div class="text-sm text-slate-400">Append-only admin_audit trail (read-only; never mutable from this panel).</div>
   </a>
-  <a href="/admin/ui/relay" class="card">
+  <a href="/relay" class="card">
     <div class="text-lg font-semibold text-slate-100 mb-2">Relay</div>
     <div class="text-sm text-slate-400">Relay connection / reservation / forward counts &amp; reject reasons (no payload).</div>
   </a>
@@ -25,13 +25,13 @@
     <span class="text-xl font-bold text-slate-100">admin-ui</span>
     <span class="badge badge-locked">LOCKED</span>
   </div>
-  <form method="post" action="/admin/ui/logout" class="inline-flex"><button class="text-slate-400" type="submit">Sign out</button></form>
+  <form method="post" action="/logout" class="inline-flex"><button class="text-slate-400" type="submit">Sign out</button></form>
 </header>
 <div class="card">
   <div class="text-lg font-semibold text-amber-400 mb-2">Store is LOCKED</div>
   <p class="text-sm text-slate-400">No §1 data is available until the coord store is unlocked. Per admin.md §8 this
   panel exposes only the lock state before unlock. Unlock is a privileged control
-  operation performed via <code class="font-mono">POST /admin/unlock</code> with the control
+  operation performed via <code class="font-mono">POST /api/unlock</code> with the control
   credential; it is intentionally <strong>not</strong> exposed in this read-only panel
   (admin.md §3, Q1 default).</p>
 </div>

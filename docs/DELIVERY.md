@@ -76,9 +76,9 @@ bb6bfee feat(mpc,cli): post-DKG chaincode commit-reveal + E2E whitelist sweep (A
 
 | 批次 | 范围 | 提交 |
 |---|---|---|
-| 主轮廓 | htmx 面板 + WYSIWYS sign approval(`/ui` / `/ui/sign/{id}` / Approve / Reject) | `b36ae4b` |
+| 主轮廓 | htmx 面板 + WYSIWYS sign approval(`/` / `/sign/{id}` / Approve / Reject) | `b36ae4b` |
 | import | 备份恢复(passphrase env-only;UI 禁止经 HTTP 输入 passphrase) | `3bbe502` |
-| 只读补全 | `/ui/fetch` / `/ui/xpub` / `/ui/address`(coord 查询 + 离线派生) | `b6531cc` |
+| 只读补全 | `/fetch` / `/xpub` / `/address`(coord 查询 + 离线派生) | `b6531cc` |
 
 设计参考:`docs/design/mcp/walletcli-ui.md`(新增,与 admin-ui 关系区分)。
 

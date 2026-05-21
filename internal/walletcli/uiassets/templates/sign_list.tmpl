@@ -11,7 +11,7 @@
       <td class="font-mono">{{short .ID}}</td>
       <td>{{sinceMS .CreatedAt}}</td>
       <td>{{if and .Mismatch (ne .Mismatch "[]") (ne .Mismatch "null")}}<span class="badge badge-warn">flagged</span>{{else}}<span class="badge badge-ok">clean</span>{{end}}</td>
-      <td><a class="btn btn-ghost" href="/ui/sign/{{.ID}}">Review</a></td>
+      <td><a class="btn btn-ghost" href="/sign/{{.ID}}">Review</a></td>
     </tr>
   {{end}}
   </tbody>

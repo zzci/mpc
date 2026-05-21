@@ -62,16 +62,20 @@ func serveHTTP(args []string) int {
 	srv.ui = newUI(srv)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/v1/health", srv.guard(srv.health))
-	mux.HandleFunc("/v1/version", srv.guard(srv.versionH))
-	mux.HandleFunc("/v1/keygen", srv.guard(srv.keygenH))
-	mux.HandleFunc("/v1/reshare", srv.guard(srv.reshareH))
-	mux.HandleFunc("/v1/import", srv.guard(srv.importH))
-	mux.HandleFunc("/v1/export", srv.guard(srv.exportH))
-	mux.HandleFunc("/v1/fetch", srv.guard(srv.fetchH))
-	mux.HandleFunc("/v1/wire", srv.guard(srv.wireH))
-	mux.HandleFunc("/v1/sign", srv.guard(srv.signH))
-	mux.HandleFunc("/v1/sign/", srv.guard(srv.signDecisionH))
+	// JSON API surface: every machine-facing route lives under /api/v1/*.
+	// The bare root (and every other path) is the htmx UI (default for a
+	// browser navigation). This split lets routers in front (load balancer
+	// / reverse proxy) route by simple prefix.
+	mux.HandleFunc("/api/v1/health", srv.guard(srv.health))
+	mux.HandleFunc("/api/v1/version", srv.guard(srv.versionH))
+	mux.HandleFunc("/api/v1/keygen", srv.guard(srv.keygenH))
+	mux.HandleFunc("/api/v1/reshare", srv.guard(srv.reshareH))
+	mux.HandleFunc("/api/v1/import", srv.guard(srv.importH))
+	mux.HandleFunc("/api/v1/export", srv.guard(srv.exportH))
+	mux.HandleFunc("/api/v1/fetch", srv.guard(srv.fetchH))
+	mux.HandleFunc("/api/v1/wire", srv.guard(srv.wireH))
+	mux.HandleFunc("/api/v1/sign", srv.guard(srv.signH))
+	mux.HandleFunc("/api/v1/sign/", srv.guard(srv.signDecisionH))
 	srv.ui.register(mux)
 
 	hs := &http.Server{
@@ -375,7 +379,7 @@ func (h *httpServer) signDecisionH(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, http.StatusMethodNotAllowed, "POST required")
 		return
 	}
-	rest := strings.TrimPrefix(r.URL.Path, "/v1/sign/")
+	rest := strings.TrimPrefix(r.URL.Path, "/api/v1/sign/")
 	id, action, found := strings.Cut(rest, "/")
 	if !found || (action != "approve" && action != "reject") {
 		httpErr(w, http.StatusNotFound, "want /v1/sign/{id}/approve|reject")

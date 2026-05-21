@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <title>wallet-cli · {{.Active}}</title>
-<link rel="stylesheet" href="/ui/assets/tw.css">
-<script src="/ui/assets/htmx.min.js" defer></script>
+<link rel="stylesheet" href="/assets/tw.css">
+<script src="/assets/htmx.min.js" defer></script>
 </head>
 <body class="min-h-screen">
 <div class="mx-auto max-w-6xl p-6">{{end}}
@@ -18,19 +18,19 @@
     <span class="badge">WYSIWYS</span>
   </div>
   <nav class="flex gap-3 text-sm">
-    <a href="/ui" class="{{if eq .Active "home"}}text-sky-400 font-semibold{{else}}text-slate-300{{end}}">Overview</a>
-    <a href="/ui/sign" class="{{if eq .Active "sign"}}text-sky-400 font-semibold{{else}}text-slate-300{{end}}">Pending signs</a>
-    <a href="/ui/fetch" class="{{if eq .Active "fetch"}}text-sky-400 font-semibold{{else}}text-slate-300{{end}}">Fetch</a>
-    <a href="/ui/xpub" class="{{if eq .Active "xpub"}}text-sky-400 font-semibold{{else}}text-slate-300{{end}}">Xpub</a>
-    <a href="/ui/address" class="{{if eq .Active "address"}}text-sky-400 font-semibold{{else}}text-slate-300{{end}}">Address</a>
-    <a href="/ui/import" class="{{if eq .Active "import"}}text-sky-400 font-semibold{{else}}text-slate-300{{end}}">Import</a>
-    {{if .AuthEnabled}}<form method="post" action="/ui/logout" class="inline-flex"><button class="text-slate-400" type="submit">Sign out</button></form>{{end}}
+    <a href="/" class="{{if eq .Active "home"}}text-sky-400 font-semibold{{else}}text-slate-300{{end}}">Overview</a>
+    <a href="/sign" class="{{if eq .Active "sign"}}text-sky-400 font-semibold{{else}}text-slate-300{{end}}">Pending signs</a>
+    <a href="/fetch" class="{{if eq .Active "fetch"}}text-sky-400 font-semibold{{else}}text-slate-300{{end}}">Fetch</a>
+    <a href="/xpub" class="{{if eq .Active "xpub"}}text-sky-400 font-semibold{{else}}text-slate-300{{end}}">Xpub</a>
+    <a href="/address" class="{{if eq .Active "address"}}text-sky-400 font-semibold{{else}}text-slate-300{{end}}">Address</a>
+    <a href="/import" class="{{if eq .Active "import"}}text-sky-400 font-semibold{{else}}text-slate-300{{end}}">Import</a>
+    {{if .AuthEnabled}}<form method="post" action="/logout" class="inline-flex"><button class="text-slate-400" type="submit">Sign out</button></form>{{end}}
   </nav>
 </header>{{end}}
 
 {{define "foot"}}
 <footer class="mt-6 text-xs text-slate-500 text-center">
-  wallet-cli panel · approve / reject is the only mutating action; keygen / reshare / import / export remain JSON-only (/v1/*).
+  wallet-cli panel · approve / reject is the only mutating action; keygen / reshare / export remain JSON-only (/api/v1/*).
 </footer>
 </div>
 </body>

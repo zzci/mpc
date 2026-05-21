@@ -1,7 +1,7 @@
 {{define "tx_detail.tmpl"}}{{template "head" .}}{{template "nav" .}}
 {{with .D}}
 <div class="flex items-center gap-3 mb-4">
-  <a href="/admin/ui/transactions" class="text-slate-400 text-sm">&larr; Transactions</a>
+  <a href="/transactions" class="text-slate-400 text-sm">&larr; Transactions</a>
   <h1 class="text-xl font-bold text-slate-100 font-mono">{{.RequestID}}</h1>
   <span class="badge {{statusClass .Status}}">{{.Status}}</span>
 </div>

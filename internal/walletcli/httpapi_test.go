@@ -50,12 +50,12 @@ func TestServeHTTPNonLoopbackNeedsToken(t *testing.T) {
 func TestGuardToken(t *testing.T) {
 	h := testServer(t, "s3cret")
 	rec := httptest.NewRecorder()
-	h.guard(h.health)(rec, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/health", nil))
+	h.guard(h.health)(rec, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/health", nil))
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("no token: code = %d, want 401", rec.Code)
 	}
 	rec = httptest.NewRecorder()
-	r := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/health", nil)
+	r := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/health", nil)
 	r.Header.Set("Authorization", "Bearer s3cret")
 	h.guard(h.health)(rec, r)
 	if rec.Code != http.StatusOK {
@@ -66,7 +66,7 @@ func TestGuardToken(t *testing.T) {
 func TestHealthVersionOpenOnLoopback(t *testing.T) {
 	h := testServer(t, "") // no token
 	rec := httptest.NewRecorder()
-	h.guard(h.versionH)(rec, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/version", nil))
+	h.guard(h.versionH)(rec, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/version", nil))
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "wallet-cli") {
 		t.Fatalf("version = %d %q", rec.Code, rec.Body.String())
 	}
@@ -75,7 +75,7 @@ func TestHealthVersionOpenOnLoopback(t *testing.T) {
 func TestMethodEnforced(t *testing.T) {
 	h := testServer(t, "")
 	rec := httptest.NewRecorder()
-	h.keygenH(rec, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/keygen", nil))
+	h.keygenH(rec, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/keygen", nil))
 	if rec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("GET keygen = %d, want 405", rec.Code)
 	}
@@ -84,7 +84,7 @@ func TestMethodEnforced(t *testing.T) {
 func TestBadJSONBody(t *testing.T) {
 	h := testServer(t, "")
 	rec := httptest.NewRecorder()
-	h.keygenH(rec, httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/keygen", strings.NewReader("{not json")))
+	h.keygenH(rec, httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/keygen", strings.NewReader("{not json")))
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("bad json = %d, want 400", rec.Code)
 	}
@@ -94,7 +94,7 @@ func TestPassphraseGuardHTTP(t *testing.T) {
 	t.Setenv(passphraseEnv, "")
 	h := testServer(t, "")
 	rec := httptest.NewRecorder()
-	h.keygenH(rec, httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/keygen", strings.NewReader(`{"Threshold":1,"Parties":3}`)))
+	h.keygenH(rec, httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/keygen", strings.NewReader(`{"Threshold":1,"Parties":3}`)))
 	if rec.Code != http.StatusPreconditionFailed {
 		t.Fatalf("missing passphrase = %d, want 412", rec.Code)
 	}
@@ -104,7 +104,7 @@ func TestImportBadBase64(t *testing.T) {
 	t.Setenv(passphraseEnv, "pw")
 	h := testServer(t, "")
 	rec := httptest.NewRecorder()
-	h.importH(rec, httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/import", strings.NewReader(`{"blob":"@@@"}`)))
+	h.importH(rec, httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/import", strings.NewReader(`{"blob":"@@@"}`)))
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("bad base64 = %d, want 400", rec.Code)
 	}
@@ -113,7 +113,7 @@ func TestImportBadBase64(t *testing.T) {
 func TestSignMissingStart(t *testing.T) {
 	h := testServer(t, "")
 	rec := httptest.NewRecorder()
-	h.signH(rec, httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/sign", strings.NewReader(`{}`)))
+	h.signH(rec, httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/sign", strings.NewReader(`{}`)))
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("missing start = %d, want 400", rec.Code)
 	}
@@ -122,12 +122,12 @@ func TestSignMissingStart(t *testing.T) {
 func TestSignDecisionUnknownID(t *testing.T) {
 	h := testServer(t, "")
 	rec := httptest.NewRecorder()
-	h.signDecisionH(rec, httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/sign/deadbeef/approve", nil))
+	h.signDecisionH(rec, httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/sign/deadbeef/approve", nil))
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("unknown sign id = %d, want 404", rec.Code)
 	}
 	rec = httptest.NewRecorder()
-	h.signDecisionH(rec, httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/sign/x/bogus", nil))
+	h.signDecisionH(rec, httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/sign/x/bogus", nil))
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("bad action = %d, want 404", rec.Code)
 	}

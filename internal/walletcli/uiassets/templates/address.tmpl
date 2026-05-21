@@ -3,8 +3,8 @@
 <h1 class="text-xl font-bold text-slate-100 mb-4">Derive ETH / BSC / TRON address (offline)</h1>
 <div class="card mb-4" style="max-width:46rem">
   <p class="text-sm text-slate-400 mb-4">BIP32 non-hardened derivation <code class="font-mono">m/&lt;i&gt;</code> from a previously-fetched group xpub. Entirely offline — the input xpub stays in this process, no network call, no passphrase needed (chaincode is part of the xpub JSON).</p>
-  <form method="post" action="/ui/address"
-        hx-post="/ui/address" hx-target="#address-result" hx-swap="innerHTML"
+  <form method="post" action="/address"
+        hx-post="/address" hx-target="#address-result" hx-swap="innerHTML"
         class="flex flex-col gap-3">
     <div class="flex gap-3 items-center">
       <label class="text-sm text-slate-400">Index (i)</label>

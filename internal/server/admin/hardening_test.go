@@ -74,12 +74,12 @@ func TestNetGate_AllowlistEnforced(t *testing.T) {
 	h := s.router()
 
 	// In-allowlist source with a valid read token → reaches the handler.
-	if w, _ := doFrom(t, h, "GET", "/admin/lock-status", "127.0.0.1:5555", readTok, ""); w.Code != http.StatusOK {
+	if w, _ := doFrom(t, h, "GET", "/api/lock-status", "127.0.0.1:5555", readTok, ""); w.Code != http.StatusOK {
 		t.Fatalf("allowed source: got %d want 200", w.Code)
 	}
 	// Out-of-allowlist source → 403 even with a valid token (netGate is
 	// outermost, fail-closed before auth).
-	if w, _ := doFrom(t, h, "GET", "/admin/lock-status", "192.0.2.7:5555", controlTok, ""); w.Code != http.StatusForbidden {
+	if w, _ := doFrom(t, h, "GET", "/api/lock-status", "192.0.2.7:5555", controlTok, ""); w.Code != http.StatusForbidden {
 		t.Fatalf("blocked source w/ token: got %d want 403", w.Code)
 	}
 	// Out-of-allowlist source with no token → still 403 (boundary precedes auth).
@@ -87,7 +87,7 @@ func TestNetGate_AllowlistEnforced(t *testing.T) {
 		t.Fatalf("blocked source no token: got %d want 403", w.Code)
 	}
 	// Malformed RemoteAddr → not parseable → denied.
-	if w, _ := doFrom(t, h, "GET", "/admin/lock-status", "garbage", readTok, ""); w.Code != http.StatusForbidden {
+	if w, _ := doFrom(t, h, "GET", "/api/lock-status", "garbage", readTok, ""); w.Code != http.StatusForbidden {
 		t.Fatalf("unparseable source: got %d want 403", w.Code)
 	}
 }
@@ -109,7 +109,7 @@ func TestStrongAuth_EnforcedAndAttributed(t *testing.T) {
 	h := s.router()
 
 	// Strong-auth failure → 401 before the scope check, no data.
-	r := httptest.NewRequestWithContext(context.Background(), "GET", "/admin/lock-status", nil)
+	r := httptest.NewRequestWithContext(context.Background(), "GET", "/api/lock-status", nil)
 	r.Header.Set("Authorization", "Bearer "+readTok)
 	r.Header.Set("X-Fail", "1")
 	w := httptest.NewRecorder()
@@ -120,10 +120,10 @@ func TestStrongAuth_EnforcedAndAttributed(t *testing.T) {
 
 	// Strong-auth pass: a control op is attributed to the verified principal
 	// in admin_audit, not the token-scope label.
-	if w, _ := do(t, h, "POST", "/admin/controls/ban-peer", controlTok, `{"peerId":"p"}`); w.Code != http.StatusAccepted {
+	if w, _ := do(t, h, "POST", "/api/controls/ban-peer", controlTok, `{"peerId":"p"}`); w.Code != http.StatusAccepted {
 		t.Fatalf("ban: got %d want 202", w.Code)
 	}
-	_, m := do(t, h, "GET", "/admin/audit", readTok, "")
+	_, m := do(t, h, "GET", "/api/audit", readTok, "")
 	items := m["items"].([]any)
 	if len(items) != 1 {
 		t.Fatalf("want 1 audit row, got %d", len(items))
@@ -142,7 +142,7 @@ func TestUnlock_InflightRejected(t *testing.T) {
 	// Simulate an unlock already in progress by holding the inflight lock.
 	s.unlock.inflight.Lock()
 	defer s.unlock.inflight.Unlock()
-	w, _ := do(t, h, "POST", "/admin/unlock", controlTok, `{"passphrase":"`+testPass+`"}`)
+	w, _ := do(t, h, "POST", "/api/unlock", controlTok, `{"passphrase":"`+testPass+`"}`)
 	if w.Code != http.StatusTooManyRequests {
 		t.Fatalf("concurrent unlock: got %d want 429", w.Code)
 	}
@@ -163,7 +163,7 @@ func TestUnlock_BruteForceEscalationAlarm(t *testing.T) {
 	}
 
 	for i := 0; i < maxUnlockFailures; i++ {
-		if w, _ := do(t, h, "POST", "/admin/unlock", controlTok, `{"passphrase":"WRONG"}`); w.Code != http.StatusUnauthorized {
+		if w, _ := do(t, h, "POST", "/api/unlock", controlTok, `{"passphrase":"WRONG"}`); w.Code != http.StatusUnauthorized {
 			t.Fatalf("attempt %d: got %d want 401", i, w.Code)
 		}
 		clk.advance(unlockBackoffCap) // clear backoff so the next attempt runs

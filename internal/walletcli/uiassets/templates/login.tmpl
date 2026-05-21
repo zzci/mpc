@@ -4,7 +4,7 @@
     <h1 class="text-xl font-bold text-slate-100 mb-2">wallet-cli sign in</h1>
     <p class="text-sm text-slate-400 mb-4">Present the HTTP bearer token configured on this server ($MPC_WALLET_HTTP_TOKEN).</p>
     {{if .Error}}<p class="badge badge-err mb-4">Invalid credential</p>{{end}}
-    <form method="post" action="/ui/session" class="flex flex-col gap-3">
+    <form method="post" action="/session" class="flex flex-col gap-3">
       <input class="input w-full" type="password" name="token" placeholder="wallet HTTP token" autocomplete="off" autofocus required>
       <button class="btn" type="submit">Sign in</button>
     </form>

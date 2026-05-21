@@ -54,12 +54,18 @@ coord 进程经 API 本就接收信封明文(必须,才能入待签列表/编排
   IP allowlist);与外部业务服务、成员 API 端口隔离(`coord.admin.listen` ≠
   `coord.external.listen` ≠ `coord.member.listen`)。
 - 单一全局管理员(非每组);组级别可见性通过查询过滤,不引入组管理员角色。
-- 路由表(实测,`internal/server/admin/ui.go:158-174`):
-  - 静态资产:`GET /admin/ui/assets/{htmx.min.js,tw.css}`
-  - 鉴权:`GET /admin/ui/login`、`POST /admin/ui/session`、`POST /admin/ui/logout`
-  - 仪表盘(LOCKED 可达):`GET /admin/ui` / `GET /admin/ui/`
-  - 数据页(LOCKED fail-closed):`GET /admin/ui/transactions` /
-    `/admin/ui/transactions/{requestId}` / `/admin/ui/audit` / `/admin/ui/relay`
+- 路由表(实测,`internal/server/admin/`):
+  - JSON API(`server.go:103-118`):`POST /api/{unlock,relock}`、
+    `GET /api/lock-status`、`GET /api/transactions{,/<requestId>}`、
+    `GET /api/audit`、`GET /api/relay/metrics`、
+    `POST /api/controls/{ban-peer,revoke-reservation,rotate-psk,quota}`
+  - htmx UI(`ui.go:158-174`):
+    - 静态资产:`GET /assets/{htmx.min.js,tw.css}`
+    - 鉴权:`GET /login`、`POST /session`、`POST /logout`
+    - 仪表盘(LOCKED 可达):`GET /`(exact match `/{$}`)
+    - 数据页(LOCKED fail-closed):`GET /transactions{,/<requestId>}` /
+      `/audit` / `/relay`
+  - 健康检查:`GET /healthz`
 
 ## 6. 数据来源
 

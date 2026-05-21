@@ -87,10 +87,13 @@ func New(cfg Config, store *coorddb.Store, opts ...Option) (*Server, error) {
 
 // router builds the admin HTTP surface. Wrapper order is outermost→innermost:
 // netGate (IP allowlist) → auth (strong-auth + scope) → lockGate
-// (data/control only) → handler. /healthz,
-// /admin/unlock and /admin/lock-status are reachable under LOCKED
-// (admin.md §8: only unlock + minimal status before unlock); every other
-// endpoint fail-closes 503 LOCKED while the store is locked.
+// (data/control only) → handler.
+//
+// Layout: every JSON endpoint lives under /api/*; the bare root and every
+// non-api path is the htmx panel (see ui.go). /healthz, /api/unlock and
+// /api/lock-status are reachable under LOCKED (admin.md §8: only unlock +
+// minimal status before unlock); every other endpoint fail-closes 503
+// LOCKED while the store is locked.
 func (s *Server) router() http.Handler {
 	mux := http.NewServeMux()
 
@@ -100,22 +103,22 @@ func (s *Server) router() http.Handler {
 	})
 
 	// Reachable under LOCKED (no encrypted-store data).
-	mux.Handle("POST /admin/unlock", s.guard(scopeControl, http.HandlerFunc(s.hUnlock)))
-	mux.Handle("POST /admin/relock", s.guard(scopeControl, http.HandlerFunc(s.hRelock)))
-	mux.Handle("GET /admin/lock-status", s.guard(scopeRead, http.HandlerFunc(s.hLockStatus)))
+	mux.Handle("POST /api/unlock", s.guard(scopeControl, http.HandlerFunc(s.hUnlock)))
+	mux.Handle("POST /api/relock", s.guard(scopeControl, http.HandlerFunc(s.hRelock)))
+	mux.Handle("GET /api/lock-status", s.guard(scopeRead, http.HandlerFunc(s.hLockStatus)))
 
 	// Read-only queries (scopeRead) — fail-closed 503 under LOCKED.
-	mux.Handle("GET /admin/transactions", s.guard(scopeRead, s.lockGate(http.HandlerFunc(s.hTransactions))))
-	mux.Handle("GET /admin/transactions/{requestId}", s.guard(scopeRead, s.lockGate(http.HandlerFunc(s.hTransactionDetail))))
-	mux.Handle("GET /admin/audit", s.guard(scopeRead, s.lockGate(http.HandlerFunc(s.hAudit))))
-	mux.Handle("GET /admin/relay/metrics", s.guard(scopeRead, s.lockGate(http.HandlerFunc(s.hRelayMetrics))))
+	mux.Handle("GET /api/transactions", s.guard(scopeRead, s.lockGate(http.HandlerFunc(s.hTransactions))))
+	mux.Handle("GET /api/transactions/{requestId}", s.guard(scopeRead, s.lockGate(http.HandlerFunc(s.hTransactionDetail))))
+	mux.Handle("GET /api/audit", s.guard(scopeRead, s.lockGate(http.HandlerFunc(s.hAudit))))
+	mux.Handle("GET /api/relay/metrics", s.guard(scopeRead, s.lockGate(http.HandlerFunc(s.hRelayMetrics))))
 
 	// Abuse controls (scopeControl) — fail-closed 503 under LOCKED (the
 	// directive must land in the encrypted admin_audit).
-	mux.Handle("POST /admin/controls/ban-peer", s.guard(scopeControl, s.lockGate(http.HandlerFunc(s.hBanPeer))))
-	mux.Handle("POST /admin/controls/revoke-reservation", s.guard(scopeControl, s.lockGate(http.HandlerFunc(s.hRevokeReservation))))
-	mux.Handle("POST /admin/controls/rotate-psk", s.guard(scopeControl, s.lockGate(http.HandlerFunc(s.hRotatePSK))))
-	mux.Handle("POST /admin/controls/quota", s.guard(scopeControl, s.lockGate(http.HandlerFunc(s.hSetQuota))))
+	mux.Handle("POST /api/controls/ban-peer", s.guard(scopeControl, s.lockGate(http.HandlerFunc(s.hBanPeer))))
+	mux.Handle("POST /api/controls/revoke-reservation", s.guard(scopeControl, s.lockGate(http.HandlerFunc(s.hRevokeReservation))))
+	mux.Handle("POST /api/controls/rotate-psk", s.guard(scopeControl, s.lockGate(http.HandlerFunc(s.hRotatePSK))))
+	mux.Handle("POST /api/controls/quota", s.guard(scopeControl, s.lockGate(http.HandlerFunc(s.hSetQuota))))
 
 	// admin-ui (UI-001): read-only htmx+tailwind SSR panel served in-process
 	// (admin.md §3). It registers under the same mux so s.netGate (§5) wraps

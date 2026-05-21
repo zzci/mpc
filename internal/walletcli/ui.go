@@ -37,7 +37,11 @@ var uiFS embed.FS
 
 const (
 	uiCookieName = "wallet_ui_sid"
-	uiPathPrefix = "/ui"
+	// uiRoot is where the htmx panel lives — the request root. The JSON
+	// API is segregated under "/api/v1/*" (see httpapi.go) so a reverse
+	// proxy or load balancer can route by simple prefix.
+	uiRoot       = "/"
+	uiLoginPath  = "/login"
 	uiSessionTTL = 30 * time.Minute
 )
 
@@ -140,27 +144,29 @@ func newUI(s *httpServer) *uiHandler {
 }
 
 func (h *uiHandler) register(mux *http.ServeMux) {
-	mux.HandleFunc("GET /ui/assets/htmx.min.js", h.asset("uiassets/htmx.min.js", "text/javascript"))
-	mux.HandleFunc("GET /ui/assets/tw.css", h.asset("uiassets/tw.css", "text/css"))
+	mux.HandleFunc("GET /assets/htmx.min.js", h.asset("uiassets/htmx.min.js", "text/javascript"))
+	mux.HandleFunc("GET /assets/tw.css", h.asset("uiassets/tw.css", "text/css"))
 
-	mux.HandleFunc("GET /ui/login", h.hLogin)
-	mux.HandleFunc("POST /ui/session", h.hSession)
-	mux.HandleFunc("POST /ui/logout", h.hLogout)
+	mux.HandleFunc("GET /login", h.hLogin)
+	mux.HandleFunc("POST /session", h.hSession)
+	mux.HandleFunc("POST /logout", h.hLogout)
 
-	mux.Handle("GET /ui", h.auth(http.HandlerFunc(h.hIndex)))
-	mux.Handle("GET /ui/", h.auth(http.HandlerFunc(h.hIndex)))
-	mux.Handle("GET /ui/sign", h.auth(http.HandlerFunc(h.hSignList)))
-	mux.Handle("GET /ui/sign/{id}", h.auth(http.HandlerFunc(h.hSignDetail)))
-	mux.Handle("POST /ui/sign/{id}/approve", h.auth(http.HandlerFunc(h.hSignApprove)))
-	mux.Handle("POST /ui/sign/{id}/reject", h.auth(http.HandlerFunc(h.hSignReject)))
-	mux.Handle("GET /ui/import", h.auth(http.HandlerFunc(h.hImportForm)))
-	mux.Handle("POST /ui/import", h.auth(http.HandlerFunc(h.hImport)))
-	mux.Handle("GET /ui/fetch", h.auth(http.HandlerFunc(h.hFetchForm)))
-	mux.Handle("POST /ui/fetch", h.auth(http.HandlerFunc(h.hFetch)))
-	mux.Handle("GET /ui/xpub", h.auth(http.HandlerFunc(h.hXpubForm)))
-	mux.Handle("POST /ui/xpub", h.auth(http.HandlerFunc(h.hXpub)))
-	mux.Handle("GET /ui/address", h.auth(http.HandlerFunc(h.hAddressForm)))
-	mux.Handle("POST /ui/address", h.auth(http.HandlerFunc(h.hAddress)))
+	// Index uses "/{$}" (Go 1.22+ exact-match) so the bare root resolves
+	// to the dashboard without swallowing sibling routes (which "/" as a
+	// prefix pattern would). Sub-paths each have their own handlers.
+	mux.Handle("GET /{$}", h.auth(http.HandlerFunc(h.hIndex)))
+	mux.Handle("GET /sign", h.auth(http.HandlerFunc(h.hSignList)))
+	mux.Handle("GET /sign/{id}", h.auth(http.HandlerFunc(h.hSignDetail)))
+	mux.Handle("POST /sign/{id}/approve", h.auth(http.HandlerFunc(h.hSignApprove)))
+	mux.Handle("POST /sign/{id}/reject", h.auth(http.HandlerFunc(h.hSignReject)))
+	mux.Handle("GET /import", h.auth(http.HandlerFunc(h.hImportForm)))
+	mux.Handle("POST /import", h.auth(http.HandlerFunc(h.hImport)))
+	mux.Handle("GET /fetch", h.auth(http.HandlerFunc(h.hFetchForm)))
+	mux.Handle("POST /fetch", h.auth(http.HandlerFunc(h.hFetch)))
+	mux.Handle("GET /xpub", h.auth(http.HandlerFunc(h.hXpubForm)))
+	mux.Handle("POST /xpub", h.auth(http.HandlerFunc(h.hXpub)))
+	mux.Handle("GET /address", h.auth(http.HandlerFunc(h.hAddressForm)))
+	mux.Handle("POST /address", h.auth(http.HandlerFunc(h.hAddress)))
 }
 
 // authNeeded reports whether the panel currently requires a session/bearer.
@@ -188,7 +194,7 @@ func (h *uiHandler) auth(next http.Handler) http.Handler {
 			h.fail(w, r, http.StatusUnauthorized, "invalid token")
 			return
 		}
-		http.Redirect(w, r, uiPathPrefix+"/login", http.StatusSeeOther)
+		http.Redirect(w, r, uiLoginPath, http.StatusSeeOther)
 	})
 }
 
@@ -213,7 +219,7 @@ func (h *uiHandler) asset(name, ctype string) http.HandlerFunc {
 
 func (h *uiHandler) hLogin(w http.ResponseWriter, r *http.Request) {
 	if !h.authNeeded() {
-		http.Redirect(w, r, uiPathPrefix, http.StatusSeeOther)
+		http.Redirect(w, r, uiRoot, http.StatusSeeOther)
 		return
 	}
 	h.render(w, r, "login.tmpl", map[string]any{"Error": r.URL.Query().Get("e") != ""})
@@ -221,7 +227,7 @@ func (h *uiHandler) hLogin(w http.ResponseWriter, r *http.Request) {
 
 func (h *uiHandler) hSession(w http.ResponseWriter, r *http.Request) {
 	if !h.authNeeded() {
-		http.Redirect(w, r, uiPathPrefix, http.StatusSeeOther)
+		http.Redirect(w, r, uiRoot, http.StatusSeeOther)
 		return
 	}
 	if err := r.ParseForm(); err != nil {
@@ -230,7 +236,7 @@ func (h *uiHandler) hSession(w http.ResponseWriter, r *http.Request) {
 	}
 	tok := r.PostFormValue("token")
 	if subtle.ConstantTimeCompare([]byte(tok), []byte(h.s.token)) != 1 {
-		http.Redirect(w, r, uiPathPrefix+"/login?e=1", http.StatusSeeOther)
+		http.Redirect(w, r, uiLoginPath+"?e=1", http.StatusSeeOther)
 		return
 	}
 	sid, err := h.sess.create()
@@ -241,12 +247,12 @@ func (h *uiHandler) hSession(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     uiCookieName,
 		Value:    sid,
-		Path:     uiPathPrefix,
+		Path:     uiRoot,
 		HttpOnly: true,
 		SameSite: http.SameSiteStrictMode,
 		MaxAge:   int(uiSessionTTL.Seconds()),
 	})
-	http.Redirect(w, r, uiPathPrefix, http.StatusSeeOther)
+	http.Redirect(w, r, uiRoot, http.StatusSeeOther)
 }
 
 func (h *uiHandler) hLogout(w http.ResponseWriter, r *http.Request) {
@@ -254,12 +260,12 @@ func (h *uiHandler) hLogout(w http.ResponseWriter, r *http.Request) {
 		h.sess.drop(c.Value)
 	}
 	http.SetCookie(w, &http.Cookie{
-		Name: uiCookieName, Value: "", Path: uiPathPrefix,
+		Name: uiCookieName, Value: "", Path: uiRoot,
 		HttpOnly: true, SameSite: http.SameSiteStrictMode, MaxAge: -1,
 	})
-	target := uiPathPrefix
+	target := uiRoot
 	if h.authNeeded() {
-		target = uiPathPrefix + "/login"
+		target = uiLoginPath
 	}
 	http.Redirect(w, r, target, http.StatusSeeOther)
 }

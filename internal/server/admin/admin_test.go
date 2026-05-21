@@ -133,23 +133,23 @@ func TestAuth_ScopeSeparation(t *testing.T) {
 	h := s.router()
 
 	// no token → 401
-	if w, _ := do(t, h, "GET", "/admin/transactions", "", ""); w.Code != http.StatusUnauthorized {
+	if w, _ := do(t, h, "GET", "/api/transactions", "", ""); w.Code != http.StatusUnauthorized {
 		t.Fatalf("no token: got %d want 401", w.Code)
 	}
 	// read token on read endpoint → ok
-	if w, _ := do(t, h, "GET", "/admin/transactions", readTok, ""); w.Code != http.StatusOK {
+	if w, _ := do(t, h, "GET", "/api/transactions", readTok, ""); w.Code != http.StatusOK {
 		t.Fatalf("read token read: got %d want 200", w.Code)
 	}
 	// read token on control endpoint → 403 (separation)
-	if w, _ := do(t, h, "POST", "/admin/controls/rotate-psk", readTok, ""); w.Code != http.StatusForbidden {
+	if w, _ := do(t, h, "POST", "/api/controls/rotate-psk", readTok, ""); w.Code != http.StatusForbidden {
 		t.Fatalf("read token control: got %d want 403", w.Code)
 	}
 	// control token implies read
-	if w, _ := do(t, h, "GET", "/admin/transactions", controlTok, ""); w.Code != http.StatusOK {
+	if w, _ := do(t, h, "GET", "/api/transactions", controlTok, ""); w.Code != http.StatusOK {
 		t.Fatalf("control token read: got %d want 200", w.Code)
 	}
 	// bogus token → 401
-	if w, _ := do(t, h, "GET", "/admin/transactions", "nope", ""); w.Code != http.StatusUnauthorized {
+	if w, _ := do(t, h, "GET", "/api/transactions", "nope", ""); w.Code != http.StatusUnauthorized {
 		t.Fatalf("bad token: got %d want 401", w.Code)
 	}
 }
@@ -169,13 +169,13 @@ func TestLocked_FailClosedAndUnlockRelock(t *testing.T) {
 	h := s.router()
 
 	// LOCKED: data + control 503; health + lock-status + unlock reachable.
-	if w, _ := do(t, h, "GET", "/admin/transactions", readTok, ""); w.Code != http.StatusServiceUnavailable {
+	if w, _ := do(t, h, "GET", "/api/transactions", readTok, ""); w.Code != http.StatusServiceUnavailable {
 		t.Fatalf("locked data: got %d want 503", w.Code)
 	}
-	if w, _ := do(t, h, "POST", "/admin/controls/rotate-psk", controlTok, ""); w.Code != http.StatusServiceUnavailable {
+	if w, _ := do(t, h, "POST", "/api/controls/rotate-psk", controlTok, ""); w.Code != http.StatusServiceUnavailable {
 		t.Fatalf("locked control: got %d want 503", w.Code)
 	}
-	if w, m := do(t, h, "GET", "/admin/lock-status", readTok, ""); w.Code != http.StatusOK || m["locked"] != true {
+	if w, m := do(t, h, "GET", "/api/lock-status", readTok, ""); w.Code != http.StatusOK || m["locked"] != true {
 		t.Fatalf("lock-status under LOCKED: %d %v", w.Code, m)
 	}
 	if w, _ := do(t, h, "GET", "/healthz", "", ""); w.Code != http.StatusOK {
@@ -183,21 +183,21 @@ func TestLocked_FailClosedAndUnlockRelock(t *testing.T) {
 	}
 
 	// Unlock (creates the encrypted db) → UNLOCKED, data served.
-	if w, m := do(t, h, "POST", "/admin/unlock", controlTok, `{"passphrase":"`+testPass+`"}`); w.Code != http.StatusOK || m["locked"] != false {
+	if w, m := do(t, h, "POST", "/api/unlock", controlTok, `{"passphrase":"`+testPass+`"}`); w.Code != http.StatusOK || m["locked"] != false {
 		t.Fatalf("unlock: %d %v", w.Code, m)
 	}
 	if !store.IsUnlocked() {
 		t.Fatal("store should be UNLOCKED")
 	}
-	if w, _ := do(t, h, "GET", "/admin/transactions", readTok, ""); w.Code != http.StatusOK {
+	if w, _ := do(t, h, "GET", "/api/transactions", readTok, ""); w.Code != http.StatusOK {
 		t.Fatalf("post-unlock data: got %d want 200", w.Code)
 	}
 
 	// Relock → LOCKED again, data 503.
-	if w, m := do(t, h, "POST", "/admin/relock", controlTok, ""); w.Code != http.StatusOK || m["locked"] != true {
+	if w, m := do(t, h, "POST", "/api/relock", controlTok, ""); w.Code != http.StatusOK || m["locked"] != true {
 		t.Fatalf("relock: %d %v", w.Code, m)
 	}
-	if w, _ := do(t, h, "GET", "/admin/transactions", readTok, ""); w.Code != http.StatusServiceUnavailable {
+	if w, _ := do(t, h, "GET", "/api/transactions", readTok, ""); w.Code != http.StatusServiceUnavailable {
 		t.Fatalf("post-relock data: got %d want 503", w.Code)
 	}
 }
@@ -214,16 +214,16 @@ func TestUnlock_BadPassphraseRateLimited(t *testing.T) {
 	}
 
 	// Wrong passphrase → 401.
-	if w, _ := do(t, h, "POST", "/admin/unlock", controlTok, `{"passphrase":"WRONG"}`); w.Code != http.StatusUnauthorized {
+	if w, _ := do(t, h, "POST", "/api/unlock", controlTok, `{"passphrase":"WRONG"}`); w.Code != http.StatusUnauthorized {
 		t.Fatalf("bad pass: got %d want 401", w.Code)
 	}
 	// Immediate retry (clock not advanced) → 429 backoff.
-	if w, m := do(t, h, "POST", "/admin/unlock", controlTok, `{"passphrase":"WRONG"}`); w.Code != http.StatusTooManyRequests {
+	if w, m := do(t, h, "POST", "/api/unlock", controlTok, `{"passphrase":"WRONG"}`); w.Code != http.StatusTooManyRequests {
 		t.Fatalf("rate limit: got %d %v want 429", w.Code, m)
 	}
 	// After backoff window, the correct passphrase succeeds.
 	clk.advance(unlockBackoffCap)
-	if w, m := do(t, h, "POST", "/admin/unlock", controlTok, `{"passphrase":"`+testPass+`"}`); w.Code != http.StatusOK || m["locked"] != false {
+	if w, m := do(t, h, "POST", "/api/unlock", controlTok, `{"passphrase":"`+testPass+`"}`); w.Code != http.StatusOK || m["locked"] != false {
 		t.Fatalf("post-backoff unlock: %d %v", w.Code, m)
 	}
 }
@@ -238,7 +238,7 @@ func TestQueries_TransactionsFilterAndDetail(t *testing.T) {
 
 	// Filter by group + status + proposer + time window.
 	w, m := do(t, h, "GET",
-		"/admin/transactions?group=grp-1&status=RETURNED&proposer=prop-1&from=1700000000000&to=1700001000000",
+		"/api/transactions?group=grp-1&status=RETURNED&proposer=prop-1&from=1700000000000&to=1700001000000",
 		readTok, "")
 	if w.Code != http.StatusOK {
 		t.Fatalf("transactions: got %d", w.Code)
@@ -248,12 +248,12 @@ func TestQueries_TransactionsFilterAndDetail(t *testing.T) {
 		t.Fatalf("want 1 item, got %v", m["items"])
 	}
 	// A non-matching proposer filter yields nothing.
-	if _, m2 := do(t, h, "GET", "/admin/transactions?proposer=other", readTok, ""); len(m2["items"].([]any)) != 0 {
+	if _, m2 := do(t, h, "GET", "/api/transactions?proposer=other", readTok, ""); len(m2["items"].([]any)) != 0 {
 		t.Fatalf("proposer filter leaked rows: %v", m2["items"])
 	}
 
 	// Detail: full record + timeline + approvals + result, NO shares anywhere.
-	wd, md := do(t, h, "GET", "/admin/transactions/"+seedReqID, readTok, "")
+	wd, md := do(t, h, "GET", "/api/transactions/"+seedReqID, readTok, "")
 	if wd.Code != http.StatusOK {
 		t.Fatalf("detail: got %d", wd.Code)
 	}
@@ -273,7 +273,7 @@ func TestQueries_TransactionsFilterAndDetail(t *testing.T) {
 		}
 	}
 	// Unknown request → 404.
-	if w404, _ := do(t, h, "GET", "/admin/transactions/nope", readTok, ""); w404.Code != http.StatusNotFound {
+	if w404, _ := do(t, h, "GET", "/api/transactions/nope", readTok, ""); w404.Code != http.StatusNotFound {
 		t.Fatalf("unknown req: got %d want 404", w404.Code)
 	}
 }
@@ -281,7 +281,7 @@ func TestQueries_TransactionsFilterAndDetail(t *testing.T) {
 func TestRelayMetrics_DecoupledNote(t *testing.T) {
 	s, store, _ := newServer(t)
 	unlock(t, store)
-	w, m := do(t, s.router(), "GET", "/admin/relay/metrics", readTok, "")
+	w, m := do(t, s.router(), "GET", "/api/relay/metrics", readTok, "")
 	if w.Code != http.StatusOK || m["available"] != false {
 		t.Fatalf("relay metrics decoupled: %d %v", w.Code, m)
 	}
@@ -303,10 +303,10 @@ func TestControls_EnforcedAuditedAndImmutable(t *testing.T) {
 	h := s.router()
 
 	// Ban + quota propagate to the controller and are audited.
-	if w, m := do(t, h, "POST", "/admin/controls/ban-peer", controlTok, `{"peerId":"12D3Koo"}`); w.Code != http.StatusOK || m["enforced"] != true {
+	if w, m := do(t, h, "POST", "/api/controls/ban-peer", controlTok, `{"peerId":"12D3Koo"}`); w.Code != http.StatusOK || m["enforced"] != true {
 		t.Fatalf("ban: %d %v", w.Code, m)
 	}
-	if w, _ := do(t, h, "POST", "/admin/controls/quota", controlTok, `{"params":{"reservation_per_token":2}}`); w.Code != http.StatusOK {
+	if w, _ := do(t, h, "POST", "/api/controls/quota", controlTok, `{"params":{"reservation_per_token":2}}`); w.Code != http.StatusOK {
 		t.Fatalf("quota: got %d", w.Code)
 	}
 	if rc.banned != 1 || rc.quotas != 1 {
@@ -314,7 +314,7 @@ func TestControls_EnforcedAuditedAndImmutable(t *testing.T) {
 	}
 
 	// admin_audit reflects both ops; there is NO mutate/delete route.
-	w, m := do(t, h, "GET", "/admin/audit", readTok, "")
+	w, m := do(t, h, "GET", "/api/audit", readTok, "")
 	if w.Code != http.StatusOK {
 		t.Fatalf("audit list: %d", w.Code)
 	}
@@ -323,19 +323,19 @@ func TestControls_EnforcedAuditedAndImmutable(t *testing.T) {
 		t.Fatalf("want 2 audit rows, got %d (%v)", len(items), items)
 	}
 	for _, method := range []string{"DELETE", "PUT", "PATCH"} {
-		if wm, _ := do(t, h, method, "/admin/audit", controlTok, ""); wm.Code != http.StatusMethodNotAllowed && wm.Code != http.StatusNotFound {
+		if wm, _ := do(t, h, method, "/api/audit", controlTok, ""); wm.Code != http.StatusMethodNotAllowed && wm.Code != http.StatusNotFound {
 			t.Fatalf("%s /admin/audit must not be routable: got %d", method, wm.Code)
 		}
-		if wm, _ := do(t, h, method, "/admin/audit/1", controlTok, ""); wm.Code != http.StatusMethodNotAllowed && wm.Code != http.StatusNotFound {
+		if wm, _ := do(t, h, method, "/api/audit/1", controlTok, ""); wm.Code != http.StatusMethodNotAllowed && wm.Code != http.StatusNotFound {
 			t.Fatalf("%s /admin/audit/1 must not be routable: got %d", method, wm.Code)
 		}
 	}
 
 	// No-secret discipline: rotate-psk audited without any key material.
-	if w, _ := do(t, h, "POST", "/admin/controls/rotate-psk", controlTok, ""); w.Code != http.StatusOK {
+	if w, _ := do(t, h, "POST", "/api/controls/rotate-psk", controlTok, ""); w.Code != http.StatusOK {
 		t.Fatalf("rotate-psk: got %d", w.Code)
 	}
-	w2, m2 := do(t, h, "GET", "/admin/audit", readTok, "")
+	w2, m2 := do(t, h, "GET", "/api/audit", readTok, "")
 	if w2.Code != http.StatusOK {
 		t.Fatalf("audit list 2: %d", w2.Code)
 	}
@@ -351,11 +351,11 @@ func TestControls_NoControllerStillAudited(t *testing.T) {
 	s, store, _ := newServer(t) // no RelayController
 	unlock(t, store)
 	h := s.router()
-	w, m := do(t, h, "POST", "/admin/controls/ban-peer", controlTok, `{"peerId":"p"}`)
+	w, m := do(t, h, "POST", "/api/controls/ban-peer", controlTok, `{"peerId":"p"}`)
 	if w.Code != http.StatusAccepted || m["recorded"] != true || m["enforced"] != false {
 		t.Fatalf("no-controller ban: %d %v", w.Code, m)
 	}
-	_, ma := do(t, h, "GET", "/admin/audit", readTok, "")
+	_, ma := do(t, h, "GET", "/api/audit", readTok, "")
 	if len(ma["items"].([]any)) != 1 {
 		t.Fatalf("directive not audited: %v", ma)
 	}

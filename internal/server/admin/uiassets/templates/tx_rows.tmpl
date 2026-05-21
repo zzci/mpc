@@ -7,7 +7,7 @@
   <tbody>
   {{range .Items}}
     <tr>
-      <td class="font-mono"><a href="/admin/ui/transactions/{{.RequestID}}">{{short .RequestID}}</a></td>
+      <td class="font-mono"><a href="/transactions/{{.RequestID}}">{{short .RequestID}}</a></td>
       <td class="font-mono">{{short .GroupID}}</td>
       <td>{{.Chain}}</td>
       <td class="font-mono">{{short .Proposer}}</td>
@@ -22,7 +22,7 @@
 </table>
 {{if .NextBefore}}
 <div class="mt-4">
-  <a class="btn btn-ghost" href="/admin/ui/transactions?group={{.F.group}}&amp;proposer={{.F.proposer}}&amp;status={{.F.status}}&amp;before={{.NextBefore}}">Load older</a>
+  <a class="btn btn-ghost" href="/transactions?group={{.F.group}}&amp;proposer={{.F.proposer}}&amp;status={{.F.status}}&amp;before={{.NextBefore}}">Load older</a>
 </div>
 {{end}}
 </div>{{end}}
