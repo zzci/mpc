@@ -11,6 +11,7 @@
     "test:unit": "bun test test/unit",
     "test:e2e": "E2E_LIVE=1 bun test test/e2e",
     "test:e2e-docker": "E2E_DOCKER=1 bun test test/e2e-docker",
+    "test:e2e-dmpc": "E2E_DMPC=1 bun test test/e2e-distributed-mpc/attestation-quorum.test.ts && E2E_DMPC=1 bun test test/e2e-distributed-mpc/keygen-3of3.test.ts && E2E_DMPC=1 bun test test/e2e-distributed-mpc/sign-2of3.test.ts && E2E_DMPC=1 bun test test/e2e-distributed-mpc/reshare.test.ts",
     "test:coverage": "bun test --coverage"
   },
   "dependencies": {

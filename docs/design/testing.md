@@ -78,12 +78,26 @@ DM-6 closure-gate(commit `e70bd75`)产出独立 Bun/TS 套件
   - `realMpcGate()` —— `attestationOnlyGate` + `internal/cli/host_transport.go`
     存在(DM-5 主提交;已在 main)+ **显式开关 `E2E_DMPC=1`**(默认 skip,
     防 CI 误触发长跑)。
-- **用例(4 件)**:
-  - `attestation-quorum.test.ts`:同事务 B11 commit 路径(幂等、INCONSISTENT、R7 violation)
-  - `keygen-3of3.test.ts` / `sign-2of3.test.ts` / `reshare.test.ts`:真 n 方
-    keygen / sign / reshare 经 DM-5 host_transport 跑通。
-- **运行**:`cd tests/e2e && E2E_DMPC=1 bun test test/e2e-distributed-mpc`;
-  默认 CI 跑 attestation-quorum,real-MPC 三件作可选门(operator 主动开启)。
+- **用例(4 文件 / 8 真测)**:
+  - `attestation-quorum.test.ts`:同事务 B11 commit 路径(REGISTERED 幂等 / R7
+    violation 409 / INCONSISTENT no-commit,3 真测)。
+  - `keygen-3of3.test.ts`:3 个独立 OS 进程经真 libp2p Noise + circuit-relay v2
+    跑 tss-lib v3 keygen,断言群密钥跨方一致 + R5 全 relay 路径(1 真测)。
+  - `sign-2of3.test.ts`:positive 路径 t+1=2 协作产 `{R,S,V}` + ecrecover 验
+    至主公钥;degraded 路径单签者超 threshold 不满足,真 tss-lib 拒签(2 真测)。
+  - `reshare.test.ts`:reshare-3-to-3-rotate 主公钥 invariant(1 真测)+
+    reshare-3-to-4 admission B10 直接驱动,陌生身份 → 409
+    `EXPECTED_MEMBER_MISMATCH`(1 真测)。
+- **运行**:
+  - 默认门(仅 attestation-quorum):`cd tests/e2e && bun test test/e2e-distributed-mpc`
+  - 完整真测(含真多进程 keygen/sign/reshare):
+    `cd tests/e2e && bun run test:e2e-dmpc`(等价
+    `E2E_DMPC=1 bun test --max-concurrency=1 test/e2e-distributed-mpc`)。
+    串行化(`--max-concurrency=1`)是必须的:并行启 4 个 ring 会与 sqlcipher /
+    cgo 启动竞争,导致 `/healthz` 超时(参见 `tests/e2e/src/lib/server-process.ts`
+    45s budget 注释)。
+- **验收基线(2026-05-21)**:`8 pass / 4 skip / 0 fail` in ~4 分钟(visibility
+  placeholders 在 gate-ok 时 skip,只在 gate 关闭时显示原因)。
 - **定位**:E2E-001(§3.1)+ E2E-002(§3.3)是回归门(单进程/Docker 仿真);
   e2e-distributed-mpc 是**真分布式实证门**,DM-1..DM-6 闭环硬判据。
 

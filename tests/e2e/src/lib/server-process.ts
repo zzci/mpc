@@ -126,8 +126,16 @@ coord:
   }
 
   await parseRelayStarted(proc, handle)
-  await waitHealthz(handle.coordBaseUrl, 20_000)
-  await waitHealthz(handle.adminBaseUrl, 20_000)
+  // Budget 45s (was 20s): when several E2E files spin up rings concurrently
+  // (the §G distributed-MPC suite is the main culprit) node startup is
+  // disk + cgo + sqlcipher bound and can take longer than the original
+  // single-test budget allowed. 45s is still well under any reasonable
+  // human-visible boundary while making the suite robust against parallel
+  // pressure. Single-test runs feel no change because steady-state startup
+  // is ~1–2s; the budget only matters when the probe is queued behind
+  // sibling node processes.
+  await waitHealthz(handle.coordBaseUrl, 45_000)
+  await waitHealthz(handle.adminBaseUrl, 45_000)
   // FIX-003 §7.1: with whole-DB encryption disabled the store opens
   // UNLOCKED-equivalent (OpenInsecure) — no admin-api unlock step, and a
   // plaintext store rejects Unlock by design. The admin-unlock path remains
