@@ -9,7 +9,8 @@
     "noEmit": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+    "preserveSymlinks": true
   },
   "include": ["src", "index.js"]
 }

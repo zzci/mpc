@@ -9,10 +9,11 @@
   },
   "dependencies": {
     "@mcp/rn-bridge": "file:../bridge",
-    "react": "*",
-    "react-native": "*"
+    "react": "^18.3.1",
+    "react-native": "^0.74.5"
   },
   "devDependencies": {
-    "typescript": "^5.4.0"
+    "@types/react": "^18.3.3",
+    "typescript": "^5.4.5"
   }
 }
