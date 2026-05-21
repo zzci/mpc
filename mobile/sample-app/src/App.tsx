@@ -15,14 +15,16 @@ import { InboxScreen, WalletsScreen, AuditScreen, SettingsScreen } from './scree
 import { OnboardingFlow } from './screens/onboarding';
 import { SdkPanel } from './screens/SdkPanel';
 import { SigningFlow } from './screens/signing';
+import { WalletDetailScreen } from './screens/wallets';
 import { ENVELOPES_NEEDING_SELF } from './data';
-import type { SettingsAction, SigningEnvelope } from './data';
+import type { SettingsAction, SigningEnvelope, Wallet } from './data';
 
 type Route =
   | { readonly kind: 'tabs'; readonly tab: TabId }
   | { readonly kind: 'onboarding' }
   | { readonly kind: 'sdk' }
-  | { readonly kind: 'signing'; readonly envelope: SigningEnvelope };
+  | { readonly kind: 'signing'; readonly envelope: SigningEnvelope }
+  | { readonly kind: 'walletDetail'; readonly wallet: Wallet };
 
 export default function App(): React.JSX.Element {
   return (
@@ -111,6 +113,19 @@ function AppShell(): React.JSX.Element {
     );
   }
 
+  if (route.kind === 'walletDetail') {
+    return (
+      <View style={s.root}>
+        <StatusBar barStyle="light-content" backgroundColor={theme.bg} />
+        <WalletDetailScreen
+          wallet={route.wallet}
+          onBack={() => setRoute({ kind: 'tabs', tab: 'wallets' })}
+          onReshare={() => setRoute({ kind: 'sdk' })}
+        />
+      </View>
+    );
+  }
+
   return (
     <View style={s.root}>
       <StatusBar barStyle="light-content" backgroundColor={theme.bg} />
@@ -125,7 +140,10 @@ function AppShell(): React.JSX.Element {
           <InboxScreen onOpenEnvelope={(env) => setRoute({ kind: 'signing', envelope: env })} />
         ) : null}
         {route.tab === 'wallets' ? (
-          <WalletsScreen onStartKeygen={() => setRoute({ kind: 'sdk' })} />
+          <WalletsScreen
+            onOpenWallet={(wallet) => setRoute({ kind: 'walletDetail', wallet })}
+            onStartKeygen={() => setRoute({ kind: 'sdk' })}
+          />
         ) : null}
         {route.tab === 'audit' ? <AuditScreen /> : null}
         {route.tab === 'settings' ? <SettingsScreen onAction={onSettingsAction} /> : null}
