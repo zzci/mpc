@@ -55,6 +55,48 @@ export interface Strings {
     readonly newWallet: string;
     readonly newWalletSub: string;
   };
+  readonly walletDetail: {
+    readonly title: string;
+    readonly defaultBadge: string;
+    readonly xpubReady: string;
+    readonly xpubPending: string;
+    readonly thresholdHeading: string;
+    readonly thresholdSub: string;
+    readonly membersHeading: string;
+    readonly membersSub: string;
+    readonly addressesHeading: string;
+    readonly addressesSub: string;
+    readonly keyMaterialHeading: string;
+    readonly keyMaterialSub: string;
+    readonly groupIdLabel: string;
+    readonly ecdsaPubkeyLabel: string;
+    readonly chaincodeLabel: string;
+    readonly pathLabel: string;
+    readonly deriveAction: string;
+    readonly deriveActionSub: string;
+    readonly reshareAction: string;
+    readonly reshareActionSub: string;
+    readonly addressCount: string;
+    readonly memberSelfBadge: string;
+    readonly memberLastSeen: string;
+  };
+  readonly derive: {
+    readonly title: string;
+    readonly subtitle: string;
+    readonly chainSection: string;
+    readonly pathSection: string;
+    readonly pathSub: string;
+    readonly previewSection: string;
+    readonly previewSub: string;
+    readonly previewPlaceholder: string;
+    readonly addressLabel: string;
+    readonly addAction: string;
+    readonly addedTitle: string;
+    readonly addedSub: string;
+    readonly closeAction: string;
+    readonly demoNote: string;
+    readonly duplicateNote: string;
+  };
   readonly audit: {
     readonly title: string;
     readonly signed: string;
@@ -298,6 +340,48 @@ const en: Strings = {
     standby: 'standby',
     newWallet: 'New wallet · start keygen',
     newWalletSub: 'Receive DKG config from coord START',
+  },
+  walletDetail: {
+    title: 'Wallet detail',
+    defaultBadge: 'default',
+    xpubReady: 'xpub ready',
+    xpubPending: 'xpub pending',
+    thresholdHeading: 'Quorum',
+    thresholdSub: '{threshold}-of-{parties} signers required',
+    membersHeading: 'Members',
+    membersSub: '{count} parties · {online} online',
+    addressesHeading: 'Addresses',
+    addressesSub: '{count} addresses across {chains} chains',
+    keyMaterialHeading: 'Key material',
+    keyMaterialSub: 'Group public key and chaincode are public; the secret shares stay on each device',
+    groupIdLabel: 'groupId',
+    ecdsaPubkeyLabel: 'ecdsa pubkey',
+    chaincodeLabel: 'chaincode',
+    pathLabel: 'path',
+    deriveAction: 'Derive new address',
+    deriveActionSub: 'Pick a chain and derivation path',
+    reshareAction: 'Reshare',
+    reshareActionSub: 'Rotate shares while keeping the group public key',
+    addressCount: '{count} addresses',
+    memberSelfBadge: 'this device',
+    memberLastSeen: 'last seen {when}',
+  },
+  derive: {
+    title: 'Derive address',
+    subtitle: 'Choose a chain and a path. The address is derived from the existing group public key — no new keygen.',
+    chainSection: 'Chain',
+    pathSection: 'Derivation path',
+    pathSub: 'BIP32-style path. Leave blank to use m/0.',
+    previewSection: 'Preview',
+    previewSub: 'Re-derived locally from chaincode + group pubkey',
+    previewPlaceholder: 'Pick a chain to preview',
+    addressLabel: 'address',
+    addAction: 'Add to wallet',
+    addedTitle: 'Address added',
+    addedSub: 'It is now reachable from this wallet for signing requests.',
+    closeAction: 'Done',
+    demoNote: 'Demo derivation — wired to bridge once exposed',
+    duplicateNote: 'This chain + path is already in the wallet',
   },
   audit: {
     title: 'Audit log',
@@ -550,6 +634,48 @@ const zh: Strings = {
     standby: '待机',
     newWallet: '新建钱包 · 启动 keygen',
     newWalletSub: '从 coord START 接收 DKG 配置',
+  },
+  walletDetail: {
+    title: '钱包详情',
+    defaultBadge: '默认',
+    xpubReady: 'xpub 已就绪',
+    xpubPending: 'xpub 未就绪',
+    thresholdHeading: '法定人数',
+    thresholdSub: '需要 {threshold} / {parties} 方签名',
+    membersHeading: '成员',
+    membersSub: '共 {count} 方 · 在线 {online}',
+    addressesHeading: '地址',
+    addressesSub: '{chains} 条链 · 共 {count} 个地址',
+    keyMaterialHeading: '密钥材料',
+    keyMaterialSub: '组公钥与 chaincode 公开;各方分片永不离开各自设备',
+    groupIdLabel: 'groupId',
+    ecdsaPubkeyLabel: 'ecdsa 公钥',
+    chaincodeLabel: 'chaincode',
+    pathLabel: '派生路径',
+    deriveAction: '派生新地址',
+    deriveActionSub: '选择链与派生路径',
+    reshareAction: '重分片 (reshare)',
+    reshareActionSub: '轮换分片,保持组公钥不变',
+    addressCount: '共 {count} 个地址',
+    memberSelfBadge: '本机',
+    memberLastSeen: '上次活跃 {when}',
+  },
+  derive: {
+    title: '派生地址',
+    subtitle: '选择目标链与派生路径,从现有组公钥重新派生地址 — 无需重新 keygen。',
+    chainSection: '链',
+    pathSection: '派生路径',
+    pathSub: 'BIP32 风格路径,留空时使用 m/0。',
+    previewSection: '预览',
+    previewSub: '由 chaincode + 组公钥在本机重算',
+    previewPlaceholder: '选择一条链查看预览',
+    addressLabel: '地址',
+    addAction: '加入钱包',
+    addedTitle: '已加入',
+    addedSub: '该地址现可在本钱包接收签名请求。',
+    closeAction: '完成',
+    demoNote: '演示派生 — 待 bridge 暴露后接入真实算法',
+    duplicateNote: '该链 + 路径已存在于本钱包',
   },
   audit: {
     title: '审计日志',
