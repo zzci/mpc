@@ -1,147 +1,44 @@
-// Trine Signer sample app shell. Composes the two-theme dark visual system
-// (midnight + onyx), the zh/en i18n provider, four bottom tabs (Inbox /
-// Wallets / Audit / Settings), the multi-step onboarding flow, and a
-// developer panel that keeps the raw SDK keygen / sign / reshare screens
-// reachable for later L3s.
+// Root of the mcp integration example. Opens the device keystore handle
+// once (newSDK), then offers the three MPC flows the SDK exposes. A plain
+// state switch stands in for a navigator — keeping the example minimal and
+// dependency-free (B-005 scope: skeleton structure only, not required to
+// run).
 
-import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, StatusBar } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { SafeAreaView, ScrollView, Text, View, Button } from 'react-native';
 import { newSDK, KEYSTORE_DIR } from './sdk';
-import { BottomTabs, ThemeProvider, useTheme, spacing } from './ui';
-import type { TabId, TabSpec, ThemeTokens } from './ui';
-import { I18nProvider, useI18n } from './i18n';
-import type { Strings } from './i18n';
-import { InboxScreen, WalletsScreen, AuditScreen, SettingsScreen } from './screens/tabs';
-import { OnboardingFlow } from './screens/onboarding';
-import { SdkPanel } from './screens/SdkPanel';
-import { ENVELOPES_NEEDING_SELF } from './data';
-import type { SettingsAction } from './data';
+import KeygenScreen from './screens/KeygenScreen';
+import SignScreen from './screens/SignScreen';
+import ReshareScreen from './screens/ReshareScreen';
 
-type Route =
-  | { readonly kind: 'tabs'; readonly tab: TabId }
-  | { readonly kind: 'onboarding' }
-  | { readonly kind: 'sdk' };
+type Tab = 'keygen' | 'sign' | 'reshare';
 
 export default function App(): React.JSX.Element {
-  return (
-    <I18nProvider initial="zh">
-      <ThemeProvider initial="midnight">
-        <AppShell />
-      </ThemeProvider>
-    </I18nProvider>
-  );
-}
-
-function AppShell(): React.JSX.Element {
-  const theme = useTheme();
-  const { t: T } = useI18n();
-  const s = useMemo(() => makeStyles(theme), [theme]);
-  const [route, setRoute] = useState<Route>({ kind: 'tabs', tab: 'inbox' });
-  const [sdkReady, setSdkReady] = useState(false);
-  const [sdkError, setSdkError] = useState<string | null>(null);
+  const [tab, setTab] = useState<Tab>('keygen');
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    let cancelled = false;
+    // PreParams / MPC run off the UI thread inside Go; newSDK only opens the
+    // keystore-rooted handle (docs/design/mcp/sdk.md §5/§6).
     newSDK(KEYSTORE_DIR)
-      .then(() => {
-        if (!cancelled) setSdkReady(true);
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) setSdkError(getErrorMessage(err));
-      });
-    return () => {
-      cancelled = true;
-    };
+      .then(() => setReady(true))
+      .catch(() => setReady(false));
   }, []);
 
-  const banner = useMemo(() => bannerText(sdkReady, sdkError, T), [sdkReady, sdkError, T]);
-  const tabs = useMemo<ReadonlyArray<TabSpec>>(
-    () => [
-      { id: 'inbox', label: T.tabs.inbox, icon: 'inbox' },
-      { id: 'wallets', label: T.tabs.wallets, icon: 'wallet' },
-      { id: 'audit', label: T.tabs.audit, icon: 'list' },
-      { id: 'settings', label: T.tabs.settings, icon: 'cog' },
-    ],
-    [T],
-  );
-
-  const goTab = (tab: TabId): void => setRoute({ kind: 'tabs', tab });
-
-  const onSettingsAction = (action: SettingsAction): void => {
-    // Foundation handles navigation-bearing kinds only; backup / about
-    // surfaces are deferred to later L3s and are silent no-ops here.
-    if (action.kind === 'onboarding') {
-      setRoute({ kind: 'onboarding' });
-      return;
-    }
-    if (action.kind === 'keygen' || action.kind === 'reshare') {
-      setRoute({ kind: 'sdk' });
-    }
-  };
-
-  if (route.kind === 'onboarding') {
-    return (
-      <View style={s.root}>
-        <StatusBar barStyle="light-content" backgroundColor={theme.bg} />
-        <OnboardingFlow onExit={() => setRoute({ kind: 'tabs', tab: 'inbox' })} />
-      </View>
-    );
-  }
-
-  if (route.kind === 'sdk') {
-    return (
-      <View style={s.root}>
-        <StatusBar barStyle="light-content" backgroundColor={theme.bg} />
-        <SdkPanel onClose={() => setRoute({ kind: 'tabs', tab: 'settings' })} />
-      </View>
-    );
-  }
-
   return (
-    <View style={s.root}>
-      <StatusBar barStyle="light-content" backgroundColor={theme.bg} />
-      {banner ? (
-        <View style={s.banner} accessibilityRole="alert">
-          <Text style={s.bannerText}>{banner}</Text>
+    <SafeAreaView>
+      <ScrollView>
+        <Text>mcp Sample Wallet</Text>
+        <Text>SDK handle: {ready ? 'open' : 'not ready'}</Text>
+        <View>
+          <Button title="Keygen" onPress={() => setTab('keygen')} />
+          <Button title="Sign" onPress={() => setTab('sign')} />
+          <Button title="Reshare" onPress={() => setTab('reshare')} />
         </View>
-      ) : null}
-
-      <View style={s.body}>
-        {route.tab === 'inbox' ? <InboxScreen /> : null}
-        {route.tab === 'wallets' ? (
-          <WalletsScreen onStartKeygen={() => setRoute({ kind: 'sdk' })} />
-        ) : null}
-        {route.tab === 'audit' ? <AuditScreen /> : null}
-        {route.tab === 'settings' ? <SettingsScreen onAction={onSettingsAction} /> : null}
-      </View>
-
-      <BottomTabs active={route.tab} onChange={goTab} inboxBadge={ENVELOPES_NEEDING_SELF} tabs={tabs} />
-    </View>
+        {tab === 'keygen' && <KeygenScreen />}
+        {tab === 'sign' && <SignScreen />}
+        {tab === 'reshare' && <ReshareScreen />}
+      </ScrollView>
+    </SafeAreaView>
   );
-}
-
-function bannerText(ready: boolean, err: string | null, T: Strings): string | null {
-  if (err) return `${T.app.initFailed}: ${err}`;
-  if (!ready) return T.app.initializing;
-  return null;
-}
-
-function getErrorMessage(err: unknown): string {
-  if (err instanceof Error) return err.message;
-  return 'unknown error';
-}
-
-function makeStyles(t: ThemeTokens) {
-  return StyleSheet.create({
-    root: { flex: 1, backgroundColor: t.bg },
-    body: { flex: 1 },
-    banner: {
-      paddingHorizontal: spacing.lg,
-      paddingVertical: spacing.sm,
-      backgroundColor: t.surface2,
-      borderBottomColor: t.hairline,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-    },
-    bannerText: { color: t.text2, fontSize: 12, fontWeight: '600' },
-  });
 }
