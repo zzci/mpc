@@ -4,6 +4,13 @@ TSS MPC 自托管共管钱包的**签名内核**：基于 [tss-lib v3](external/
 
 > 本仓库只负责签名内核与传输/编排骨架；交易构造、广播、质押 calldata 等链上业务逻辑不在范围内。
 
+## 文档入口
+
+- **[架构总览](docs/ARCHITECTURE.md)** — 系统上下文 / 组件 / 部署拓扑 / 时序 / 信任模型 / 安全边界
+- **[交付状态](docs/DELIVERY.md)** — P0-P6 + DM-* + AD-* + cli-ui 实际进度 + 验证方式
+- **[使用指南](docs/USAGE.md)** — 快速开始 / 部署 / A面+B面 API / SDK / wallet-cli / 测试 / 备份
+- **[设计深度](docs/design/)** — 实现者细节(17 篇组件 source-of-truth)
+
 ## 目录结构
 
 | 路径 | 说明 |
