@@ -221,6 +221,133 @@ export interface Strings {
     readonly sign: string;
     readonly reshare: string;
   };
+  readonly keygen: {
+    readonly title: string;
+    readonly intro: string;
+    readonly stepConfigure: string;
+    readonly stepConfigureSub: string;
+    readonly stepConfirm: string;
+    readonly stepConfirmSub: string;
+    readonly stepProgress: string;
+    readonly stepProgressSub: string;
+    readonly stepDone: string;
+    readonly stepError: string;
+    readonly thresholdLabel: string;
+    readonly thresholdSub: string;
+    readonly partiesLabel: string;
+    readonly partiesSub: string;
+    readonly passphraseLabel: string;
+    readonly passphrasePlaceholder: string;
+    readonly passphraseSub: string;
+    readonly quorumPreview: string;
+    readonly factCallback: string;
+    readonly factCallbackSub: string;
+    readonly factGroupPub: string;
+    readonly factGroupPubSub: string;
+    readonly factShareLocal: string;
+    readonly factShareLocalSub: string;
+    readonly factCommittee: string;
+    readonly factCommitteeSub: string;
+    readonly callShape: string;
+    readonly callShapeValue: string;
+    readonly stageHandshake: string;
+    readonly stageHandshakeSub: string;
+    readonly stageCommit: string;
+    readonly stageCommitSub: string;
+    readonly stageShare: string;
+    readonly stageShareSub: string;
+    readonly stageFinalize: string;
+    readonly stageFinalizeSub: string;
+    readonly stagePublish: string;
+    readonly stagePublishSub: string;
+    readonly stageActive: string;
+    readonly stageDone: string;
+    readonly stageWait: string;
+    readonly progressEventLabel: string;
+    readonly resultTitle: string;
+    readonly resultSub: string;
+    readonly resultGroupPubKey: string;
+    readonly resultThreshold: string;
+    readonly resultParties: string;
+    readonly resultMonikers: string;
+    readonly resultMonikersFallback: string;
+    readonly errorTitle: string;
+    readonly errorLaunch: string;
+    readonly bannerLive: string;
+    readonly bannerDemo: string;
+    readonly ctaContinue: string;
+    readonly ctaStart: string;
+    readonly ctaCancel: string;
+    readonly ctaClose: string;
+    readonly ctaRetry: string;
+  };
+  readonly reshare: {
+    readonly title: string;
+    readonly intro: string;
+    readonly invariantTitle: string;
+    readonly invariantBody: string;
+    readonly stepIntro: string;
+    readonly stepIntroSub: string;
+    readonly stepConfigure: string;
+    readonly stepConfigureSub: string;
+    readonly stepConfirm: string;
+    readonly stepConfirmSub: string;
+    readonly stepProgress: string;
+    readonly stepProgressSub: string;
+    readonly stepDone: string;
+    readonly stepError: string;
+    readonly oldThresholdLabel: string;
+    readonly oldThresholdSub: string;
+    readonly newThresholdLabel: string;
+    readonly newThresholdSub: string;
+    readonly newPartiesLabel: string;
+    readonly newPartiesSub: string;
+    readonly passphraseLabel: string;
+    readonly passphrasePlaceholder: string;
+    readonly passphraseSub: string;
+    readonly summaryHeading: string;
+    readonly oldQuorum: string;
+    readonly newQuorum: string;
+    readonly factInvariantPub: string;
+    readonly factInvariantPubSub: string;
+    readonly factInvariantAddr: string;
+    readonly factInvariantAddrSub: string;
+    readonly factRotate: string;
+    readonly factRotateSub: string;
+    readonly factOldWipe: string;
+    readonly factOldWipeSub: string;
+    readonly callShape: string;
+    readonly callShapeValue: string;
+    readonly stagePrepare: string;
+    readonly stagePrepareSub: string;
+    readonly stageDistribute: string;
+    readonly stageDistributeSub: string;
+    readonly stageRecombine: string;
+    readonly stageRecombineSub: string;
+    readonly stageInstall: string;
+    readonly stageInstallSub: string;
+    readonly stageVerify: string;
+    readonly stageVerifySub: string;
+    readonly stageActive: string;
+    readonly stageDone: string;
+    readonly stageWait: string;
+    readonly progressEventLabel: string;
+    readonly resultTitle: string;
+    readonly resultSub: string;
+    readonly resultGroupPubKey: string;
+    readonly resultOldThreshold: string;
+    readonly resultNewThreshold: string;
+    readonly resultNewParties: string;
+    readonly errorTitle: string;
+    readonly errorLaunch: string;
+    readonly bannerLive: string;
+    readonly bannerDemo: string;
+    readonly ctaContinue: string;
+    readonly ctaStart: string;
+    readonly ctaCancel: string;
+    readonly ctaClose: string;
+    readonly ctaRetry: string;
+  };
   readonly backup: {
     readonly exportTitle: string;
     readonly exportIntro: string;
@@ -596,6 +723,136 @@ const en: Strings = {
     keygen: 'Keygen',
     sign: 'Sign',
     reshare: 'Reshare',
+  },
+  keygen: {
+    title: 'New wallet · keygen',
+    intro:
+      'Run a t-of-n ECDSA distributed key generation across the committee. The bridge call shape and callback contract from docs/design/mcp/sdk.md §2 are preserved.',
+    stepConfigure: 'Configure committee',
+    stepConfigureSub: 'Pick the threshold, total parties, and the keystore wrap passphrase for this device.',
+    stepConfirm: 'Confirm and start',
+    stepConfirmSub: 'Re-read the security facts before launching the DKG run.',
+    stepProgress: 'Running keygen',
+    stepProgressSub: 'Distributed key generation in progress across the committee.',
+    stepDone: 'Committee ready',
+    stepError: 'Keygen failed',
+    thresholdLabel: 'Threshold (t)',
+    thresholdSub: 'Minimum signers required to authorize a transaction.',
+    partiesLabel: 'Parties (n)',
+    partiesSub: 'Total participating devices in the committee.',
+    passphraseLabel: 'Keystore passphrase',
+    passphrasePlaceholder: 'At least 4 characters · demo defaults to "demo"',
+    passphraseSub: 'Wraps this device’s newly generated share. Never leaves the device.',
+    quorumPreview: '{threshold}-of-{parties} signers required',
+    factCallback: 'Callback contract',
+    factCallbackSub: 'onProgress* fires zero or more times, then exactly one of onResult or onError terminates the run.',
+    factGroupPub: 'Group public key',
+    factGroupPubSub: 'Surfaced via onResult as a GroupSummary — public, identifies the new committee.',
+    factShareLocal: 'Share stays local',
+    factShareLocalSub: 'Each device emits its share material; nothing crosses the JS bridge in plaintext.',
+    factCommittee: 'Committee identity',
+    factCommitteeSub: 'monikers and groupPubKey arrive together when onResult fires.',
+    callShape: 'Bridge call shape',
+    callShapeValue: 'keyGen({threshold, parties, passphrase}, callbacks) → Promise<void>',
+    stageHandshake: 'Handshake',
+    stageHandshakeSub: 'Discover committee members, agree on session parameters.',
+    stageCommit: 'Round 1 · commitments',
+    stageCommitSub: 'Exchange feldman/paillier commitments across signers.',
+    stageShare: 'Round 2 · shares',
+    stageShareSub: 'Distribute and verify share contributions.',
+    stageFinalize: 'Finalize · group pubkey',
+    stageFinalizeSub: 'Combine commitments into the invariant group public key.',
+    stagePublish: 'Publish · GroupSummary',
+    stagePublishSub: 'Emit onResult with threshold / parties / monikers / groupPubKey.',
+    stageActive: 'running',
+    stageDone: 'done',
+    stageWait: 'queued',
+    progressEventLabel: 'onProgress',
+    resultTitle: 'Committee ready',
+    resultSub: 'GroupSummary received via onResult. The committee can now accept signing requests.',
+    resultGroupPubKey: 'groupPubKey',
+    resultThreshold: 'threshold',
+    resultParties: 'parties',
+    resultMonikers: 'monikers',
+    resultMonikersFallback: '{parties} parties',
+    errorTitle: 'Keygen failed',
+    errorLaunch: 'launch failed: {detail}',
+    bannerLive: 'Live bridge call · keyGen',
+    bannerDemo: 'Demo session · bridge stub returned, callbacks not exercised',
+    ctaContinue: 'Continue',
+    ctaStart: 'Start keygen',
+    ctaCancel: 'Cancel',
+    ctaClose: 'Done',
+    ctaRetry: 'Try again',
+  },
+  reshare: {
+    title: 'Reshare committee',
+    intro:
+      'Rotate the share material onto a new committee while keeping the group public key — and every derived address — unchanged.',
+    invariantTitle: 'Invariant: master pubkey and addresses',
+    invariantBody:
+      'Reshare rebuilds the secret shares on a new committee but keeps groupPubKey and chaincode identical. Every address derived from the wallet stays valid.',
+    stepIntro: 'Read the invariant',
+    stepIntroSub: 'Reshare is the safe way to rotate shares — addresses and the group public key never change.',
+    stepConfigure: 'Configure new committee',
+    stepConfigureSub: 'Old threshold, new threshold, new total parties, and the keystore wrap passphrase.',
+    stepConfirm: 'Confirm and start',
+    stepConfirmSub: 'Re-read the security facts before launching the reshare run.',
+    stepProgress: 'Resharing',
+    stepProgressSub: 'New shares are being recombined and installed across the committee.',
+    stepDone: 'Shares rotated',
+    stepError: 'Reshare failed',
+    oldThresholdLabel: 'Old threshold',
+    oldThresholdSub: 'The threshold of the existing committee.',
+    newThresholdLabel: 'New threshold (t′)',
+    newThresholdSub: 'Threshold for the rotated committee.',
+    newPartiesLabel: 'New parties (n′)',
+    newPartiesSub: 'Total devices in the rotated committee.',
+    passphraseLabel: 'Keystore passphrase',
+    passphrasePlaceholder: 'At least 4 characters · demo defaults to "demo"',
+    passphraseSub: 'Wraps the new share for this device. Never leaves the device.',
+    summaryHeading: 'Committee diff',
+    oldQuorum: 'old · {threshold}-of-{parties}',
+    newQuorum: 'new · {threshold}-of-{parties}',
+    factInvariantPub: 'groupPubKey unchanged',
+    factInvariantPubSub: 'onResult returns the same groupPubKey as the existing committee.',
+    factInvariantAddr: 'Addresses preserved',
+    factInvariantAddrSub: 'Every derived chain address remains valid — no on-chain migration needed.',
+    factRotate: 'Shares rotated',
+    factRotateSub: 'Every device emits new share material; old shares are superseded.',
+    factOldWipe: 'Old shares retired',
+    factOldWipeSub: 'After install completes, the previous committee can no longer assemble a signature.',
+    callShape: 'Bridge call shape',
+    callShapeValue: 'reshare({oldT, newT, newN, passphrase}, callbacks) → Promise<void>',
+    stagePrepare: 'Prepare',
+    stagePrepareSub: 'Lock the existing groupPubKey · open libp2p streams to new committee.',
+    stageDistribute: 'Round 1 · distribute',
+    stageDistributeSub: 'Old committee splits shares for the new committee.',
+    stageRecombine: 'Round 2 · recombine',
+    stageRecombineSub: 'New committee reconstructs share contributions privately.',
+    stageInstall: 'Install · new shares',
+    stageInstallSub: 'Each new device wraps and stores its share under the passphrase KEK.',
+    stageVerify: 'Verify · invariant pubkey',
+    stageVerifySub: 'Confirm onResult.groupPubKey matches the existing committee.',
+    stageActive: 'running',
+    stageDone: 'done',
+    stageWait: 'queued',
+    progressEventLabel: 'onProgress',
+    resultTitle: 'Shares rotated',
+    resultSub: 'Reshare completed. groupPubKey and every derived address are unchanged.',
+    resultGroupPubKey: 'groupPubKey',
+    resultOldThreshold: 'old threshold',
+    resultNewThreshold: 'new threshold',
+    resultNewParties: 'new parties',
+    errorTitle: 'Reshare failed',
+    errorLaunch: 'launch failed: {detail}',
+    bannerLive: 'Live bridge call · reshare',
+    bannerDemo: 'Demo session · bridge stub returned, callbacks not exercised',
+    ctaContinue: 'Continue',
+    ctaStart: 'Start reshare',
+    ctaCancel: 'Cancel',
+    ctaClose: 'Done',
+    ctaRetry: 'Try again',
   },
   backup: {
     exportTitle: 'Export share backup',
@@ -975,6 +1232,136 @@ const zh: Strings = {
     keygen: 'Keygen',
     sign: '签名',
     reshare: '重分片',
+  },
+  keygen: {
+    title: '新建钱包 · keygen',
+    intro:
+      '在委员会成员之间运行 t-of-n ECDSA 分布式密钥生成。完整保留 docs/design/mcp/sdk.md §2 中的 bridge 调用形态与回调契约。',
+    stepConfigure: '配置委员会',
+    stepConfigureSub: '选择门限、总参与方数,以及本机 keystore 的封装口令。',
+    stepConfirm: '确认并启动',
+    stepConfirmSub: '在启动 DKG 之前,再次核对安全事项。',
+    stepProgress: '正在 keygen',
+    stepProgressSub: '委员会成员协同进行分布式密钥生成。',
+    stepDone: '委员会已就绪',
+    stepError: 'keygen 失败',
+    thresholdLabel: '门限 (t)',
+    thresholdSub: '授权一次签名所需的最少签名人数。',
+    partiesLabel: '参与方 (n)',
+    partiesSub: '本次委员会的总设备数量。',
+    passphraseLabel: 'keystore 口令',
+    passphrasePlaceholder: '至少 4 位 · 演示默认 "demo"',
+    passphraseSub: '用于在本机封装新生成的分片,永不离开设备。',
+    quorumPreview: '需要 {threshold} / {parties} 方签名',
+    factCallback: '回调契约',
+    factCallbackSub: 'onProgress 可触发零次或多次,随后 onResult / onError 之一恰好触发一次以终止本次运行。',
+    factGroupPub: '组公钥',
+    factGroupPubSub: '在 onResult 中以 GroupSummary 返回 — 公开信息,标识新的委员会。',
+    factShareLocal: '分片留在本机',
+    factShareLocalSub: '每台设备各自产出自己的分片材料,任何明文分片都不会跨越 JS bridge。',
+    factCommittee: '委员会身份',
+    factCommitteeSub: 'monikers 与 groupPubKey 会随 onResult 一起返回。',
+    callShape: 'Bridge 调用',
+    callShapeValue: 'keyGen({threshold, parties, passphrase}, callbacks) → Promise<void>',
+    stageHandshake: '握手',
+    stageHandshakeSub: '发现委员会成员,协商会话参数。',
+    stageCommit: '第 1 轮 · 承诺',
+    stageCommitSub: '在签名方之间交换 feldman / paillier 承诺。',
+    stageShare: '第 2 轮 · 分片',
+    stageShareSub: '分发并校验分片贡献。',
+    stageFinalize: '收尾 · 组公钥',
+    stageFinalizeSub: '聚合承诺得到不变的组公钥。',
+    stagePublish: '发布 · GroupSummary',
+    stagePublishSub: '通过 onResult 输出 threshold / parties / monikers / groupPubKey。',
+    stageActive: '进行中',
+    stageDone: '完成',
+    stageWait: '等待',
+    progressEventLabel: 'onProgress',
+    resultTitle: '委员会已就绪',
+    resultSub: 'onResult 返回了 GroupSummary,委员会现在可以接受签名请求。',
+    resultGroupPubKey: 'groupPubKey',
+    resultThreshold: '门限',
+    resultParties: '参与方',
+    resultMonikers: 'monikers',
+    resultMonikersFallback: '{parties} 方',
+    errorTitle: 'keygen 失败',
+    errorLaunch: '启动失败: {detail}',
+    bannerLive: '已绑定 bridge · keyGen',
+    bannerDemo: '演示会话 · bridge 桩返回,未触发回调',
+    ctaContinue: '继续',
+    ctaStart: '开始 keygen',
+    ctaCancel: '取消',
+    ctaClose: '完成',
+    ctaRetry: '重试',
+  },
+  reshare: {
+    title: '重分片委员会',
+    intro:
+      '将分片材料轮换到新的委员会上,保持组公钥以及所有派生地址不变。',
+    invariantTitle: '不变量:主公钥与地址',
+    invariantBody:
+      '重分片在新委员会上重建私钥分片,但 groupPubKey 与 chaincode 保持不变。本钱包派生出的每个地址都会继续生效。',
+    stepIntro: '阅读不变量',
+    stepIntroSub: '重分片是安全的分片轮换方式 — 地址与组公钥永远不变。',
+    stepConfigure: '配置新委员会',
+    stepConfigureSub: '设置旧门限、新门限、新总参与方数以及 keystore 封装口令。',
+    stepConfirm: '确认并启动',
+    stepConfirmSub: '在启动重分片之前,再次核对安全事项。',
+    stepProgress: '重分片中',
+    stepProgressSub: '新分片正在委员会之间重组并安装。',
+    stepDone: '分片已轮换',
+    stepError: '重分片失败',
+    oldThresholdLabel: '旧门限',
+    oldThresholdSub: '现有委员会的门限。',
+    newThresholdLabel: '新门限 (t′)',
+    newThresholdSub: '轮换后委员会的门限。',
+    newPartiesLabel: '新参与方 (n′)',
+    newPartiesSub: '轮换后委员会的总设备数。',
+    passphraseLabel: 'keystore 口令',
+    passphrasePlaceholder: '至少 4 位 · 演示默认 "demo"',
+    passphraseSub: '用于在本机封装新分片,永不离开设备。',
+    summaryHeading: '委员会对比',
+    oldQuorum: '旧 · {threshold} / {parties}',
+    newQuorum: '新 · {threshold} / {parties}',
+    factInvariantPub: 'groupPubKey 不变',
+    factInvariantPubSub: 'onResult 返回的 groupPubKey 与现有委员会保持一致。',
+    factInvariantAddr: '地址保持不变',
+    factInvariantAddrSub: '所有派生的链上地址依然生效,无需任何链上迁移。',
+    factRotate: '分片已轮换',
+    factRotateSub: '每台设备产出新的分片材料,旧分片被取代。',
+    factOldWipe: '旧分片作废',
+    factOldWipeSub: '安装完成后,旧委员会再也无法凑齐一次签名。',
+    callShape: 'Bridge 调用',
+    callShapeValue: 'reshare({oldT, newT, newN, passphrase}, callbacks) → Promise<void>',
+    stagePrepare: '准备',
+    stagePrepareSub: '锁定现有 groupPubKey · 建立到新委员会的 libp2p 流。',
+    stageDistribute: '第 1 轮 · 分发',
+    stageDistributeSub: '旧委员会为新委员会切分分片。',
+    stageRecombine: '第 2 轮 · 重组',
+    stageRecombineSub: '新委员会私下重建分片贡献。',
+    stageInstall: '安装 · 新分片',
+    stageInstallSub: '每台新设备用口令 KEK 封装并存储新分片。',
+    stageVerify: '校验 · 不变的公钥',
+    stageVerifySub: '确认 onResult.groupPubKey 与现有委员会一致。',
+    stageActive: '进行中',
+    stageDone: '完成',
+    stageWait: '等待',
+    progressEventLabel: 'onProgress',
+    resultTitle: '分片已轮换',
+    resultSub: '重分片完成。groupPubKey 与所有派生地址均保持不变。',
+    resultGroupPubKey: 'groupPubKey',
+    resultOldThreshold: '旧门限',
+    resultNewThreshold: '新门限',
+    resultNewParties: '新参与方',
+    errorTitle: '重分片失败',
+    errorLaunch: '启动失败: {detail}',
+    bannerLive: '已绑定 bridge · reshare',
+    bannerDemo: '演示会话 · bridge 桩返回,未触发回调',
+    ctaContinue: '继续',
+    ctaStart: '开始重分片',
+    ctaCancel: '取消',
+    ctaClose: '完成',
+    ctaRetry: '重试',
   },
   backup: {
     exportTitle: '导出分片备份',
