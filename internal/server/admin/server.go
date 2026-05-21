@@ -35,6 +35,10 @@ type Server struct {
 	tlsCfg     *tls.Config  // nil → plaintext (deployment terminates TLS/mTLS)
 	allowNets  []*net.IPNet // empty → no in-process IP allowlist (Start warns)
 
+	// pairing holds the device-enrollment token store + the public coord
+	// base URL embedded in QR contents. store==nil disables the routes.
+	pairing pairingHooks
+
 	httpSrv *http.Server
 }
 
@@ -112,6 +116,17 @@ func (s *Server) router() http.Handler {
 	mux.Handle("GET /api/transactions/{requestId}", s.guard(scopeRead, s.lockGate(http.HandlerFunc(s.hTransactionDetail))))
 	mux.Handle("GET /api/audit", s.guard(scopeRead, s.lockGate(http.HandlerFunc(s.hAudit))))
 	mux.Handle("GET /api/relay/metrics", s.guard(scopeRead, s.lockGate(http.HandlerFunc(s.hRelayMetrics))))
+
+	// Pairing CRUD (scopeControl) — reachable under LOCKED because tokens
+	// are an in-memory bootstrap surface (no encrypted-store dependency).
+	// The QR-render handler streams a PNG so the UI can <img src=…> it
+	// directly without exposing the raw token via the page DOM.
+	if s.pairingEnabled() {
+		mux.Handle("GET /api/pairing", s.guard(scopeControl, http.HandlerFunc(s.hPairingList)))
+		mux.Handle("POST /api/pairing", s.guard(scopeControl, http.HandlerFunc(s.hPairingCreate)))
+		mux.Handle("DELETE /api/pairing/{token}", s.guard(scopeControl, http.HandlerFunc(s.hPairingDelete)))
+		mux.Handle("GET /api/pairing/{token}/qr.png", s.guard(scopeControl, http.HandlerFunc(s.hPairingQR)))
+	}
 
 	// Abuse controls (scopeControl) — fail-closed 503 under LOCKED (the
 	// directive must land in the encrypted admin_audit).

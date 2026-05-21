@@ -88,10 +88,72 @@ coord:
 合并部署后 admin-ui 自动随 admin-api 进程对外:
 
 - `GET https://<admin-host>:8090/login` → 提交 read/control token
-- 主页 `/`:LOCKED 态可达(仅显锁定);UNLOCKED 后显示 Transactions / Audit / Relay 卡片。
+- 主页 `/`:LOCKED 态可达(仅显锁定);UNLOCKED 后显示 Transactions / Audit / Relay / Pairing 卡片。
 - 受 `s.netGate`(IP allowlist)+ StrongAuth seam(mTLS/OIDC 可注入)保护。
 
 详见 `docs/design/server/admin.md` §3-§5。
+
+### 2.4 设备配对(pairing,QR 二维码)
+
+新设备首次接入用 admin-ui `/pairing` 页面生成一次性 token + 二维码,
+设备扫码即可拿到所需的 coord URL + relay 信息并把自身公钥提交给 coord:
+
+1. 运维在 `/pairing` 页面填表生成 token(可选 `groupId` / `label` /
+   `ttlSeconds`,默认 600s,上限 86400s)。
+2. 页面渲染 PNG 二维码,内容是公开 URL
+   `https://<coord>/v1/pairing/<token>/config`。
+3. 新设备扫码 → `GET` 该 URL → 收到
+   `{token, groupId?, label?, expiresAtMs, coordBaseUrl, relayPeerID?, relayAddrs?}`。
+4. 设备本地生成 secp256k1 身份密钥对 → `POST <coord>/v1/pairing/<token>/enroll`,body:
+   `{"identityPubkey": "<33B hex compressed>"}`。
+5. coord 校验 token(单次使用 + 未过期)→ 标记 used + 写 `admin_audit` →
+   返同款 config + 关联 ticket 信息。
+
+**鉴权与安全**:
+- token 32 字节随机(64 hex),URL-path 即鉴权;不需要别的凭据。
+- 单次使用:重复 POST 同 token → `409 STATE_CONFLICT` (consumed);
+- 过期:token 过期 → `409` (expired);
+- 未知:`404 NOT_FOUND`;
+- 公开端点受 `externalRL` 每-IP 限流(P6,挡 brute-force);
+- 不进 QR:**relay PSK / 设备私钥 / admin 令牌**均不出现在 QR 或响应中。
+  QR 仅含 coord 公开端点 URL;relay PSK 须运维另行下发(若使用 PSK)。
+- 全部 create / delete / consume 写入不可篡改的 `admin_audit`。
+
+**运维配置**(`cmd/server` 装配时):
+```go
+pair := server.NewPairingStore(nil)
+coord, _ := coord.New(coordCfg, store, presence,
+    coord.WithPairingStore(pair),
+    coord.WithPairingInfo(coord.PairingPublicInfo{
+        CoordBaseURL: "https://coord.example.com",
+        RelayPeerID:  "12D3KooW...",
+        RelayAddrs:   []string{"/ip4/.../tcp/4001"},
+    }),
+)
+adm, _ := admin.New(admCfg, store,
+    admin.WithPairing(pair, "https://coord.example.com"),
+)
+```
+不配置 `WithPairingInfo` / `WithPairing` → 配对功能整体禁用(`/pairing` 页面
+404,公开端点 404)。
+
+**JSON API**(admin,`scopeControl` 鉴权):
+- `POST /api/pairing` body `{groupId?,label?,ttlSeconds?}` → 201 ticket
+- `GET /api/pairing` → 200 `{items:[…]}`
+- `DELETE /api/pairing/{token}` → 204
+- `GET /api/pairing/{token}/qr.png` → image/png
+
+**公开 coord 端点**(无 API key,token-as-auth):
+- `GET /v1/pairing/{token}/config` → 200 config (preview, 不消耗 token)
+- `POST /v1/pairing/{token}/enroll` body `{identityPubkey, label?}` → 200 config (消耗 token)
+
+**wallet-cli 客户端**:在交互 shell 内
+```bash
+wallet> pair https://coord.example.com/v1/pairing/<token>/config
+{"paired":true,"groupId":"groupA","coordBaseUrl":"https://coord.example.com","identityPubHex":"02..."}
+```
+落地文件 `<keystore-dir>/pair.json` 包含 coord URL、relay 引导信息、本地生成
+的身份密钥对(私钥仅本地,**不**回传 coord),供后续 B 面调用使用。
 
 ## 3. 外部业务服务集成(A 面)
 

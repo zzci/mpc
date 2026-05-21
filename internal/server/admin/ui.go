@@ -91,6 +91,18 @@ var uiFuncs = template.FuncMap{
 			return ""
 		}
 	},
+	// toS turns an int64 unix-ms value into the decimal string msTime
+	// expects, so a template can chain `{{msTime (toS .ExpiresAtMS)}}`
+	// without an intermediate fmt call.
+	"toS": func(n int64) string { return strconv.FormatInt(n, 10) },
+	// shortHex trims a long hex (e.g. an identity pubkey) for compact
+	// table cells while keeping enough characters for visual matching.
+	"shortHex": func(s string) string {
+		if len(s) <= 18 {
+			return s
+		}
+		return s[:10] + "…" + s[len(s)-6:]
+	},
 }
 
 var uiTmpl = template.Must(
@@ -177,6 +189,14 @@ func (h *uiHandler) register(mux *http.ServeMux) {
 	mux.Handle("GET /transactions/{requestId}", h.auth(h.s.lockGate(http.HandlerFunc(h.hTxDetail))))
 	mux.Handle("GET /audit", h.auth(h.s.lockGate(http.HandlerFunc(h.hAuditPage))))
 	mux.Handle("GET /relay", h.auth(h.s.lockGate(http.HandlerFunc(h.hRelayPage))))
+
+	// Pairing console — LOCKED-reachable (tokens live in memory, no
+	// encrypted-store dependency). Hidden from the nav when not wired.
+	if h.s.pairingEnabled() {
+		mux.Handle("GET /pairing", h.auth(http.HandlerFunc(h.hPairingPage)))
+		mux.Handle("POST /pairing", h.auth(http.HandlerFunc(h.hPairingUICreate)))
+		mux.Handle("POST /pairing/{token}/delete", h.auth(http.HandlerFunc(h.hPairingUIDelete)))
+	}
 }
 
 // strong runs the StrongAuth seam (admin.md §4) when wired, threading the

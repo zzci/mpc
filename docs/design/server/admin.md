@@ -59,12 +59,16 @@ coord 进程经 API 本就接收信封明文(必须,才能入待签列表/编排
     `GET /api/lock-status`、`GET /api/transactions{,/<requestId>}`、
     `GET /api/audit`、`GET /api/relay/metrics`、
     `POST /api/controls/{ban-peer,revoke-reservation,rotate-psk,quota}`
+  - **设备配对**(可选,需 `WithPairing` 装配,见 `server/pairing.md`):
+    `POST /api/pairing`、`GET /api/pairing`、`DELETE /api/pairing/{token}`、
+    `GET /api/pairing/{token}/qr.png`(image/png QR)
   - htmx UI(`ui.go:158-174`):
     - 静态资产:`GET /assets/{htmx.min.js,tw.css}`
     - 鉴权:`GET /login`、`POST /session`、`POST /logout`
     - 仪表盘(LOCKED 可达):`GET /`(exact match `/{$}`)
     - 数据页(LOCKED fail-closed):`GET /transactions{,/<requestId>}` /
       `/audit` / `/relay`
+    - 配对页(可选):`GET /pairing`、`POST /pairing`、`POST /pairing/{token}/delete`
   - 健康检查:`GET /healthz`
 
 ## 6. 数据来源

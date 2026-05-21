@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/zzci/mpc/internal/contract"
+	"github.com/zzci/mpc/internal/server"
 	"github.com/zzci/mpc/internal/server/coorddb"
 )
 
@@ -37,6 +38,12 @@ type Coord struct {
 	provisionRL  *rateLimiter
 	externalRL   *rateLimiter // P6: per-IP external (A) surface
 	memberRL     *rateLimiter // P6: per-IP member (B) surface
+
+	// pairing is the shared device-enrollment token store (admin writes,
+	// coord serves the public /v1/pairing/{token}/{config,enroll}).
+	// nil ⇒ feature disabled and the public routes are not registered.
+	pairing     *server.PairingStore
+	pairingInfo PairingPublicInfo
 
 	httpSrv *http.Server
 }

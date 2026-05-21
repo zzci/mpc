@@ -77,19 +77,27 @@ func Run(args []string) int {
 		return 1
 	}
 
-	se := &session{sdk: s, out: os.Stdout, errw: os.Stderr, in: bufio.NewScanner(os.Stdin)}
+	se := &session{
+		sdk:         s,
+		keystoreDir: *ksDir,
+		out:         os.Stdout,
+		errw:        os.Stderr,
+		in:          bufio.NewScanner(os.Stdin),
+	}
 	wf(os.Stderr, "%s — keystore %s. type 'help', 'quit' to exit.\n", version, *ksDir)
 	return se.loop()
 }
 
 // session holds the single long-lived SDK handle and the operator I/O. out
 // carries machine-readable results (JSON / hex); errw carries prompts,
-// progress and errors.
+// progress and errors. keystoreDir is also the persistence root for the
+// pairing record (see pair.go).
 type session struct {
-	sdk  *sdk.SDK
-	out  io.Writer
-	errw io.Writer
-	in   *bufio.Scanner
+	sdk         *sdk.SDK
+	keystoreDir string
+	out         io.Writer
+	errw        io.Writer
+	in          *bufio.Scanner
 }
 
 const helpText = `commands:
@@ -102,6 +110,7 @@ const helpText = `commands:
   xpub <req-file>                fetch this group's HD xpub from coord (B8)
   address <i> <xpub-file>        offline-derive m/<i> ETH/BSC/TRON address
   wire <msg-file>                feed one received MPC wire message
+  pair <config-url>              consume a coord pairing QR (fetch config, POST identity, persist)
   help                           show this help
   quit | exit                    leave the session
 `
@@ -141,6 +150,8 @@ func (se *session) loop() int {
 			se.cmdAddress(rest)
 		case "wire":
 			se.cmdWire(rest)
+		case "pair":
+			se.cmdPair(rest)
 		default:
 			wf(se.errw, "unknown command %q (try 'help')\n", cmd)
 		}

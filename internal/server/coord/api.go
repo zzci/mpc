@@ -69,6 +69,12 @@ func (c *Coord) router() http.Handler {
 	mux.Handle("POST /v1/groups/{groupId}/reshare", c.lockGate(http.HandlerFunc(c.hReshare)))
 	mux.Handle("PUT /v1/groups/{groupId}/attestation", c.lockGate(http.HandlerFunc(c.hAttestation)))
 
+	// Public pairing endpoints (no API-key, no member sig): the path-segment
+	// token IS the authentication. Wrapped in the externalRL per-IP limiter
+	// to shed brute-force token guessing. Available only when a
+	// PairingStore was wired (WithPairingStore); see enroll.go.
+	c.registerPairingRoutes(mux)
+
 	// S-002 — group/membership provisioning (self-attesting payloads).
 	mux.Handle("POST /v1/groups", c.lockGate(c.rateGate(http.HandlerFunc(c.hProvisionGroup))))
 	mux.Handle("POST /v1/groups/{groupId}/membership", c.lockGate(c.rateGate(http.HandlerFunc(c.hMembership))))

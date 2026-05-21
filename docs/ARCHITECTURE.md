@@ -154,6 +154,38 @@ coord 不在 MPC 路径上。
 6. **链无关内核**:库仅产 `{R,S,V}`,构造/广播均外部服务负责。
 7. **R7 公钥 append-only**:`groups.ecdsa_pubkey` 一旦写入永不可改(应用层 + SQLite trigger 二层守卫)。
 
+## 8.bis 设备配对(pairing / QR 引导)
+
+新设备首次加入时(无既有凭据,无 SDK 配置),走**公开配对**:
+
+```
+admin /pairing  ──╮  Create(groupId?, label, ttlSeconds)
+                  ▼                                           ┌─ 设备 ─┐
+            PairingStore  ───── one-time token (64-hex) ────► │ scan  │
+                  ▲                                            │ QR    │
+                  │                                            │       │
+admin /api/pairing/{t}/qr.png  →  PNG QR contains URL          │       │
+                                                                │       │
+GET  /v1/pairing/{t}/config  (PUBLIC, no auth) ────────────►   │ learn │
+                                                                │ ↓     │
+                                          ◄──── identityPub ── │ post  │
+POST /v1/pairing/{t}/enroll  (PUBLIC, token=auth)              │ pair  │
+   → Consume + audit + return config                            └───────┘
+                                                              persist pair.json
+                                                              (coord URL + relay
+                                                               peer/addrs + own
+                                                               identity priv/pub)
+```
+
+- **公开** coord 端点 `GET/POST /v1/pairing/{token}/{config,enroll}`:无 API key,
+  路径 token 即鉴权;每-IP `externalRL` 限流挡 brute-force。
+- **单次使用**:Consume 标记 UsedAt + UsedBy;重放 → 409 `STATE_CONFLICT`。
+- **TTL**:默认 10min,上限 24h。
+- **零敏感数据进 QR**:QR 仅含 coord 公开 URL;relay PSK / admin 凭据 / 设备私钥**永不**在 QR 或公开响应里。
+- **审计**:所有 create / delete / consume 写入 `admin_audit`。
+- **设计文档**:`docs/design/server/pairing.md`(新)、`docs/design/server/admin.md`、
+  `docs/design/contract/api.md` 公开端点节。
+
 ## 9. 安全边界(纵深防御层)
 
 | 层 | 防护 |

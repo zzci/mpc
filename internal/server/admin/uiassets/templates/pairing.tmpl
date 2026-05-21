@@ -1,0 +1,57 @@
+{{define "pairing.tmpl"}}{{template "head" .}}
+{{template "nav" .}}
+<h1 class="text-xl font-bold text-slate-100 mb-4">Device pairing</h1>
+
+{{if .PublicCoordMissing}}
+<div class="card mb-4">
+  <div class="badge badge-warn mb-2">public coord URL not configured</div>
+  <p class="text-sm text-slate-400">QR contents will be a relative path
+  (<code class="font-mono">/v1/pairing/&lt;token&gt;/config</code>) and only
+  resolve on the same host. Wire <code class="font-mono">WithPairing(store,
+  coordBaseURL)</code> in <code class="font-mono">cmd/server</code> to embed
+  a full public URL into the QR.</p>
+</div>
+{{end}}
+
+<div class="card mb-6" style="max-width:36rem">
+  <h2 class="text-lg font-semibold text-slate-100 mb-2">Generate token</h2>
+  <p class="text-sm text-slate-400 mb-4">A pairing token is a single-use,
+  short-lived ticket. A device scanning the corresponding QR will fetch its
+  bootstrap config (coord base URL + relay info) and may POST its identity
+  pubkey to claim the slot.</p>
+  <form method="post" action="/pairing" class="flex flex-col gap-3">
+    <label class="text-sm text-slate-400">Group ID (optional — tags the
+    ticket; group membership is still managed via the existing B-side flow)</label>
+    <input class="input w-full" type="text" name="groupId" placeholder="">
+    <label class="text-sm text-slate-400">Label (operator note, e.g. "Alice's iPhone")</label>
+    <input class="input w-full" type="text" name="label" placeholder="">
+    <label class="text-sm text-slate-400">TTL (seconds; default 600, cap 86400)</label>
+    <input class="input" type="number" min="60" max="86400" name="ttlSeconds" placeholder="600" style="width:10rem">
+    <button class="btn" type="submit">Create</button>
+  </form>
+</div>
+
+<h2 class="text-lg font-semibold text-slate-100 mb-2">Active tickets</h2>
+{{if .Items}}
+<div class="overflow-x-auto">
+<table>
+  <thead><tr><th>Token</th><th>Group</th><th>Label</th><th>Expires</th><th>Used</th><th>QR</th><th></th></tr></thead>
+  <tbody>
+  {{range .Items}}
+    <tr>
+      <td class="font-mono">{{short .Token}}</td>
+      <td>{{if .GroupID}}<span class="font-mono">{{.GroupID}}</span>{{else}}<span class="text-slate-500">(none)</span>{{end}}</td>
+      <td>{{.Label}}</td>
+      <td>{{msTime (toS .ExpiresAtMS)}}</td>
+      <td>{{if .UsedAtMS}}<span class="badge badge-ok">claimed</span><br><span class="text-xs font-mono">{{shortHex .UsedBy}}</span>{{else}}<span class="badge">pending</span>{{end}}</td>
+      <td>{{if not .UsedAtMS}}<img src="/api/pairing/{{.Token}}/qr.png" alt="QR" width="128" height="128" style="background:#fff;padding:.25rem;border-radius:.25rem">{{else}}—{{end}}</td>
+      <td><form method="post" action="/pairing/{{.Token}}/delete"><button class="btn btn-ghost" type="submit">Revoke</button></form></td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{else}}
+<div class="card text-center text-slate-400">No pairing tokens (yet).</div>
+{{end}}
+{{template "foot" .}}{{end}}

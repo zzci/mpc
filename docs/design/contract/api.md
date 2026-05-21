@@ -127,6 +127,43 @@ Resp { items:[ { index, evmAddress, tronAddress, createdAt } ], serverTime }
 ```
 - 仅本组成员经身份签名鉴权可读;**禁** A 侧暴露(F1 严格 owning-member-only;经 xpub 已可枚举的链接性既受用户接受,但避免免鉴权便利化外暴露)。
 
+## P. 公开配对(无鉴权,token-as-auth)
+
+新设备首次接入的引导通道。详见 `docs/design/server/pairing.md`。两个公开
+端点(均受 `externalRL` 每-IP 限流):
+
+### P1 拉取配对配置
+
+`GET /v1/pairing/{token}/config`(无鉴权)
+
+```
+Resp 200 { token, groupId?, label?, expiresAtMs,
+           coordBaseUrl, relayPeerID?, relayAddrs? }
+Resp 404 NOT_FOUND       // 未知 token
+```
+
+**不**消耗 token。设备扫码后用此 GET 拿到引导数据。
+
+### P2 提交身份公钥(消耗 token)
+
+`POST /v1/pairing/{token}/enroll`(无鉴权)
+
+```
+Req { identityPubkey: <33B 或 65B hex secp256k1>, label? }
+Resp 200 { …同 P1 响应… }     // token 已被标记 used
+Resp 400 INVALID_ENVELOPE       // identity 长度/hex 校验失败
+Resp 404 NOT_FOUND             // 未知 token
+Resp 409 STATE_CONFLICT        // token 过期 或 已用(replay)
+```
+
+**关键约束**:
+- token 单次使用,replay → 409。
+- TTL 默认 10min,上限 24h;过期 → 409。
+- 公开但**不**含敏感凭据:响应永不包含 PSK / admin token / 私钥。
+- 配对**不**直接写 `group_members`;只是引导设备 + 记录 identity 公钥 +
+  `admin_audit`(在 admin 侧的 create/delete 写;consume 在 coord 侧仅日志,
+  pairing.md §3 注 TODO)。组成员资格仍走既有 B 面 membership 流程。
+
 ## C. 错误码
 
 | HTTP | code | 含义 |
