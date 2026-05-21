@@ -14,13 +14,15 @@ import type { Strings } from './i18n';
 import { InboxScreen, WalletsScreen, AuditScreen, SettingsScreen } from './screens/tabs';
 import { OnboardingFlow } from './screens/onboarding';
 import { SdkPanel } from './screens/SdkPanel';
+import { SigningFlow } from './screens/signing';
 import { ENVELOPES_NEEDING_SELF } from './data';
-import type { SettingsAction } from './data';
+import type { SettingsAction, SigningEnvelope } from './data';
 
 type Route =
   | { readonly kind: 'tabs'; readonly tab: TabId }
   | { readonly kind: 'onboarding' }
-  | { readonly kind: 'sdk' };
+  | { readonly kind: 'sdk' }
+  | { readonly kind: 'signing'; readonly envelope: SigningEnvelope };
 
 export default function App(): React.JSX.Element {
   return (
@@ -97,6 +99,18 @@ function AppShell(): React.JSX.Element {
     );
   }
 
+  if (route.kind === 'signing') {
+    return (
+      <View style={s.root}>
+        <StatusBar barStyle="light-content" backgroundColor={theme.bg} />
+        <SigningFlow
+          envelope={route.envelope}
+          onExit={() => setRoute({ kind: 'tabs', tab: 'inbox' })}
+        />
+      </View>
+    );
+  }
+
   return (
     <View style={s.root}>
       <StatusBar barStyle="light-content" backgroundColor={theme.bg} />
@@ -107,7 +121,9 @@ function AppShell(): React.JSX.Element {
       ) : null}
 
       <View style={s.body}>
-        {route.tab === 'inbox' ? <InboxScreen /> : null}
+        {route.tab === 'inbox' ? (
+          <InboxScreen onOpenEnvelope={(env) => setRoute({ kind: 'signing', envelope: env })} />
+        ) : null}
         {route.tab === 'wallets' ? (
           <WalletsScreen onStartKeygen={() => setRoute({ kind: 'sdk' })} />
         ) : null}

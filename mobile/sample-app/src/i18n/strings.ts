@@ -179,6 +179,76 @@ export interface Strings {
     readonly sign: string;
     readonly reshare: string;
   };
+  readonly signing: {
+    readonly detailTitle: string;
+    readonly proposer: string;
+    readonly receivedAt: string;
+    readonly aZoneHeading: string;
+    readonly aZoneSub: string;
+    readonly bZoneHeading: string;
+    readonly bZoneSub: string;
+    readonly checksHeading: string;
+    readonly metaHashOk: string;
+    readonly metaHashBad: string;
+    readonly crossCheckOk: string;
+    readonly crossCheckBad: string;
+    readonly digestLabel: string;
+    readonly digestSub: string;
+    readonly toLabel: string;
+    readonly toLabelSafe: string;
+    readonly toLabelDanger: string;
+    readonly valueLabel: string;
+    readonly fiatLabel: string;
+    readonly nonceLabel: string;
+    readonly gasLimitLabel: string;
+    readonly gasPriceLabel: string;
+    readonly dataLabel: string;
+    readonly emptyData: string;
+    readonly orderLabel: string;
+    readonly operatorLabel: string;
+    readonly memoLabel: string;
+    readonly walletLabel: string;
+    readonly quorumHeading: string;
+    readonly quorumSub: string;
+    readonly memberThis: string;
+    readonly memberApproved: string;
+    readonly memberRejected: string;
+    readonly memberPending: string;
+    readonly mismatchTitle: string;
+    readonly mismatchBody: string;
+    readonly mismatchForceReject: string;
+    readonly approveCta: string;
+    readonly rejectCta: string;
+    readonly progressTitle: string;
+    readonly progressSub: string;
+    readonly stagePrepare: string;
+    readonly stagePrepareSub: string;
+    readonly stageRound1: string;
+    readonly stageRound1Sub: string;
+    readonly stageRound2: string;
+    readonly stageRound2Sub: string;
+    readonly stageRound3: string;
+    readonly stageRound3Sub: string;
+    readonly stageCombine: string;
+    readonly stageCombineSub: string;
+    readonly stageReport: string;
+    readonly stageReportSub: string;
+    readonly stageBadgeActive: string;
+    readonly stageBadgeDone: string;
+    readonly stageBadgeWait: string;
+    readonly resultSignedTitle: string;
+    readonly resultSignedSub: string;
+    readonly resultRejectedTitle: string;
+    readonly resultRejectedSub: string;
+    readonly resultExpiredTitle: string;
+    readonly resultExpiredSub: string;
+    readonly resultRsvLabel: string;
+    readonly resultReportLabel: string;
+    readonly resultBackToInbox: string;
+    readonly cancelFlow: string;
+    readonly demoBannerLive: string;
+    readonly demoBannerDemo: string;
+  };
 }
 
 const en: Strings = {
@@ -360,6 +430,77 @@ const en: Strings = {
     sign: 'Sign',
     reshare: 'Reshare',
   },
+  signing: {
+    detailTitle: 'Review and sign',
+    proposer: 'Proposer',
+    receivedAt: 'Received',
+    aZoneHeading: 'A · Verified facts',
+    aZoneSub: 'Re-derived locally from unsignedTx, the sole funds-safety authority',
+    bZoneHeading: 'B · Business info',
+    bZoneSub: 'Advisory only — supplied by the proposer, never authoritative',
+    checksHeading: 'Integrity checks',
+    metaHashOk: 'metaHash matches proposer signature',
+    metaHashBad: 'metaHash does NOT match proposer signature',
+    crossCheckOk: 'A facts cross-check B info',
+    crossCheckBad: 'A facts and B info disagree',
+    digestLabel: 'digest32',
+    digestSub: 'Re-derived locally and bound 1:1 with unsignedTx',
+    toLabel: 'To',
+    toLabelSafe: 'allow-listed',
+    toLabelDanger: 'NOT on allow-list',
+    valueLabel: 'Value',
+    fiatLabel: 'Estimate',
+    nonceLabel: 'Nonce',
+    gasLimitLabel: 'Gas limit',
+    gasPriceLabel: 'Gas price',
+    dataLabel: 'calldata',
+    emptyData: '0x · plain transfer',
+    orderLabel: 'Order ID',
+    operatorLabel: 'Operator',
+    memoLabel: 'Memo',
+    walletLabel: 'Wallet',
+    quorumHeading: 'Quorum decisions',
+    quorumSub: '{approved} of {threshold} approvals collected · {parties} parties',
+    memberThis: 'this device',
+    memberApproved: 'approved',
+    memberRejected: 'rejected',
+    memberPending: 'awaiting',
+    mismatchTitle: 'A / B mismatch · approval disabled',
+    mismatchBody:
+      'The proposer’s business info does not match the re-derived facts. WYSIWYS strict mode refuses to sign — please reject this request.',
+    mismatchForceReject: 'Reject (recommended)',
+    approveCta: 'Approve and sign',
+    rejectCta: 'Reject',
+    progressTitle: 'Signing in progress',
+    progressSub: 'MPC round running across {parties} parties · digest {digest}',
+    stagePrepare: 'Prepare session',
+    stagePrepareSub: 'Pin digest32 · open libp2p stream to signers',
+    stageRound1: 'Round 1 · commitments',
+    stageRound1Sub: 'Exchange paillier and feldman commitments',
+    stageRound2: 'Round 2 · shares',
+    stageRound2Sub: 'Distribute and verify share contributions',
+    stageRound3: 'Round 3 · sign',
+    stageRound3Sub: 'Compute partial sigma_i across all signers',
+    stageCombine: 'Combine · {R,S,V}',
+    stageCombineSub: 'Aggregate to 65-byte secp256k1 signature',
+    stageReport: 'Report to coord',
+    stageReportSub: 'POST /v1/requests/{id}/sign · attestation log',
+    stageBadgeActive: 'running',
+    stageBadgeDone: 'done',
+    stageBadgeWait: 'queued',
+    resultSignedTitle: 'Signed',
+    resultSignedSub: 'Signature accepted by coord and broadcast queued',
+    resultRejectedTitle: 'Rejected',
+    resultRejectedSub: 'No share material was used — MPC never started',
+    resultExpiredTitle: 'Expired',
+    resultExpiredSub: 'Decision window closed before approval',
+    resultRsvLabel: '{R,S,V} · 65 bytes',
+    resultReportLabel: 'Reason',
+    resultBackToInbox: 'Back to inbox',
+    cancelFlow: 'Cancel',
+    demoBannerLive: 'Live SignSession',
+    demoBannerDemo: 'Demo SignSession · approve/reject still preserve bridge shape',
+  },
 };
 
 const zh: Strings = {
@@ -540,6 +681,77 @@ const zh: Strings = {
     keygen: 'Keygen',
     sign: '签名',
     reshare: '重分片',
+  },
+  signing: {
+    detailTitle: '审核并签名',
+    proposer: '提案方',
+    receivedAt: '收到',
+    aZoneHeading: 'A · 已校验事实',
+    aZoneSub: '由 unsignedTx 在本机重算,资金安全的唯一权威',
+    bZoneHeading: 'B · 业务信息',
+    bZoneSub: '仅作参考 — 由提案方提供,绝非权威',
+    checksHeading: '完整性核对',
+    metaHashOk: 'metaHash 与提案方签名一致',
+    metaHashBad: 'metaHash 与提案方签名不一致',
+    crossCheckOk: 'A 区事实与 B 区信息一致',
+    crossCheckBad: 'A 区事实与 B 区信息不一致',
+    digestLabel: 'digest32',
+    digestSub: '本机重算,与 unsignedTx 1:1 绑定',
+    toLabel: '收款方',
+    toLabelSafe: '在白名单',
+    toLabelDanger: '不在白名单',
+    valueLabel: '金额',
+    fiatLabel: '估值',
+    nonceLabel: 'Nonce',
+    gasLimitLabel: 'Gas 上限',
+    gasPriceLabel: 'Gas 价格',
+    dataLabel: 'calldata',
+    emptyData: '0x · 纯转账',
+    orderLabel: '工单号',
+    operatorLabel: '操作员',
+    memoLabel: '备注',
+    walletLabel: '钱包',
+    quorumHeading: '法定人数决策',
+    quorumSub: '已收集 {approved} / {threshold} 批准 · 共 {parties} 方',
+    memberThis: '本机',
+    memberApproved: '已批准',
+    memberRejected: '已拒绝',
+    memberPending: '等待中',
+    mismatchTitle: 'A / B 不匹配 · 已禁用批准',
+    mismatchBody:
+      '提案方的业务信息与本机重算事实不一致。WYSIWYS 严格模式拒绝签名 — 请拒绝该请求。',
+    mismatchForceReject: '拒绝 (建议)',
+    approveCta: '批准并签名',
+    rejectCta: '拒绝',
+    progressTitle: '正在签名',
+    progressSub: '{parties} 方协同 MPC · digest {digest}',
+    stagePrepare: '初始化会话',
+    stagePrepareSub: '锁定 digest32 · 建立 libp2p 流',
+    stageRound1: '第 1 轮 · 承诺',
+    stageRound1Sub: '交换 paillier / feldman 承诺',
+    stageRound2: '第 2 轮 · 份额',
+    stageRound2Sub: '分发并校验份额贡献',
+    stageRound3: '第 3 轮 · 签名',
+    stageRound3Sub: '各方计算偏 sigma_i',
+    stageCombine: '聚合 · {R,S,V}',
+    stageCombineSub: '聚合为 65 字节 secp256k1 签名',
+    stageReport: '上报 coord',
+    stageReportSub: 'POST /v1/requests/{id}/sign · attestation 记录',
+    stageBadgeActive: '进行中',
+    stageBadgeDone: '完成',
+    stageBadgeWait: '等待',
+    resultSignedTitle: '已签名',
+    resultSignedSub: '签名已被 coord 接受,等待广播',
+    resultRejectedTitle: '已拒绝',
+    resultRejectedSub: '本机未使用任何分片 — 未进入 MPC',
+    resultExpiredTitle: '已过期',
+    resultExpiredSub: '决策窗口已关闭',
+    resultRsvLabel: '{R,S,V} · 65 字节',
+    resultReportLabel: '原因',
+    resultBackToInbox: '返回收件箱',
+    cancelFlow: '取消',
+    demoBannerLive: '已绑定 SignSession',
+    demoBannerDemo: '演示 SignSession · approve/reject 保留 bridge 接口形状',
   },
 };
 
