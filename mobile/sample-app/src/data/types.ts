@@ -151,7 +151,8 @@ export interface SettingsRow {
 
 export type SettingsAction =
   | { readonly kind: 'onboarding' }
-  | { readonly kind: 'backup' }
+  | { readonly kind: 'exportBackup' }
+  | { readonly kind: 'importBackup' }
   | { readonly kind: 'reshare' }
   | { readonly kind: 'keygen' }
   | { readonly kind: 'about' };

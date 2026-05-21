@@ -222,8 +222,8 @@ export const SETTINGS: ReadonlyArray<SettingsSection> = [
   {
     heading: 'shares',
     rows: [
-      { key: 'exportShare', action: { kind: 'backup' } },
-      { key: 'importShare' },
+      { key: 'exportShare', action: { kind: 'exportBackup' } },
+      { key: 'importShare', action: { kind: 'importBackup' } },
       { key: 'changeKek' },
       { key: 'reshare', action: { kind: 'reshare' } },
       { key: 'keygen', action: { kind: 'keygen' } },

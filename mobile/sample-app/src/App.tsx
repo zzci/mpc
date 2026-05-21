@@ -16,6 +16,7 @@ import { OnboardingFlow } from './screens/onboarding';
 import { SdkPanel } from './screens/SdkPanel';
 import { SigningFlow } from './screens/signing';
 import { WalletDetailScreen } from './screens/wallets';
+import { BackupExportScreen, BackupImportScreen } from './screens/backup';
 import { ENVELOPES_NEEDING_SELF } from './data';
 import type { SettingsAction, SigningEnvelope, Wallet } from './data';
 
@@ -24,7 +25,9 @@ type Route =
   | { readonly kind: 'onboarding' }
   | { readonly kind: 'sdk' }
   | { readonly kind: 'signing'; readonly envelope: SigningEnvelope }
-  | { readonly kind: 'walletDetail'; readonly wallet: Wallet };
+  | { readonly kind: 'walletDetail'; readonly wallet: Wallet }
+  | { readonly kind: 'backupExport' }
+  | { readonly kind: 'backupImport' };
 
 export default function App(): React.JSX.Element {
   return (
@@ -72,14 +75,22 @@ function AppShell(): React.JSX.Element {
   const goTab = (tab: TabId): void => setRoute({ kind: 'tabs', tab });
 
   const onSettingsAction = (action: SettingsAction): void => {
-    // Foundation handles navigation-bearing kinds only; backup / about
-    // surfaces are deferred to later L3s and are silent no-ops here.
+    // Foundation handles navigation-bearing kinds; the About surface stays
+    // a silent no-op here pending its own L3.
     if (action.kind === 'onboarding') {
       setRoute({ kind: 'onboarding' });
       return;
     }
     if (action.kind === 'keygen' || action.kind === 'reshare') {
       setRoute({ kind: 'sdk' });
+      return;
+    }
+    if (action.kind === 'exportBackup') {
+      setRoute({ kind: 'backupExport' });
+      return;
+    }
+    if (action.kind === 'importBackup') {
+      setRoute({ kind: 'backupImport' });
     }
   };
 
@@ -122,6 +133,24 @@ function AppShell(): React.JSX.Element {
           onBack={() => setRoute({ kind: 'tabs', tab: 'wallets' })}
           onReshare={() => setRoute({ kind: 'sdk' })}
         />
+      </View>
+    );
+  }
+
+  if (route.kind === 'backupExport') {
+    return (
+      <View style={s.root}>
+        <StatusBar barStyle="light-content" backgroundColor={theme.bg} />
+        <BackupExportScreen onClose={() => setRoute({ kind: 'tabs', tab: 'settings' })} />
+      </View>
+    );
+  }
+
+  if (route.kind === 'backupImport') {
+    return (
+      <View style={s.root}>
+        <StatusBar barStyle="light-content" backgroundColor={theme.bg} />
+        <BackupImportScreen onClose={() => setRoute({ kind: 'tabs', tab: 'settings' })} />
       </View>
     );
   }
