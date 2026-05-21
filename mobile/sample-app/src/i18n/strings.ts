@@ -221,6 +221,89 @@ export interface Strings {
     readonly sign: string;
     readonly reshare: string;
   };
+  readonly backup: {
+    readonly exportTitle: string;
+    readonly exportIntro: string;
+    readonly importTitle: string;
+    readonly importIntro: string;
+    readonly stepSelect: string;
+    readonly stepSelectSub: string;
+    readonly stepPassphrase: string;
+    readonly stepPassphraseSub: string;
+    readonly stepImportPassphraseSub: string;
+    readonly stepConfirm: string;
+    readonly stepConfirmSub: string;
+    readonly stepProgress: string;
+    readonly stepProgressSub: string;
+    readonly stepDone: string;
+    readonly stepDoneSub: string;
+    readonly stepError: string;
+    readonly stepPaste: string;
+    readonly stepPasteSub: string;
+    readonly stepPreview: string;
+    readonly stepPreviewSub: string;
+    readonly walletLabel: string;
+    readonly walletMembers: string;
+    readonly passphraseLabel: string;
+    readonly passphrasePlaceholder: string;
+    readonly passphraseRepeat: string;
+    readonly passphraseMismatch: string;
+    readonly passphraseTooShort: string;
+    readonly factsHeading: string;
+    readonly factKek: string;
+    readonly factKekSub: string;
+    readonly factNoPlaintext: string;
+    readonly factNoPlaintextSub: string;
+    readonly factDevice: string;
+    readonly factDeviceSub: string;
+    readonly factGroup: string;
+    readonly factGroupSub: string;
+    readonly progressDeriveKek: string;
+    readonly progressDeriveKekSub: string;
+    readonly progressWrap: string;
+    readonly progressWrapSub: string;
+    readonly progressEmit: string;
+    readonly progressEmitSub: string;
+    readonly progressUnwrap: string;
+    readonly progressUnwrapSub: string;
+    readonly progressInstall: string;
+    readonly progressInstallSub: string;
+    readonly progressActive: string;
+    readonly progressDone: string;
+    readonly progressWait: string;
+    readonly resultExportTitle: string;
+    readonly resultExportSub: string;
+    readonly resultImportTitle: string;
+    readonly resultImportSub: string;
+    readonly artifactHeading: string;
+    readonly artifactSub: string;
+    readonly artifactCopy: string;
+    readonly artifactCopied: string;
+    readonly blobInputLabel: string;
+    readonly blobInputPlaceholder: string;
+    readonly blobFromClipboard: string;
+    readonly blobFromFile: string;
+    readonly previewMoniker: string;
+    readonly previewSize: string;
+    readonly previewCreated: string;
+    readonly previewWrap: string;
+    readonly previewWrapValue: string;
+    readonly errorTitle: string;
+    readonly errorPassphrase: string;
+    readonly errorBlob: string;
+    readonly errorGeneric: string;
+    readonly demoBanner: string;
+    readonly liveBanner: string;
+    readonly ctaContinue: string;
+    readonly ctaExport: string;
+    readonly ctaImport: string;
+    readonly ctaCloseExport: string;
+    readonly ctaCloseImport: string;
+    readonly ctaRetry: string;
+    readonly callShape: string;
+    readonly callShapeExport: string;
+    readonly callShapeImport: string;
+  };
   readonly signing: {
     readonly detailTitle: string;
     readonly proposer: string;
@@ -513,6 +596,91 @@ const en: Strings = {
     keygen: 'Keygen',
     sign: 'Sign',
     reshare: 'Reshare',
+  },
+  backup: {
+    exportTitle: 'Export share backup',
+    exportIntro:
+      'Wrap one of this device’s shares with a passphrase-derived key (Argon2id). The output is an opaque blob — store or share it through a trusted channel.',
+    importTitle: 'Import share backup',
+    importIntro:
+      'Restore a share from a passphrase-wrapped backup blob. The blob is unwrapped on this device and the unwrapped share never leaves the keystore.',
+    stepSelect: 'Pick share',
+    stepSelectSub: 'Choose which group share to back up',
+    stepPassphrase: 'Set wrap passphrase',
+    stepPassphraseSub: 'Used only to derive the wrap KEK (Argon2id). It is never sent anywhere.',
+    stepImportPassphraseSub: 'Enter the same passphrase used at export time.',
+    stepConfirm: 'Confirm',
+    stepConfirmSub: 'Re-read the security facts before wrapping the share.',
+    stepProgress: 'Working',
+    stepProgressSub: 'Driving the bridge call.',
+    stepDone: 'Done',
+    stepDoneSub: 'Backup ready.',
+    stepError: 'Failed',
+    stepPaste: 'Paste blob',
+    stepPasteSub: 'Paste the base64 backup blob produced by exportShare.',
+    stepPreview: 'Preview metadata',
+    stepPreviewSub: 'Inspect what the blob will install before confirming.',
+    walletLabel: 'Wallet',
+    walletMembers: '{threshold}-of-{parties} · {members} members',
+    passphraseLabel: 'Wrap passphrase',
+    passphrasePlaceholder: 'At least 8 characters · 12+ recommended',
+    passphraseRepeat: 'Repeat passphrase',
+    passphraseMismatch: 'Passphrases do not match',
+    passphraseTooShort: 'Use at least 8 characters',
+    factsHeading: 'Security facts',
+    factKek: 'Argon2id-wrapped',
+    factKekSub: 'Wrap key derived locally from your passphrase. Argon2id default cost.',
+    factNoPlaintext: 'No plaintext share',
+    factNoPlaintextSub: 'The raw share never leaves the keystore — only the wrapped blob is emitted.',
+    factDevice: 'Device identity',
+    factDeviceSub: 'Bound to this device · {memberId} on {device}',
+    factGroup: 'Group',
+    factGroupSub: '{moniker} · {groupId}',
+    progressDeriveKek: 'Derive KEK',
+    progressDeriveKekSub: 'Argon2id over passphrase + per-share salt',
+    progressWrap: 'Wrap share',
+    progressWrapSub: 'AEAD seal share material with the derived KEK',
+    progressEmit: 'Emit blob',
+    progressEmitSub: 'Base64 envelope · safe to copy / store',
+    progressUnwrap: 'Unwrap blob',
+    progressUnwrapSub: 'AEAD open with derived KEK',
+    progressInstall: 'Install share',
+    progressInstallSub: 'Store share in keystore under its moniker',
+    progressActive: 'running',
+    progressDone: 'done',
+    progressWait: 'queued',
+    resultExportTitle: 'Backup ready',
+    resultExportSub: 'The wrapped blob is below. Store it somewhere only you control.',
+    resultImportTitle: 'Share installed',
+    resultImportSub: 'The share is back in the keystore. The device can re-join its group.',
+    artifactHeading: 'Backup blob',
+    artifactSub: 'Base64 — Argon2id-wrapped',
+    artifactCopy: 'Copy to clipboard',
+    artifactCopied: 'Copied · paste into your vault',
+    blobInputLabel: 'Backup blob (base64)',
+    blobInputPlaceholder: 'Paste the base64 blob here…',
+    blobFromClipboard: 'Paste from clipboard',
+    blobFromFile: 'Read from file',
+    previewMoniker: 'Share moniker',
+    previewSize: 'Blob size',
+    previewCreated: 'Created',
+    previewWrap: 'Wrap',
+    previewWrapValue: 'Argon2id · default cost',
+    errorTitle: 'Bridge call rejected',
+    errorPassphrase: 'Passphrase did not unwrap this blob.',
+    errorBlob: 'Blob is empty or malformed.',
+    errorGeneric: 'Bridge returned an error.',
+    demoBanner: 'Demo session · exportShare/importShare stubs returned a placeholder',
+    liveBanner: 'Live bridge call · exportShare/importShare',
+    ctaContinue: 'Continue',
+    ctaExport: 'Wrap and export',
+    ctaImport: 'Unwrap and install',
+    ctaCloseExport: 'Back to settings',
+    ctaCloseImport: 'Back to settings',
+    ctaRetry: 'Try again',
+    callShape: 'Bridge call shape',
+    callShapeExport: 'exportShare(moniker, passphrase) → blob',
+    callShapeImport: 'importShare(blobBase64, passphrase) → moniker',
   },
   signing: {
     detailTitle: 'Review and sign',
@@ -807,6 +975,91 @@ const zh: Strings = {
     keygen: 'Keygen',
     sign: '签名',
     reshare: '重分片',
+  },
+  backup: {
+    exportTitle: '导出分片备份',
+    exportIntro:
+      '用口令派生的密钥 (Argon2id) 封装本机持有的某个分片。输出是一个不透明的密文 blob,请通过可信渠道保存或传输。',
+    importTitle: '导入分片备份',
+    importIntro:
+      '从口令封装的备份 blob 中恢复一个分片。本机解封,解封后的明文分片永不离开 keystore。',
+    stepSelect: '选择分片',
+    stepSelectSub: '选择要备份的分组分片',
+    stepPassphrase: '设置封装口令',
+    stepPassphraseSub: '仅用于在本机派生封装 KEK (Argon2id),口令本身不会上传。',
+    stepImportPassphraseSub: '请输入导出时使用的同一口令。',
+    stepConfirm: '确认',
+    stepConfirmSub: '在封装分片之前,请再次核对安全事项。',
+    stepProgress: '处理中',
+    stepProgressSub: '正在调用 bridge 接口。',
+    stepDone: '完成',
+    stepDoneSub: '备份已就绪。',
+    stepError: '失败',
+    stepPaste: '粘贴 blob',
+    stepPasteSub: '粘贴由 exportShare 生成的 base64 备份 blob。',
+    stepPreview: '预览元信息',
+    stepPreviewSub: '确认前查看 blob 将要安装的内容。',
+    walletLabel: '钱包',
+    walletMembers: '{threshold} / {parties} · 共 {members} 方',
+    passphraseLabel: '封装口令',
+    passphrasePlaceholder: '至少 8 位 · 推荐 12+',
+    passphraseRepeat: '再次输入口令',
+    passphraseMismatch: '两次输入不一致',
+    passphraseTooShort: '请使用至少 8 位口令',
+    factsHeading: '安全事项',
+    factKek: 'Argon2id 封装',
+    factKekSub: '本机用口令 + 每分片盐值派生封装密钥,Argon2id 默认参数。',
+    factNoPlaintext: '从不明文',
+    factNoPlaintextSub: '明文分片永不离开 keystore,只发出封装后的 blob。',
+    factDevice: '设备身份',
+    factDeviceSub: '绑定本机 · {memberId} @ {device}',
+    factGroup: '分组',
+    factGroupSub: '{moniker} · {groupId}',
+    progressDeriveKek: '派生 KEK',
+    progressDeriveKekSub: '基于口令 + 每分片盐的 Argon2id 派生',
+    progressWrap: '封装分片',
+    progressWrapSub: '用派生 KEK 进行 AEAD 封装',
+    progressEmit: '输出 blob',
+    progressEmitSub: 'Base64 信封 · 可安全复制 / 存储',
+    progressUnwrap: '解封 blob',
+    progressUnwrapSub: '用派生 KEK 进行 AEAD 解封',
+    progressInstall: '安装分片',
+    progressInstallSub: '按 moniker 存入 keystore',
+    progressActive: '进行中',
+    progressDone: '完成',
+    progressWait: '等待',
+    resultExportTitle: '备份已生成',
+    resultExportSub: '下方即封装后的 blob。请存放在仅自己可控的位置。',
+    resultImportTitle: '分片已安装',
+    resultImportSub: '分片已写回 keystore,该设备可重新参与分组签名。',
+    artifactHeading: '备份 blob',
+    artifactSub: 'Base64 · Argon2id 封装',
+    artifactCopy: '复制到剪贴板',
+    artifactCopied: '已复制 · 请粘贴到保险位置',
+    blobInputLabel: '备份 blob (base64)',
+    blobInputPlaceholder: '将 base64 blob 粘贴到此处…',
+    blobFromClipboard: '从剪贴板粘贴',
+    blobFromFile: '从文件读取',
+    previewMoniker: '分片 moniker',
+    previewSize: 'Blob 大小',
+    previewCreated: '生成时间',
+    previewWrap: '封装方式',
+    previewWrapValue: 'Argon2id · 默认参数',
+    errorTitle: 'Bridge 调用失败',
+    errorPassphrase: '口令无法解封此 blob。',
+    errorBlob: 'Blob 为空或格式错误。',
+    errorGeneric: 'Bridge 返回错误。',
+    demoBanner: '演示会话 · exportShare/importShare 桩返回占位结果',
+    liveBanner: '已绑定 bridge · exportShare/importShare',
+    ctaContinue: '继续',
+    ctaExport: '封装并导出',
+    ctaImport: '解封并安装',
+    ctaCloseExport: '返回设置',
+    ctaCloseImport: '返回设置',
+    ctaRetry: '重试',
+    callShape: 'Bridge 调用',
+    callShapeExport: 'exportShare(moniker, passphrase) → blob',
+    callShapeImport: 'importShare(blobBase64, passphrase) → moniker',
   },
   signing: {
     detailTitle: '审核并签名',
