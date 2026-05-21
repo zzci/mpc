@@ -1,4 +1,5 @@
 import Foundation
+import React
 
 /// iOS side of the mcp RN bridge. It owns the single gomobile-bound
 /// `MobileapiSDK` handle (from the `.xcframework` produced by `gomobile bind`,

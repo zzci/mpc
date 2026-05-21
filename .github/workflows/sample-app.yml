@@ -140,6 +140,25 @@ jobs:
           cp -R "${tmp}/scaffold/android" mobile/sample-app/android
           rm -rf "${tmp}"
 
+      - name: Bump Gradle JVM heap for Jetifier on hermes-android
+        # The RN 0.74 template ships gradle.properties with
+        # `org.gradle.jvmargs=-Xmx2048m -XX:MaxMetaspaceSize=512m`; the
+        # JetifyTransform of hermes-android-*-debug.aar OOMs at that size on
+        # ubuntu-latest GitHub runners. gradle.properties takes precedence
+        # over GRADLE_OPTS for both the daemon and worker/transform JVMs, so
+        # we patch the file rather than exporting an env var. ubuntu-latest
+        # has ~16 GB RAM so -Xmx4g is comfortable.
+        run: |
+          set -euo pipefail
+          props=mobile/sample-app/android/gradle.properties
+          test -f "${props}"
+          if grep -q '^org.gradle.jvmargs=' "${props}"; then
+            sed -i 's|^org.gradle.jvmargs=.*|org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m|' "${props}"
+          else
+            printf '\norg.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m\n' >> "${props}"
+          fi
+          grep '^org.gradle.jvmargs=' "${props}"
+
       - name: Install sample-app deps (npm install)
         working-directory: mobile/sample-app
         run: npm install --no-audit --no-fund
