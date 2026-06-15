@@ -10,7 +10,7 @@
   "dependencies": {
     "@mcp/rn-bridge": "file:../bridge",
     "react": "18.2.0",
-    "react-native": "^0.74.5"
+    "react-native": "^0.86.0"
   },
   "devDependencies": {
     "@react-native/babel-preset": "0.74.85",
