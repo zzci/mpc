@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "@mcp/rn-bridge": "file:../bridge",
-    "react": "18.2.0",
+    "react": "19.2.8",
     "react-native": "^0.74.5"
   },
   "devDependencies": {
