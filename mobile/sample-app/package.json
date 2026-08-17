@@ -13,7 +13,7 @@
     "react-native": "^0.74.5"
   },
   "devDependencies": {
-    "@react-native/babel-preset": "0.74.85",
+    "@react-native/babel-preset": "0.87.0",
     "@react-native/metro-config": "0.74.85",
     "@types/react": "^18.2.0",
     "typescript": "^5.4.5"
